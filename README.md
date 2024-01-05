@@ -4,3 +4,12 @@
 ![Tidal Stripping](logo.png)
 
 Not quite ready yet, but its getting there. Huge thanks to @JoBovy's [python packaging guide](https://pythonpackaging.info/) and GitHub's Co-Pilot for teaching me how to incorporate Fortran dependencies. 
+
+- Does not work with the new Mac processors.
+- only tested on Linux systems
+- requires numpy<=1.12.0 since I'm using numpy.distutils. I don't believe any other package can handle Fortran code. Shoulda probably went with C. 
+- Still missing python functions. 
+- need to make documentation 
+- need to publish on PyPi
+
+- Started in Jan 2024. 

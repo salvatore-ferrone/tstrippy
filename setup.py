@@ -5,7 +5,8 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
 # my fortran module
-ext = Extension('test',sources=['test.f90'])
+
+fortran_extension = Extension('tstrippy.test',sources=['tstrippy/test.f90'])
 
 setup(
     name="tstrippy",
@@ -26,5 +27,5 @@ setup(
     install_requires=['numpy',
                       "h5py",
                       'astropy',],
-    ext_modules=[ext]
+    ext_modules=[fortran_extension]
 )

@@ -1,12 +1,12 @@
+LICENSE
 README.md
 setup.py
-test.f90
+/home/sferrone/tstrippy/tstrippy/test.f90
 tstrippy/__init__.py
-tstrippy/_math.py
+tstrippy/test.f90
+tstrippy/trash.py
 tstrippy.egg-info/PKG-INFO
 tstrippy.egg-info/SOURCES.txt
 tstrippy.egg-info/dependency_links.txt
 tstrippy.egg-info/requires.txt
 tstrippy.egg-info/top_level.txt
-tstrippy/integrate/__init__.py
-tstrippy/integrate/integrator.f90

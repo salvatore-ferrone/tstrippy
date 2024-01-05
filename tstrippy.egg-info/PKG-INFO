@@ -10,6 +10,10 @@ Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: Mac only (for now)
 Requires-Python: >=3.6
 Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: h5py
+Requires-Dist: astropy
 
 # TSTRIPPY
 ## TIDAL-STRIPING-PYTHON

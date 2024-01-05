@@ -1,0 +1,17 @@
+# Compiled Python files
+*.pyc
+__pycache__/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Compiled Fortran files
+*.o
+*.mod
+*.so
+
+# Other
+.DS_Store
+*.log

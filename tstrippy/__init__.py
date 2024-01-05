@@ -1,2 +1,1 @@
-from .test import test
-from .integrator import *
+from .lib.integrator import *

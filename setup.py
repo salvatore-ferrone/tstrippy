@@ -6,9 +6,28 @@ long_description = (this_directory / "README.md").read_text()
 
 # my fortran module
 
-test_extension = Extension('tstrippy.test',sources=['tstrippy/test.f90'])
 
-integrator_extension = Extension('tstrippy.integrator',sources=['tstrippy/src/integrator.f90'])
+constands_module = Extension('tstrippy.lib.constants',
+                              sources=[
+                                  'tstrippy/src/constants.f90',
+                                  ])
+
+potentials_module = Extension('tstrippy.lib.potentials',
+                              sources=[
+                                  'tstrippy/src/constants.f90',
+                                  'tstrippy/src/potentials.f90',
+                                  ])
+
+integrator_module = Extension('tstrippy.lib.integrator',
+                              sources=[
+                                  'tstrippy/src/constants.f90',
+                                  'tstrippy/src/potentials.f90',
+                                  'tstrippy/src/galacticbar.f90',
+                                  'tstrippy/src/perturbers.f90',
+                                  'tstrippy/src/hostperturber.f90',
+                                  'tstrippy/src/integrator.f90', 
+                                  ])
+
 
 
 setup(
@@ -30,5 +49,5 @@ setup(
     install_requires=['numpy',
                       "h5py",
                       'astropy',],
-    ext_modules=[test_extension,integrator_extension]
+    ext_modules=[constands_module,potentials_module,integrator_module]
 )

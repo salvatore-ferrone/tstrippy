@@ -11,6 +11,3 @@ contains
     END SUBROUTINE add
 end module test
 
-! adding a comment because why not
-! second test comment for github
-! a third test comment for push/pull

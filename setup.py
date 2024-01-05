@@ -6,7 +6,10 @@ long_description = (this_directory / "README.md").read_text()
 
 # my fortran module
 
-fortran_extension = Extension('tstrippy.test',sources=['tstrippy/test.f90'])
+test_extension = Extension('tstrippy.test',sources=['tstrippy/test.f90'])
+
+integrator_extension = Extension('tstrippy.integrator',sources=['tstrippy/src/integrator.f90'])
+
 
 setup(
     name="tstrippy",
@@ -27,5 +30,5 @@ setup(
     install_requires=['numpy',
                       "h5py",
                       'astropy',],
-    ext_modules=[fortran_extension]
+    ext_modules=[test_extension,integrator_extension]
 )

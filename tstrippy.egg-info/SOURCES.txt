@@ -10,3 +10,5 @@ tstrippy.egg-info/SOURCES.txt
 tstrippy.egg-info/dependency_links.txt
 tstrippy.egg-info/requires.txt
 tstrippy.egg-info/top_level.txt
+tstrippy/src/__init__.py
+tstrippy/src/integrator.f90

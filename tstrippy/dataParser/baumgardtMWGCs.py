@@ -5,7 +5,7 @@ import pkg_resources
 
 
 class baumgardtMWGCs:
-    """Class for parsing the Baumgardt et al. 2019 catalog of Milky Way globular clusters
+    """Class for parsing the Baumgardt et al. 20XX-204ever catalog of Milky Way globular clusters
     
     NOTE. the catalog is available at https://people.smp.uq.edu.au/HolgerBaumgardt/globular/
     it is difficult to parse, I did this by hand and stored it in a fits file.
@@ -36,7 +36,7 @@ class baumgardtMWGCs:
         :type units: dict, optional
         """        
         
-        self.pathtoclusterdata=pkg_resources.resource_filename('tstrippy', 'data/baumgardtMWGCs.fits')
+        self.pathtoclusterdata=pkg_resources.resource_filename('tstrippy', 'data/2023-03-28-merged.fits')
         
         self._extractdatafromfits()
         self.units=units

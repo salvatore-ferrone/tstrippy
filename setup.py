@@ -49,5 +49,6 @@ setup(
     install_requires=['numpy',
                       "h5py",
                       'astropy',],
-    ext_modules=[constands_module,potentials_module,integrator_module]
+    ext_modules=[constands_module,potentials_module,integrator_module],
+    package_data={'tstrippy': ['data/*']},
 )

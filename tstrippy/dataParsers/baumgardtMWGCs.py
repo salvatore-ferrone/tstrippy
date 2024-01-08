@@ -5,16 +5,59 @@ import pkg_resources
 
 
 class baumgardtMWGCs:
-    """Class for parsing the Baumgardt et al. 20XX-204ever catalog of Milky Way globular clusters
-    
-    NOTE. the catalog is available at https://people.smp.uq.edu.au/HolgerBaumgardt/globular/
-    it is difficult to parse, I did this by hand and stored it in a fits file.
-    
-    
-    TO DO LIST:
-        Generate a code that queries the catalog, downloads the fits file and parses it.
-        - sample from skewed distribution of the distances
-    """    
+    """
+    A class to handle data from the Baumgardt Milky Way Globular Clusters (MWGCs).
+
+    This class provides methods to extract data from a FITS file, select a globular cluster of interest, 
+    and build a covariance matrix of the observed kinematics of a given globular cluster.
+
+    Attributes
+    ----------
+    pathtoclusterdata : str
+        The path to the FITS file containing the cluster data.
+    data : dict
+        The data extracted from the FITS file.
+    units : dict
+        The units for the data fields.
+    GCdex : int
+        The index of the selected globular cluster in the data.
+    GCname : str
+        The name of the selected globular cluster.
+    RA : astropy.units.quantity.Quantity
+        The right ascension of the selected globular cluster.
+    ERRA : astropy.units.quantity.Quantity
+        The error on the right ascension of the selected globular cluster.
+    DEC : astropy.units.quantity.Quantity
+        The declination of the selected globular cluster.
+    ERDEC : astropy.units.quantity.Quantity
+        The error on the declination of the selected globular cluster.
+    Rsun : astropy.units.quantity.Quantity
+        The distance from the Sun to the selected globular cluster.
+    ERsun : astropy.units.quantity.Quantity
+        The error on the distance from the Sun to the selected globular cluster.
+    RV : astropy.units.quantity.Quantity
+        The radial velocity of the selected globular cluster.
+    ERV : astropy.units.quantity.Quantity
+        The error on the radial velocity of the selected globular cluster.
+    mualpha : astropy.units.quantity.Quantity
+        The proper motion in right ascension of the selected globular cluster.
+    ERmualpha : astropy.units.quantity.Quantity
+        The error on the proper motion in right ascension of the selected globular cluster.
+    mu_delta : astropy.units.quantity.Quantity
+        The proper motion in declination of the selected globular cluster.
+    ERmu_delta : astropy.units.quantity.Quantity
+        The error on the proper motion in declination of the selected globular cluster.
+    rhopmrade : astropy.units.quantity.Quantity
+        The correlation between the proper motions in right ascension and declination of the selected globular cluster.
+    Mass : astropy.units.quantity.Quantity
+        The mass of the selected globular cluster.
+    DM : astropy.units.quantity.Quantity
+        The distance modulus of the selected globular cluster.
+    rh_m : astropy.units.quantity.Quantity
+        The half-mass radius of the selected globular cluster.
+    ERrh_m : astropy.units.quantity.Quantity
+        The error on the half-mass radius of the selected globular cluster.
+    """
 
     def __init__(
         self,
@@ -32,8 +75,6 @@ class baumgardtMWGCs:
         ):
         """ extracts the data from the fits file and stores it in a dictionary
 
-        :param units: an optional dictionary with the requested units for each field. The keys must be correct and the values must be astropy units that are compatible with those in the fits file, defaults to { "RA":u.degree, "DEC":u.degree, "Rsun":u.kpc, "RV":u.km/u.s, "mualpha":u.mas/u.yr, "mu_delta":u.mas/u.yr, "Mass":u.Msun, "rh_m":u.kpc, "DM":u.Msun, "rhopmrade":""}
-        :type units: dict, optional
         """        
         
         self.pathtoclusterdata=pkg_resources.resource_filename('tstrippy', 'data/2023-03-28-merged.fits')
@@ -43,8 +84,7 @@ class baumgardtMWGCs:
 
 
     def _extractdatafromfits(self):
-        """
-        parses the fits file and stores the data in a dictionary
+        """ internal function to extract the data from the fits file and store it in a dictionary
         """        
         GCfits=fits.open(self.pathtoclusterdata)
         fields = [GCfits[1].header['TTYPE'+str(i)] for i in range(1,GCfits[1].header['TFIELDS']+1)]
@@ -61,9 +101,19 @@ class baumgardtMWGCs:
         GCfits.close()
     
     def SetGlobularClusterOfInterest(self,GCname):
-        """
-        Make the properties of the GC of interest available for the class
-        """
+        """Pick a globular cluster of interest and extract its data to tbe class directly
+
+        Parameters
+        ----------
+        GCname : str
+            name of the globular cluter of interest. Must be one of the names in the fits file
+        
+        Returns
+        -------
+        None
+            None
+        """        
+
         self.GCdex=np.where(self.data['Cluster']==GCname)[0][0]
         self.GCname=GCname
         self.RA=self.data['RA'][self.GCdex].to(self.units['RA'])
@@ -85,27 +135,38 @@ class baumgardtMWGCs:
         self.ERrh_m=0*self.rh_m.unit # no errors on these
     
     def BuildCovarianceMatrix(self,ERRA=0,ERDEC=0,ERhalfmassradius=0):
-        """
-        Purpose:
-            Build the co-variance matrix of the observed kinematics of a given GC
-        Input:
-            dataTable: the astropy table of the GC data
-            GCidx: the index of the GC in the table
-        Output:
-            means: the mean values of the kinematics [RA,DEC,Rsun,RV,mualpha,mu_delta]
-            covMat: the co-variance matrix
+        """build the covariance matrix of the observed kinematics of a given GC. Intended to be used for sampling
 
-        NOTE: the order of the kinematics is:
-            [RA,DEC,Rsun,RV,mualpha,mu_delta]
-        NOTE:
-            the errors on RA and DEC are set to zero
-            only the covariance between the proper motions is given
-            intendned to be sampled with 
-        EXAMPLE:
-        self.BuildCovarianceMatrix()
-        RA,DEC,D,RV,mualpha,mu_delta,Mass,halfmassradius = np.random.multivariate_normal(self.meanParameters,self.covarianceParameters)
-        """
-        # 
+        Parameters
+        ----------
+        ERRA : int, optional
+            error on the Right Ascension, by default 0
+        ERDEC : int, optional
+            error on the Declination, by default 0
+        ERhalfmassradius : int, optional
+            Error of the half mass radius, by default 0
+        
+        Examples
+        --------
+        >>> self.BuildCovarianceMatrix()
+        >>> RA,DEC,D,RV,mualpha,mu_delta,Mass,halfmassradius = np.random.multivariate_normal(self.meanParameters,self.covarianceParameters)
+
+
+        Returns
+        -------
+        None
+            None
+            
+        Note
+        ----
+        the order of the data are:
+            [RA,DEC,Rsun,RV,mualpha,mu_delta,rh_m]
+        the data can be accessed with the following:
+            self.sigmaParameters = sigmas
+            self.meanParameters = means
+            self.covarianceParameters =
+
+        """        
         means = [self.RA.to(self.units['RA']).value,
             self.DEC.to(self.units['DEC']).value,
             self.Rsun.to(self.units['Rsun']).value,

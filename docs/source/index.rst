@@ -11,6 +11,8 @@ Welcome to tstrippy's documentation!
    :caption: Contents:
 
    installation.rst
+   api/index.rst
+   api/dataParsers.rst
 
 Indices and tables
 ==================
@@ -18,3 +20,5 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+

@@ -1,2 +1,3 @@
-from .lib.integrator import *
-from .dataParser.baumgardtMWGCs import baumgardtMWGCs
+from . import dataParsers
+from . import lib
+from . import integrator

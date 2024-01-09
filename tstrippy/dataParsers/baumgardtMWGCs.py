@@ -16,50 +16,10 @@ class baumgardtMWGCs:
 
     Attributes
     ----------
-    _pathtoclusterdata : str
-        The path to the FITS file containing the cluster data.
     data : dict
         The data extracted from the FITS file.
     units : dict
         The units for the data fields.
-    GCdex : int
-        The index of the selected globular cluster in the data.
-    GCname : str
-        The name of the selected globular cluster.
-    RA : astropy.units.quantity.Quantity
-        The right ascension of the selected globular cluster.
-    ERRA : astropy.units.quantity.Quantity
-        The error on the right ascension of the selected globular cluster.
-    DEC : astropy.units.quantity.Quantity
-        The declination of the selected globular cluster.
-    ERDEC : astropy.units.quantity.Quantity
-        The error on the declination of the selected globular cluster.
-    Rsun : astropy.units.quantity.Quantity
-        The distance from the Sun to the selected globular cluster.
-    ERsun : astropy.units.quantity.Quantity
-        The error on the distance from the Sun to the selected globular cluster.
-    RV : astropy.units.quantity.Quantity
-        The radial velocity of the selected globular cluster.
-    ERV : astropy.units.quantity.Quantity
-        The error on the radial velocity of the selected globular cluster.
-    mualpha : astropy.units.quantity.Quantity
-        The proper motion in right ascension of the selected globular cluster.
-    ERmualpha : astropy.units.quantity.Quantity
-        The error on the proper motion in right ascension of the selected globular cluster.
-    mu_delta : astropy.units.quantity.Quantity
-        The proper motion in declination of the selected globular cluster.
-    ERmu_delta : astropy.units.quantity.Quantity
-        The error on the proper motion in declination of the selected globular cluster.
-    rhopmrade : astropy.units.quantity.Quantity
-        The correlation between the proper motions in right ascension and declination of the selected globular cluster.
-    Mass : astropy.units.quantity.Quantity
-        The mass of the selected globular cluster.
-    DM : astropy.units.quantity.Quantity
-        The distance modulus of the selected globular cluster.
-    rh_m : astropy.units.quantity.Quantity
-        The half-mass radius of the selected globular cluster.
-    ERrh_m : astropy.units.quantity.Quantity
-        The error on the half-mass radius of the selected globular cluster.
     """
 
     def __init__(
@@ -143,10 +103,12 @@ class baumgardtMWGCs:
                 if units[i]=="unitless":
                     units[i]=""
                 data[fields[i]] = GCfits[1].data[fields[i]]*u.Unit(units[i])
+                data[fields[i]].to(self.units[fields[i]])
         self.data=data
         GCfits.close()
     
-    def SetGlobularClusterOfInterest(self,GCname):
+    
+    def getGCCovarianceMatrix(self,GCname):
         """Pick a globular cluster of interest and extract its data to tbe class directly
 
         Parameters
@@ -154,50 +116,6 @@ class baumgardtMWGCs:
         GCname : str
             name of the globular cluter of interest. Must be one of the names in the fits file
         
-        Returns
-        -------
-        None
-            None
-        """        
-
-        self.GCdex=np.where(self.data['Cluster']==GCname)[0][0]
-        self.GCname=GCname
-        self.RA=self.data['RA'][self.GCdex].to(self.units['RA'])
-        self.ERRA=0*self.units['RA'] # no errors on these
-        self.DEC=self.data['DEC'][self.GCdex].to(self.units['DEC'])
-        self.ERDEC=0*self.units['DEC'] # no errors on these
-        self.Rsun=self.data['Rsun'][self.GCdex].to(self.units['Rsun'])
-        self.ERsun=self.data['ERsun'][self.GCdex].to(self.units['Rsun'])
-        self.RV=self.data['RV'][self.GCdex].to(self.units['RV'])
-        self.ERV=self.data['ERV'][self.GCdex].to(self.units['RV'])
-        self.mualpha=self.data['mualpha'][self.GCdex].to(self.units['mualpha'])
-        self.ERmualpha=self.data['ERmualpha'][self.GCdex].to(self.units['mualpha'])
-        self.mu_delta=self.data['mu_delta'][self.GCdex].to(self.units['mu_delta'])
-        self.ERmu_delta=self.data['ERmu_delta'][self.GCdex].to(self.units['mu_delta'])
-        self.rhopmrade=self.data['rhopmrade'][self.GCdex].to(self.units['rhopmrade'])
-        self.Mass=self.data['Mass'][self.GCdex].to(self.units['Mass'])
-        self.DM=self.data['DM'][self.GCdex].to(self.units['DM'])
-        self.rh_m=self.data['rh_m'][self.GCdex].to(self.units['rh_m'])
-        self.ERrh_m=0*self.rh_m.unit # no errors on these
-    
-    def BuildCovarianceMatrix(self,ERRA=0,ERDEC=0,ERhalfmassradius=0):
-        """build the covariance matrix of the observed kinematics of a given GC. Intended to be used for sampling
-
-        Parameters
-        ----------
-        ERRA : int, optional
-            error on the Right Ascension, by default 0
-        ERDEC : int, optional
-            error on the Declination, by default 0
-        ERhalfmassradius : int, optional
-            Error of the half mass radius, by default 0
-        
-        Examples
-        --------
-        >>> self.BuildCovarianceMatrix()
-        >>> RA,DEC,D,RV,mualpha,mu_delta,Mass,halfmassradius = np.random.multivariate_normal(self.meanParameters,self.covarianceParameters)
-
-
         Returns
         -------
         means : list
@@ -208,42 +126,45 @@ class baumgardtMWGCs:
         Note
         ----
         the order of the data are:
-            [RA,DEC,Rsun,RV,mualpha,mu_delta,rh_m]
-
+            [RA,DEC,Rsun,RV,mualpha,mu_delta,Mass,rh_m]
+        Example
+        --------
+        means,covarianceMatrix = GC.getGCCovarianceMatrix('NGC104')
+        
         """        
-        means = [self.RA.to(self.units['RA']).value,
-            self.DEC.to(self.units['DEC']).value,
-            self.Rsun.to(self.units['Rsun']).value,
-            self.RV.to(self.units['RV']).value,
-            self.mualpha.to(self.units['mualpha']).value,
-            self.mu_delta.to(self.units['mu_delta']).value,
-            self.Mass.to(self.units['Mass']).value,
-            self.rh_m.to(self.units['rh_m']).value,]
-        sigmas = [self.ERRA.to(self.units['RA']).value,
-            self.ERDEC.to(self.units['DEC']).value,
-            self.ERsun.to(self.units['Rsun']).value,
-            self.ERV.to(self.units['RV']).value,
-            self.ERmualpha.to(self.units['mualpha']).value,
-            self.ERmu_delta.to(self.units['mu_delta']).value,
-            self.DM.to(self.units['Mass']).value,
-            self.ERrh_m.to(self.units['rh_m']).value,]
+        assert isinstance(GCname,str), f"{GCname} is not a string"
+        assert GCname in self.data['Cluster'], f"{GCname} is not a valid globular cluster name"
+        
+        GCdex=np.where(self.data['Cluster']==GCname)[0][0]
+        
+        # drop the units for numpy
+        RA=self.data['RA'][GCdex].value
+        ERRA=0 # no error
+        DEC=self.data['DEC'][GCdex].value
+        ERDEC=0 # no error
+        Rsun=self.data['Rsun'][GCdex].value
+        ERsun=self.data['ERsun'][GCdex].value
+        RV=self.data['RV'][GCdex].value
+        ERV=self.data['ERV'][GCdex].value
+        mualpha=self.data['mualpha'][GCdex].value
+        ERmualpha=self.data['ERmualpha'][GCdex].value
+        mu_delta=self.data['mu_delta'][GCdex].value
+        ERmu_delta=self.data['ERmu_delta'][GCdex].value
+        rhopmrade=self.data['rhopmrade'][GCdex].value
+        Mass=self.data['Mass'][GCdex].value
+        DM=self.data['DM'][GCdex].value
+        rh_m=self.data['rh_m'][GCdex].value
+        ERrh_m=0 # no error
+        
+        means=[RA,DEC,Rsun,RV,mualpha,mu_delta,Mass,rh_m]
+        sigmas=[ERRA,ERDEC,ERsun,ERV,ERmualpha,ERmu_delta,DM,ERrh_m]
         Nparams = len(means)
         # put in the variances
         covarianceMatrix=np.zeros((Nparams,Nparams))
         for i in range(Nparams):
             covarianceMatrix[i,i]=sigmas[i]**2
         # convert correlation to covariance and put in the covariance
-        covarianceMatrix[4,5]=covarianceMatrix[5,4]=self.rhopmrade*self.ERmualpha.value*self.ERmu_delta.value # only the covariance between the proper motions
-        self.fields = {
-            "RA":{"name":"RA","unit":self.units['RA']},
-            "DEC":{"name":"DEC","unit":self.units['DEC']},
-            "Rsun":{"name":"Rsun","unit":self.units['Rsun']},
-            "RV":{"name":"RV","unit":self.units['RV']},
-            "mualpha":{"name":r"$\mu_{\alpha}cos{\delta}$","unit":self.units['mualpha']},
-            "mu_delta":{"name":r"$\mu_{\delta}$","unit":self.units['mu_delta']},
-            "Mass":{"name":"Mass","unit":r"$M_{\odot}$"},
-            "rh_m":{"name":r"$r_{\frac{1}{2}M}$","unit":self.units['rh_m']},
-        }
+        covarianceMatrix[4,5]=covarianceMatrix[5,4]=rhopmrade*ERmualpha*ERmu_delta # only the covariance between the proper motions
         return means,covarianceMatrix
-
+        
 

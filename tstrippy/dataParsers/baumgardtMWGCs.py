@@ -14,15 +14,45 @@ class baumgardtMWGCs:
     
     This path will store all the data, and return an astropy object of all the data in ICRS coordinates.
 
+    Parameters
+    ----------
+    units : dict, optional
+        The units for the data fields. The keys are the names of the fields, and the values are the units, which are astropy units. The user may change the units if desired. Default is the following:
+            units ={
+                "RA":u.degree,\n
+                "DEC":u.degree,\n
+                "Rsun":u.kpc,\n
+                "RV":u.km/u.s,\n
+                "mualpha":u.mas/u.yr,\n
+                "mu_delta":u.mas/u.yr,\n
+                "Mass":u.Msun,\n
+                "rh_m":u.kpc,\n
+                "rhopmrade":u.dimensionless_unscaled}
+
     Attributes
     ----------
-    data : dict
-        The data extracted from the FITS file.
     units : dict
-        The units for the data fields.
-    getGCCovarianceMatrix : method
-        A method to extract the data for a given globular cluster and return the covariance matrix.
         
+    data : dict
+        The data extracted from the FITS file and stored in the dictionary. This fits file was assembled by hand from https://people.smp.uq.edu.au/HolgerBaumgardt/globular/. They keys are the following:
+            data = {
+                "Cluster":np.chararray,\n
+                "RA":astropy.units.quantity.Quantity,\n
+                "DEC":astropy.units.quantity.Quantity,\n
+                "Rsun":astropy.units.quantity.Quantity,\n
+                "ERsun":astropy.units.quantity.Quantity,\n
+                "RV":astropy.units.quantity.Quantity,\n
+                "ERV":astropy.units.quantity.Quantity,\n
+                "mualpha":astropy.units.quantity.Quantity,\n
+                "ERmualpha":astropy.units.quantity.Quantity,\n
+                "mu_delta":astropy.units.quantity.Quantity,\n
+                "ERmu_delta":astropy.units.quantity.Quantity,\n
+                "Mass":astropy.units.quantity.Quantity,\n
+                "DM":astropy.units.quantity.Quantity,\n
+                "rh_m":astropy.units.quantity.Quantity,\n
+                "rhopmrade":astropy.units.quantity.Quantity, correlation \n
+            }
+
     """
 
     def __init__(
@@ -139,20 +169,19 @@ class baumgardtMWGCs:
         
         Returns
         -------
-        means : list
+        means : numpy.ndarray
             list of the means of the parameters
-        covarianceMatrix : np.array
-            covariance matrix of the parameters
+        cov : numpy.ndarray
+            covcariance matrix of the parameters
         
         Note
         ----
         the order of the data are:
             [RA,DEC,Rsun,RV,mualpha,mu_delta,Mass,rh_m]
-        Example
-        --------
-        means,covarianceMatrix = GC.getGCCovarianceMatrix('NGC104')
-        samples=np.random.multivariate_normal(means,covarianceMatrix,1000)
-        
+        It is intended that the user will use the means and covariance matrix to generate a multivariate normal distribution.
+            Nsamples=1000
+            means,cov = GC.getGCCovarianceMatrix('NGC104')
+            samples=np.random.multivariate_normal(means,cov,Nsamples)        
         """        
         assert isinstance(GCname,str), f"{GCname} is not a string"
         assert GCname in self.data['Cluster'], f"{GCname} is not a valid globular cluster name"
@@ -182,11 +211,11 @@ class baumgardtMWGCs:
         sigmas=np.array([ERRA,ERDEC,ERsun,ERV,ERmualpha,ERmu_delta,DM,ERrh_m])
         Nparams = len(means)
         # put in the variances
-        covarianceMatrix=np.zeros((Nparams,Nparams))
+        cov=np.zeros((Nparams,Nparams))
         for i in range(Nparams):
-            covarianceMatrix[i,i]=sigmas[i]**2
+            cov[i,i]=sigmas[i]**2
         # convert correlation to covariance and put in the covariance
-        covarianceMatrix[4,5]=covarianceMatrix[5,4]=rhopmrade*ERmualpha*ERmu_delta # only the covariance between the proper motions
-        return means,covarianceMatrix
+        cov[4,5]=cov[5,4]=rhopmrade*ERmualpha*ERmu_delta # only the covariance between the proper motions
+        return means,cov
         
 

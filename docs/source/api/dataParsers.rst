@@ -5,13 +5,12 @@ Module contents
 ---------------
 
 .. automodule:: tstrippy.dataParsers
-   :members:
+   :members: 
    :undoc-members:
    :show-inheritance:
 
-baumgardtMWGCs module
+baumgardtMWGCs 
 ---------------------
-
 .. automodule:: tstrippy.dataParsers.baumgardtMWGCs
    :members:
    :undoc-members:

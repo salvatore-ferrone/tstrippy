@@ -20,6 +20,9 @@ class baumgardtMWGCs:
         The data extracted from the FITS file.
     units : dict
         The units for the data fields.
+    getGCCovarianceMatrix : method
+        A method to extract the data for a given globular cluster and return the covariance matrix.
+        
     """
 
     def __init__(

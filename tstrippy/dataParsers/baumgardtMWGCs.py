@@ -84,7 +84,7 @@ class baumgardtMWGCs:
         self._pathtoclusterdata=pkg_resources.resource_filename('tstrippy', 'data/2023-03-28-merged.fits')
         self._unitkeys = ["RA","DEC","Rsun","RV","mualpha","mu_delta","Mass","rh_m","DM","rhopmrade"]
         self._unittypes= ["angle","angle","length","velocity","velocity","velocity","mass","length","length",""]
-        
+
         assert self._pathtoclusterdata is not None, "The path to the cluster data is not valid"
         assert isinstance(self._pathtoclusterdata,str), "The path to the cluster data is not a string"
         if not os.path.exists(self._pathtoclusterdata):
@@ -118,7 +118,6 @@ class baumgardtMWGCs:
         assert units['rh_m'].is_equivalent(u.kpc), f"The units of rh_m is {units['rh_m']}, which is not equvalent to kpc"
         assert units['DM'].is_equivalent(u.Msun), f"The units of DM is {units['DM']}, which is not equvalent to Msun"
         assert units['rhopmrade'].is_equivalent(u.dimensionless_unscaled), f"The units of rhopmrade is {units['rhopmrade']}, which is not equvalent to dimensionless_unscaled"
-
         self.units=units
         self._extractdatafromfits()
 
@@ -126,7 +125,14 @@ class baumgardtMWGCs:
     def _extractdatafromfits(self):
         """ internal function to extract the data from the fits file and store it in a dictionary
         """        
-        GCfits=fits.open(self._pathtoclusterdata)
+        try:
+            GCfits = fits.open(self._pathtoclusterdata)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"The file {self._pathtoclusterdata} does not exist.")
+        except OSError:
+            raise OSError(f"The file {self._pathtoclusterdata} is not a valid FITS file.")
+        
+        
         fields = [GCfits[1].header['TTYPE'+str(i)] for i in range(1,GCfits[1].header['TFIELDS']+1)]
         units = [GCfits[1].header['TUNIT'+str(i)] for i in range(1,GCfits[1].header['TFIELDS']+1)]
         data={}
@@ -194,17 +200,15 @@ class baumgardtMWGCs:
 
         Returns
         -------
-        None
-            None
-            
+        means : list
+            list of the means of the parameters
+        covarianceMatrix : np.array
+            covariance matrix of the parameters
+        
         Note
         ----
         the order of the data are:
             [RA,DEC,Rsun,RV,mualpha,mu_delta,rh_m]
-        the data can be accessed with the following:
-            self.sigmaParameters = sigmas
-            self.meanParameters = means
-            self.covarianceParameters =
 
         """        
         means = [self.RA.to(self.units['RA']).value,
@@ -240,8 +244,6 @@ class baumgardtMWGCs:
             "Mass":{"name":"Mass","unit":r"$M_{\odot}$"},
             "rh_m":{"name":r"$r_{\frac{1}{2}M}$","unit":self.units['rh_m']},
         }
-        self.sigmaParameters = sigmas
-        self.meanParameters = means
-        self.covarianceParameters = covarianceMatrix
+        return means,covarianceMatrix
 
 

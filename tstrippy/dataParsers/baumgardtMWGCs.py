@@ -33,7 +33,6 @@ class baumgardtMWGCs:
             "mu_delta":u.mas/u.yr,
             "Mass":u.Msun,
             "rh_m":u.kpc,
-            "DM":u.Msun,
             "rhopmrade":u.dimensionless_unscaled}
         ):
         """ extracts the data from the fits file and stores it in a dictionary
@@ -42,7 +41,7 @@ class baumgardtMWGCs:
         
         # CHECK THAT THE FILE EXISTS
         self._pathtoclusterdata=pkg_resources.resource_filename('tstrippy', 'data/2023-03-28-merged.fits')
-        self._unitkeys = ["RA","DEC","Rsun","RV","mualpha","mu_delta","Mass","rh_m","DM","rhopmrade"]
+        self._unitkeys = ["RA","DEC","Rsun","RV","mualpha","mu_delta","Mass","rh_m","rhopmrade"]
         self._unittypes= ["angle","angle","length","velocity","velocity","velocity","mass","length","length",""]
 
         assert self._pathtoclusterdata is not None, "The path to the cluster data is not valid"
@@ -65,7 +64,6 @@ class baumgardtMWGCs:
         assert isinstance(units['mu_delta'],u.UnitBase), f"{units[key]} is not a valid astropy unit"
         assert isinstance(units['Mass'],u.UnitBase), f"{units[key]} is not a valid astropy unit"
         assert isinstance(units['rh_m'],u.UnitBase), f"{units[key]} is not a valid astropy unit"
-        assert isinstance(units['DM'],u.UnitBase), f"{units[key]} is not a valid astropy unit"
         
         # check that the are the correct units
         assert units['RA'].is_equivalent(u.degree), f"The units of RA is {units['RA']}, which is not equvalent to degree"
@@ -76,35 +74,54 @@ class baumgardtMWGCs:
         assert units['mu_delta'].is_equivalent(u.mas/u.yr), f"The units of mu_delta is {units['mu_delta']}, which is not equvalent to mas/yr"
         assert units['Mass'].is_equivalent(u.Msun), f"The units of Mass is {units['Mass']}, which is not equvalent to Msun"
         assert units['rh_m'].is_equivalent(u.kpc), f"The units of rh_m is {units['rh_m']}, which is not equvalent to kpc"
-        assert units['DM'].is_equivalent(u.Msun), f"The units of DM is {units['DM']}, which is not equvalent to Msun"
         assert units['rhopmrade'].is_equivalent(u.dimensionless_unscaled), f"The units of rhopmrade is {units['rhopmrade']}, which is not equvalent to dimensionless_unscaled"
+        
         self.units=units
         self._extractdatafromfits()
 
 
     def _extractdatafromfits(self):
         """ internal function to extract the data from the fits file and store it in a dictionary
-        """        
+        """  
+        
+        
         try:
-            GCfits = fits.open(self._pathtoclusterdata)
+            GCfits = fits.open(self._pathtoclusterdata,'readonly')
         except FileNotFoundError:
             raise FileNotFoundError(f"The file {self._pathtoclusterdata} does not exist.")
         except OSError:
             raise OSError(f"The file {self._pathtoclusterdata} is not a valid FITS file.")
         
         
-        fields = [GCfits[1].header['TTYPE'+str(i)] for i in range(1,GCfits[1].header['TFIELDS']+1)]
-        units = [GCfits[1].header['TUNIT'+str(i)] for i in range(1,GCfits[1].header['TFIELDS']+1)]
-        data={}
-        for i in range(len(fields)):
-            if units[i]=="Name":
-                data[fields[i]] = GCfits[1].data[fields[i]]
+        num_tunits = sum(1 for key in GCfits[1].header if key.startswith('TUNIT'))
+        data = {}
+        for n in range(1,num_tunits+1):
+            myttype=GCfits[1].header['TTYPE'+str(n)]
+            mytunit=GCfits[1].header['TUNIT'+str(n)]
+            if mytunit=='Name':
+                data[myttype]=GCfits[1].data[GCfits[1].header['TTYPE'+str(n)]]
             else:
-                if units[i]=="unitless":
-                    units[i]=""
-                data[fields[i]] = GCfits[1].data[fields[i]]*u.Unit(units[i])
-                data[fields[i]].to(self.units[fields[i]])
+                data[myttype]=GCfits[1].data[GCfits[1].header['TTYPE'+str(n)]]*u.Unit(GCfits[1].header['TUNIT'+str(n)])
+
+        
+        # convert to the desired units
+        data['RA']=data['RA'].to(self.units['RA'])
+        data['DEC']=data['DEC'].to(self.units['DEC'])
+        data['Rsun']=data['Rsun'].to(self.units['Rsun'])
+        data['ERsun']=data['ERsun'].to(self.units['Rsun'])
+        data['RV']=data['RV'].to(self.units['RV'])
+        data['ERV']=data['ERV'].to(self.units['RV'])
+        data['mualpha']=data['mualpha'].to(self.units['mualpha'])
+        data['ERmualpha']=data['ERmualpha'].to(self.units['mualpha'])
+        data['mu_delta']=data['mu_delta'].to(self.units['mu_delta'])
+        data['ERmu_delta']=data['ERmu_delta'].to(self.units['mu_delta'])
+        data['Mass']=data['Mass'].to(self.units['Mass'])
+        data['DM']=data['DM'].to(self.units['Mass'])
+        data['rh_m']=data['rh_m'].to(self.units['rh_m'])
+        data['rhopmrade']=data['rhopmrade'].to(self.units['rhopmrade'])
+        
         self.data=data
+        
         GCfits.close()
     
     

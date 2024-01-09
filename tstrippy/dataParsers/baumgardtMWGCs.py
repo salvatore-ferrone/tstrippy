@@ -2,7 +2,7 @@ import astropy.units as u
 import astropy.coordinates as coord
 from astropy.io import fits
 import numpy as np
-import pkg_resources
+import importlib.resources
 import os
 
 class baumgardtMWGCs:
@@ -40,7 +40,9 @@ class baumgardtMWGCs:
         """        
         
         # CHECK THAT THE FILE EXISTS
-        self._pathtoclusterdata=pkg_resources.resource_filename('tstrippy', 'data/2023-03-28-merged.fits')
+        pathobj=importlib.resources.files('tstrippy').joinpath('data/2023-03-28-merged.fits')
+        self._pathtoclusterdata=os.path.abspath(str(pathobj))
+        
         self._unitkeys = ["RA","DEC","Rsun","RV","mualpha","mu_delta","Mass","rh_m","rhopmrade"]
         self._unittypes= ["angle","angle","length","velocity","velocity","velocity","mass","length","length",""]
 

@@ -78,21 +78,21 @@ class baumgardtMWGCs:
         
         self.units=units
         self._extractdatafromfits()
+        self._fitskeys = ["Cluster", "RA","DEC","Rsun","ERsun","RV","ERV","mualpha","ERmualpha","mu_delta","ERmu_delta","Mass","DM","rh_m","rhopmrade","Cluster"]
 
 
     def _extractdatafromfits(self):
         """ internal function to extract the data from the fits file and store it in a dictionary
         """  
-        
-        
+
         try:
             GCfits = fits.open(self._pathtoclusterdata,'readonly')
         except FileNotFoundError:
             raise FileNotFoundError(f"The file {self._pathtoclusterdata} does not exist.")
         except OSError:
             raise OSError(f"The file {self._pathtoclusterdata} is not a valid FITS file.")
-        
-        
+
+        # extract the data from the Binary Table
         num_tunits = sum(1 for key in GCfits[1].header if key.startswith('TUNIT'))
         data = {}
         for n in range(1,num_tunits+1):
@@ -121,7 +121,6 @@ class baumgardtMWGCs:
         data['rhopmrade']=data['rhopmrade'].to(self.units['rhopmrade'])
         
         self.data=data
-        
         GCfits.close()
     
     
@@ -147,6 +146,7 @@ class baumgardtMWGCs:
         Example
         --------
         means,covarianceMatrix = GC.getGCCovarianceMatrix('NGC104')
+        samples=np.random.multivariate_normal(means,covarianceMatrix,1000)
         
         """        
         assert isinstance(GCname,str), f"{GCname} is not a string"
@@ -173,8 +173,8 @@ class baumgardtMWGCs:
         rh_m=self.data['rh_m'][GCdex].value
         ERrh_m=0 # no error
         
-        means=[RA,DEC,Rsun,RV,mualpha,mu_delta,Mass,rh_m]
-        sigmas=[ERRA,ERDEC,ERsun,ERV,ERmualpha,ERmu_delta,DM,ERrh_m]
+        means=np.array([RA,DEC,Rsun,RV,mualpha,mu_delta,Mass,rh_m])
+        sigmas=np.array([ERRA,ERDEC,ERsun,ERV,ERmualpha,ERmu_delta,DM,ERrh_m])
         Nparams = len(means)
         # put in the variances
         covarianceMatrix=np.zeros((Nparams,Nparams))

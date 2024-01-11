@@ -10,10 +10,12 @@ Welcome to tstrippy's documentation!
    :maxdepth: 1
    :caption: Contents:
 
-   intro_notebook.ipynb
    installation.rst
+   intro_notebook.ipynb
    api/index.rst
    api/dataParsers.rst
+   examples/index.rst
+   examples/gettingBaumgardtMWGCs.ipynb
 
 Indices and tables
 ==================

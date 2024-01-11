@@ -21,7 +21,7 @@ release = '0.0.1'
 extensions = ['sphinx.ext.autodoc',"sphinx.ext.napoleon"]
 
 templates_path = ['_templates']
-exclude_patterns = ['tstrippy/tstrippy/lib/*.so',]
+exclude_patterns = ['tstrippy/tstrippy/lib/*.so','.ipynb_checkpoints/*']
 
 
 
@@ -30,3 +30,6 @@ exclude_patterns = ['tstrippy/tstrippy/lib/*.so',]
 
 html_theme = 'alabaster'
 html_static_path = []
+
+# -- Options for configuring jupyter notebooks --------------------------------
+nbsphinx_prompt_width = 0

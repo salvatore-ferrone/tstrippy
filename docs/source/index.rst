@@ -11,6 +11,7 @@ Welcome to tstrippy's documentation!
    :caption: Contents:
 
    installation.rst
+   examples/gettingBaumgardtMWGCs.ipynb
    api/index.rst
    api/dataParsers.rst
 

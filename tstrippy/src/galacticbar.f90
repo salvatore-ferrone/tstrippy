@@ -3,7 +3,7 @@ MODULE galacticbar
     ! so far it will just include one mode
     ! it will handle updating the bar as a function of time
     ! it will return the force from the bar at a given time
-
+		!    test comment from github app 
     ! The bar can have a changing angular momentum, 
     ! the orientation is found with a polynomial fit
     ! theta = theta0 + b*t + c*t^2 + d*t^3 + ...

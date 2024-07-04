@@ -7,7 +7,7 @@ long_description = (this_directory / "README.md").read_text()
 # my fortran module
 
 
-constands_module = Extension('tstrippy.lib.constants',
+constants_module = Extension('tstrippy.lib.constants',
                               sources=[
                                   'tstrippy/src/constants.f90',
                                   ])
@@ -41,14 +41,15 @@ setup(
     url="https://github.com/salvatore-ferrone",
     packages=setuptools.find_packages(include=['tstrippy', 'tstrippy.*']),
     classifiers=[
-        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.11.2",
         "License :: OSI Approved :: MIT License",
+        "Operating System :: POSIX :: Linux",
         "Operating System :: Mac only (for now)",
     ],
     python_requires='>=3.6',
     install_requires=['numpy',
                       "h5py",
                       'astropy',],
-    ext_modules=[constands_module,potentials_module,integrator_module],
+    ext_modules=[constants_module,potentials_module,integrator_module],
     package_data={'tstrippy': ['data/*']},
 )

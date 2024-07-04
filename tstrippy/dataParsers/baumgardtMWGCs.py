@@ -1,5 +1,4 @@
 import astropy.units as u
-import astropy.coordinates as coord
 from astropy.io import fits
 import numpy as np
 import importlib.resources

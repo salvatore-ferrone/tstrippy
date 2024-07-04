@@ -1,0 +1,5 @@
+distance: kpc
+mass: Msun
+velocity: km/s
+time: kpc s / km
+G: km2 kpc / (solMass s2)

@@ -2,10 +2,10 @@ MODULE integrator
     ! this integrator needs to contain the current positions
     ! it needs to be able to apply any force that I want at any time
     ! it needs to be able to integrate the positions and velocities
+    use constants
     use potentials
     use perturbers
     use hostperturber
-    use constants
     use galacticbar
     IMPLICIT NONE
     PRIVATE 

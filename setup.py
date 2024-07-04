@@ -12,9 +12,11 @@ potentials_module = Extension('tstrippy.lib.potentials',
                               sources=['tstrippy/src/potentials.f90'])
 
 integrator_module = Extension('tstrippy.lib.integrator',
-                              sources=['tstrippy/src/galacticbar.f90',
+                              sources=['tstrippy/src/constants.f90',
+                                       'tstrippy/src/potentials.f90',
                                        'tstrippy/src/perturbers.f90',
                                        'tstrippy/src/hostperturber.f90',
+                                       'tstrippy/src/galacticbar.f90',
                                        'tstrippy/src/integrator.f90'])
 
 setup(

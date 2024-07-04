@@ -1,3 +1,3 @@
 # tstrippy/__init__.py
-from . import dataParsers
+from . import Parsers
 from . import lib

@@ -188,23 +188,23 @@ class baumgardtMWGCs:
         GCdex=np.where(self.data['Cluster']==GCname)[0][0]
         
         # drop the units for numpy
-        RA=self.data['RA'][GCdex].value
-        ERRA=0 # no error
-        DEC=self.data['DEC'][GCdex].value
-        ERDEC=0 # no error
-        Rsun=self.data['Rsun'][GCdex].value
-        ERsun=self.data['ERsun'][GCdex].value
-        RV=self.data['RV'][GCdex].value
-        ERV=self.data['ERV'][GCdex].value
-        mualpha=self.data['mualpha'][GCdex].value
-        ERmualpha=self.data['ERmualpha'][GCdex].value
-        mu_delta=self.data['mu_delta'][GCdex].value
-        ERmu_delta=self.data['ERmu_delta'][GCdex].value
-        rhopmrade=self.data['rhopmrade'][GCdex].value
-        Mass=self.data['Mass'][GCdex].value
-        DM=self.data['DM'][GCdex].value
-        rh_m=self.data['rh_m'][GCdex].value
-        ERrh_m=0 # no error
+        RA          =   self.data['RA'][GCdex].value
+        ERRA        =   0 # no error
+        DEC         =   self.data['DEC'][GCdex].value
+        ERDEC       =   0 # no error
+        Rsun        =   self.data['Rsun'][GCdex].value
+        ERsun       =   self.data['ERsun'][GCdex].value
+        RV          =   self.data['RV'][GCdex].value
+        ERV         =   self.data['ERV'][GCdex].value
+        mualpha     =   self.data['mualpha'][GCdex].value
+        ERmualpha   =   self.data['ERmualpha'][GCdex].value
+        mu_delta    =   self.data['mu_delta'][GCdex].value
+        ERmu_delta  =   self.data['ERmu_delta'][GCdex].value
+        rhopmrade   =   self.data['rhopmrade'][GCdex].value
+        Mass        =   self.data['Mass'][GCdex].value
+        DM          =   self.data['DM'][GCdex].value
+        rh_m        =   self.data['rh_m'][GCdex].value
+        ERrh_m      =   0 # no error
         
         means=np.array([RA,DEC,Rsun,RV,mualpha,mu_delta,Mass,rh_m])
         sigmas=np.array([ERRA,ERDEC,ERsun,ERV,ERmualpha,ERmu_delta,DM,ERrh_m])

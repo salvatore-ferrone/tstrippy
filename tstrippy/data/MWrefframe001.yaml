@@ -1,0 +1,18 @@
+vLSR:
+  - 0
+  - 240
+  - 0
+vSun:
+  - 11.1
+  - 12.24
+  - 7.25
+galcen_distance: 8340
+z_sun: 27
+unitvLSR: km/s
+unitvSun: km/s
+unitgalcen_distance: pc
+unitz_sun: pc
+papers:
+  - Reid et al 2014
+  - Schonrich (2012)
+  - Chen et al. 2001

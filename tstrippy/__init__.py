@@ -1,3 +1,4 @@
 # tstrippy/__init__.py
 from . import Parsers
-from . import lib
+from .lib import integrator
+from .code import ergodic

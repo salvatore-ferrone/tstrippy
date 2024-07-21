@@ -152,9 +152,10 @@ MODULE integrator
         integer, intent(in) :: N
         REAL*8, DIMENSION(N), intent(in) :: x,y,z,vx,vy,vz
         integer::index
-        character*100 :: filename
+        character*200 :: filename
         ! make the file name
-        WRITE(filename,'(A,A,A,I0,A)') trim(streamdir),trim(streamname),'-',index,'.bin'
+        WRITE(filename,'(A,A,A,I0,A)') &
+            trim(streamdir),trim(streamname),'-',index,'.bin'
         ! open the file
         open(unit=FILEUNITBASE, file=filename, form="unformatted", status="replace")
         ! write the first line

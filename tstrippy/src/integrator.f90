@@ -30,7 +30,7 @@ MODULE integrator
     REAL*8, PUBLIC :: t,dt
     INTEGER, PUBLIC :: ntimesteps,ntimepoints,nparticles,nwriteskip
     INTEGER, PUBLIC :: FILEUNITBASE 
-    CHARACTER*100, PUBLIC :: outname,outdir,streamdir,streamname
+    CHARACTER*500, PUBLIC :: outname,outdir,streamdir,streamname
     contains 
     SUBROUTINE setstaticgalaxy(milkywaypotentialname,mwparams)
         !! decide which potential we are going to integrate in
@@ -131,8 +131,8 @@ MODULE integrator
         ! thie should be incompatible with writeparticleorbits
         ! I should block them from happening at the same time somehow
         INTEGER, intent(in) :: nskip
-        CHARACTER*100, intent(in) :: myoutname
-        CHARACTER*100, intent(in) :: myoutdir
+        CHARACTER*500, intent(in) :: myoutname
+        CHARACTER*500, intent(in) :: myoutdir
         integer, intent(in),optional :: memorybaseint ! memory address to start the file units
 
 
@@ -152,7 +152,7 @@ MODULE integrator
         integer, intent(in) :: N
         REAL*8, DIMENSION(N), intent(in) :: x,y,z,vx,vy,vz
         integer::index
-        character*200 :: filename
+        character*500 :: filename
         ! make the file name
         WRITE(filename,'(A,A,A,I0,A)') &
             trim(streamdir),trim(streamname),'-',index,'.bin'

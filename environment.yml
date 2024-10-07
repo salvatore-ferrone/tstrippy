@@ -2,7 +2,7 @@ name: tstrippy
 channels:
   - conda-forge
 dependencies:
-  - python=3.11
+  - python=3.10
   - numpy=1.23.0
   - pip
   - pip:

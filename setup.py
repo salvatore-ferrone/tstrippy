@@ -42,7 +42,7 @@ setup(
         "Operating System :: MacOS :: MacOS X",
     ],
     python_requires='>=3.6',
-    install_requires=['numpy', 'h5py', 'astropy'],
+    install_requires=['h5py', 'astropy'],
     ext_modules=[constants_module, potentials_module, integrator_module],
     package_data={'tstrippy': ['data/*']},
 )

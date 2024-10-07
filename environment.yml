@@ -6,4 +6,4 @@ dependencies:
   - numpy=1.23
   - pip
   - pip:
-      - tstrippy
+      - -e .

@@ -11,7 +11,7 @@ Welcome to tstrippy's documentation!
    :caption: Contents:
 
    installation.rst
-   intro_notebook.ipynb
+   baumgardt_catalog.ipynb
 
 .. Indices and tables
 

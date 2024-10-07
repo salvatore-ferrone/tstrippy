@@ -23,7 +23,7 @@ extensions = ['sphinx.ext.autodoc',"sphinx.ext.napoleon","nbsphinx"]
 templates_path = ["_templates"]
 exclude_patterns = ['tstrippy/tstrippy/lib/*.so','.ipynb_checkpoints/*']
 
-
+master_doc = 'index'
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

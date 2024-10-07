@@ -1,5 +1,5 @@
 sphinx
 nbsphinx
 ipython
-# jupyter
+jupyter
 # sphinx_rtd_theme

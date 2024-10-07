@@ -12,10 +12,6 @@ Welcome to tstrippy's documentation!
 
    installation.rst
    intro_notebook.ipynb
-   api/index.rst
-   api/Parsers.rst
-   examples/index.rst
-   examples/gettingBaumgardtMWGCs.ipynb
 
 .. Indices and tables
 

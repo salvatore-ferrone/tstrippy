@@ -1,8 +1,6 @@
+numpy
 sphinx
 nbsphinx
 ipython
 jupyter
 sphinx_rtd_theme
-numpy
-matplotlib
-tstrippy

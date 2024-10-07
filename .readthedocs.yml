@@ -10,6 +10,6 @@ sphinx:
 
 python:
   install:
-    - method: pip
+    - method: conda
       path: .
-    - requirements: docs/requirements.txt
+    - requirements: environment.yml

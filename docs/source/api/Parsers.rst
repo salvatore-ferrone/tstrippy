@@ -4,14 +4,14 @@ dataParsers package
 Module contents
 ---------------
 
-.. automodule:: tstrippy.dataParsers
+.. automodule:: tstrippy.Parsers
    :members: 
    :undoc-members:
    :show-inheritance:
 
 baumgardtMWGCs 
 ---------------------
-.. automodule:: tstrippy.dataParsers.baumgardtMWGCs
+.. automodule:: tstrippy.Parsers.baumgardtMWGCs
    :members:
    :undoc-members:
    :show-inheritance:

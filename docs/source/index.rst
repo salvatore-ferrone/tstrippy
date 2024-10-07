@@ -7,21 +7,22 @@ Welcome to tstrippy's documentation!
 ====================================
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Contents:
 
    installation.rst
    intro_notebook.ipynb
    api/index.rst
-   api/dataParsers.rst
+   api/Parsers.rst
    examples/index.rst
    examples/gettingBaumgardtMWGCs.ipynb
 
-Indices and tables
-==================
+.. Indices and tables
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+.. ==================
+.. Bovy doesn't reccomend these and I agree
+.. * :ref:`genindex`
+.. * :ref:`modindex`
+.. * :ref:`search`
 
 

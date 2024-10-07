@@ -3,7 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.10
-  - numpy=1.23.0
+  - numpy=1.22
   - pip
   - pip:
       - -e .

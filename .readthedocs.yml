@@ -11,4 +11,4 @@ sphinx:
 python:
   install:
     - method: conda
-    - requirements: environment.yml
+    - path: environment.yml

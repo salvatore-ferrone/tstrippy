@@ -33,3 +33,4 @@ html_static_path = []
 
 # -- Options for configuring jupyter notebooks --------------------------------
 nbsphinx_prompt_width = "0"
+nbsphinx_execute = 'always'

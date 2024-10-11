@@ -13,6 +13,7 @@ Welcome to tstrippy's documentation!
    installation.rst
    baumgardt_catalog.ipynb
    galactic_orbits.ipynb
+   bar.ipynb
    api/index.rst
 
 .. Indices and tables

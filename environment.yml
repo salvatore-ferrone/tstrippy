@@ -7,10 +7,13 @@ dependencies:
   - setuptools=68.2
   - astropy==5
   - matplotlib==3.5
-  - nbsphinx==0.9.3
+  - nbsphinx
   - jupyterlab
   - yaml
-  - importlib
+  - pip:
+    - -e . 
+
+### NOTE!  `pip -e .` installs tstrippy in the environment.
 
 ## Note that I only need to add the simplest dependencies here. The rest will be installed automatically. 
 ## It's better to avoid pip because it pip will always update a new dependencies. 

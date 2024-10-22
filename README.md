@@ -7,9 +7,11 @@ Not quite ready yet, but its getting there. Huge thanks to @JoBovy's [python pac
 
 - Does not work with the new Mac processors.
 - only tested on Linux systems
-- requires numpy<=1.12.0 since I'm using numpy.distutils. I don't believe any other package can handle Fortran code. Shoulda probably went with C. 
-- Still missing python functions. 
-- need to make documentation 
+- Started in Jan 2024. 
+- requires numpy<=1.22.0 since I'm using numpy.distutils. I don't believe any other package can handle Fortran code. Shoulda probably went with C. 
 - need to publish on PyPi
 
-- Started in Jan 2024. 
+NOTES:
+The documentation on `tstrippy.readthedocs.io` is going well. I want to be able to compile the code on readthedoc's computer. However, I'm having a difficult time having it compile the fortran submodules properly. The error messages are long and elusive. 
+
+

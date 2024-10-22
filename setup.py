@@ -6,10 +6,12 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
 constants_module = Extension('tstrippy.lib.constants',
-                             sources=['tstrippy/src/constants.f90'])
+                             sources=['tstrippy/src/constants.f90'],
+                             extra_f90_compile_args=['-fPIC'])
 
 potentials_module = Extension('tstrippy.lib.potentials',
-                              sources=['tstrippy/src/potentials.f90'])
+                              sources=['tstrippy/src/potentials.f90'],
+                              extra_f90_compile_args=['-fPIC'])
 
 integrator_module = Extension('tstrippy.lib.integrator',
                               sources=['tstrippy/src/constants.f90',
@@ -17,14 +19,16 @@ integrator_module = Extension('tstrippy.lib.integrator',
                                        'tstrippy/src/perturbers.f90',
                                        'tstrippy/src/hostperturber.f90',
                                        'tstrippy/src/galacticbar.f90',
-                                       'tstrippy/src/integrator.f90'])
+                                       'tstrippy/src/integrator.f90'],
+                              extra_f90_compile_args=['-fPIC'])
+
 
 setup(
     name="tstrippy",
     version="0.0.1",
     author="Salvatore Ferrone",
     author_email="salvatore.ferrone.1996@gmail.com",
-    description="A small example package",
+    description="My life's work",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/salvatore-ferrone",

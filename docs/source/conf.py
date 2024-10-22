@@ -33,4 +33,4 @@ html_static_path = []
 
 # -- Options for configuring jupyter notebooks --------------------------------
 nbsphinx_prompt_width = "0"
-nbsphinx_execute = 'always' # this will execute the notebooks before building the documentation. I'm dropping it because it's too difficult to manage the dependencies of the notebooks.
+# nbsphinx_execute = 'always' # this will execute the notebooks before building the documentation. I'm dropping it because it's too difficult to manage the dependencies of the notebooks.

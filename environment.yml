@@ -14,10 +14,11 @@ dependencies:
   - nbsphinx
   - gfortran
 
-  - pip:
-    - -e . 
+  # - pip:
+    # - -e . 
 
 ### NOTE!  `pip -e .` installs tstrippy in the environment.
+###### NOTE that I am dropping `pip -e .` because I can't get the forgran to compile. Issues with C headers expecting long ints instead of ints. 
 
 ## Note that I only need to add the simplest dependencies here. The rest will be installed automatically. 
 ## It's better to avoid pip because it pip will always update a new dependencies. 

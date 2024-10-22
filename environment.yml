@@ -7,6 +7,10 @@ dependencies:
   - setuptools=68.2
   - astropy==5
   - matplotlib==3.5
+  - nbsphinx==0.9.3
+  - jupyterlab
+  - yaml
+  - importlib
 
 ## Note that I only need to add the simplest dependencies here. The rest will be installed automatically. 
 ## It's better to avoid pip because it pip will always update a new dependencies. 

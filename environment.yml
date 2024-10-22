@@ -1,6 +1,7 @@
 name: tstrippy
 channels:
   - conda-forge
+  - defaults
 dependencies:
   - python=3.9.20
   - numpy==1.22
@@ -11,6 +12,8 @@ dependencies:
   - pyyaml==6.0
   - pip==24.2
   - nbsphinx
+  - gfortran
+
   - pip:
     - -e . 
 

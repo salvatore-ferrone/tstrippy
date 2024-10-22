@@ -1,8 +1,21 @@
 import astropy.units as u
 from astropy.io import fits
 import numpy as np
-import importlib.resources
+from pathlib import Path
 import os
+
+
+# Get the directory of the current script
+current_script_directory = Path(__file__).parent
+
+# Construct the path to the data file relative to the current script
+path_to_data = current_script_directory / ".." / "data"
+
+# Resolve the path to make it absolute (and normalize it)
+path_to_cluster_data = path_to_data / "2023-03-28-merged.fits"
+absolute_path_to_cluster_data = path_to_cluster_data.resolve()
+
+
 
 class baumgardtMWGCs:
     """
@@ -72,9 +85,7 @@ class baumgardtMWGCs:
         """        
         
         # CHECK THAT THE FILE EXISTS
-        pathobj=importlib.resources.files('tstrippy').joinpath('data/2023-03-28-merged.fits')
-        self._pathtoclusterdata=os.path.abspath(str(pathobj))
-        
+        self._pathtoclusterdata = str(absolute_path_to_cluster_data)        
         self._unitkeys = ["RA","DEC","Rsun","RV","mualpha","mu_delta","Mass","rh_m","rhopmrade"]
         self._unittypes= ["angle","angle","length","velocity","velocity","velocity","mass","length","length",""]
 

@@ -2,15 +2,15 @@ name: tstrippy
 channels:
   - conda-forge
 dependencies:
-  - python=3.9
+  - python=3.9.20
   - numpy==1.22
   - setuptools=68.2
-  - astropy==5
+  - astropy==5.0
   - matplotlib==3.5
+  - jupyterlab==4.2
+  - pyyaml==6.0
+  - pip==24.2
   - nbsphinx
-  - jupyterlab
-  - yaml
-  - pip
   - pip:
     - -e . 
 
@@ -22,3 +22,6 @@ dependencies:
 ## in the end, the main constraint is that I need to use numpy 1.22 and setuptools 68.2 for the fotran compiler.
 ## The other package versions are specified only becuase they are the versions that are compatible with numpy 1.22. 
 ## Also, versions of python newer than 3.9 do work. 
+
+
+### NOTE. readthedocs.io says adding more constraints to the dependencies makes the compilation faster because conda-forge has a smaller solution space to search in 

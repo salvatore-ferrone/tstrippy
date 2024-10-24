@@ -331,6 +331,7 @@ MODULE integrator
                 CALL computeforcebyhosts(NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axHP,ayHP,azHP,phiHP)
             end if 
             IF (DOGALACTICBAR) THEN
+                ! print*, "Setting initial bar orientation"
                 CALL updatebarorientation(currenttime)
                 CALL barforce(NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axBAR,ayBAR,azBAR,phiBAR)
             END IF

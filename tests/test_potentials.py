@@ -9,10 +9,9 @@ def test_instantiation():
     return None
 
 
-def test_obtaining_parameters():
+def test_obtaining_pouliasis2017pii_parameters():
     MWparams = tstrippy.Parsers.potential_parameters.pouliasis2017pii()
     assert len(MWparams) == 11
-    
     return None
 
 def test_pouliasis2017pii():

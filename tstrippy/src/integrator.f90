@@ -10,7 +10,7 @@ MODULE integrator
     IMPLICIT NONE
     PRIVATE 
     ! DECLARE SUBROUTINES
-    PUBLIC :: setstaticgalaxy,setintegrationparameters,setinitialkinematics
+    PUBLIC :: setstaticgalaxy,setintegrationparameters,setinitialkinematics,setbackwardorbit
     PUBLIC :: inithostperturber,initnbodysystem,initgalacticbar,initperturbers
     PUBLIC :: leapfrogtofinalpositions,leapfrogintime
     PUBLIC :: initwriteparticleorbits,writeparticleorbits
@@ -25,9 +25,11 @@ MODULE integrator
     LOGICAL, PUBLIC :: GALAXYISSET = .FALSE.
     LOGICAL, PUBLIC :: DOWRITEORBITS = .FALSE.
     LOGICAL, PUBLIC :: DOWRITESTREAM = .FALSE.
+    LOGICAL, PUBLIC :: DOBACKWARDORBIT = .FALSE.
+    INTEGER, PUBLIC :: BackwardForwardSign 
     procedure(), pointer,public :: milkywaypotential
     REAL*8,DIMENSION(:),PUBLIC,allocatable :: milkwayparams
-    REAL*8, PUBLIC :: t,dt
+    REAL*8, PUBLIC :: currenttime,dt
     INTEGER, PUBLIC :: ntimesteps,ntimepoints,nparticles,nwriteskip
     INTEGER, PUBLIC :: FILEUNITBASE 
     CHARACTER*500, PUBLIC :: outname,outdir,streamdir,streamname
@@ -59,16 +61,10 @@ MODULE integrator
         GALAXYISSET=.TRUE.
     END SUBROUTINE setstaticgalaxy
 
-    SUBROUTINE setintegrationparameters(t0,dt0,nsteps)
-        ! define the total integration time, the timestep, and the number of timesteps
-        REAL*8, intent(in) :: t0,dt0
-        INTEGER, intent(in) :: nsteps
-        t = t0
-        dt = dt0
-        ntimesteps = nsteps
-        ntimepoints = nsteps + 1
-    END SUBROUTINE setintegrationparameters
-    
+    SUBROUTINE setbackwardorbit()
+        DOBACKWARDORBIT = .TRUE.
+    END SUBROUTINE setbackwardorbit
+
     SUBROUTINE setinitialkinematics(N,x,y,z,vx,vy,vz)
         ! set the initial kinematics of the particles
         INTEGER, intent(in) :: N
@@ -78,11 +74,30 @@ MODULE integrator
         xf = x
         yf = y
         zf = z
-        vxf = vx
-        vyf = vy
-        vzf = vz
+        if (DOBACKWARDORBIT) then
+            vxf = -vx
+            vyf = -vy
+            vzf = -vz
+            BackwardForwardSign = -1
+        else
+            vxf = vx
+            vyf = vy
+            vzf = vz
+            BackwardForwardSign = 1
+        end if
         tesc = -9990.0
     END SUBROUTINE setinitialkinematics
+
+    SUBROUTINE setintegrationparameters(t0,dt0,nsteps)
+        ! define the total integration time, the timestep, and the number of timesteps
+        REAL*8, intent(in) :: t0,dt0
+        INTEGER, intent(in) :: nsteps
+        currenttime = t0
+        dt = dt0
+        ntimesteps = nsteps
+        ntimepoints = nsteps + 1
+    END SUBROUTINE setintegrationparameters
+    
 
     subroutine initnbodysystem(N,massesnbody,scaleradiinbody)
         ! initialize the nbody system
@@ -243,7 +258,6 @@ MODULE integrator
         REAL*8, DIMENSION(NP) :: ax0,ay0,az0
         REAL*8, DIMENSION(NP) :: phiSG,phiHP,phiP,phiBAR
         REAL*8, DIMENSION(NP,NP) :: phiNBODY
-        REAL*8 :: currenttime
         REAL*8 :: TESCTHRESHOLD = -999.0
         INTEGER :: i,j
         integer, dimension(NP) :: indexes
@@ -284,11 +298,6 @@ MODULE integrator
         vyt=0
         vzt=0
         i=0
-        if (DOHOSTPERTURBER) then
-            currenttime=timehost(1)
-        else
-            currenttime=0.0
-        end if
         xt(:,i+1) = xf
         yt(:,i+1) = yf
         zt(:,i+1) = zf
@@ -321,7 +330,7 @@ MODULE integrator
         ay0=aySG+ayHP+ayP+ayNBODY+ayBAR
         az0=azSG+azHP+azP+azNBODY+azBAR
         DO i=1,(nstep)
-            currenttime=currenttime + dt
+            currenttime=currenttime + BackwardForwardSign*dt
             xt(:,i+1) = xt(:,i) + vxt(:,i)*dt + 0.5*ax0*dt**2
             yt(:,i+1) = yt(:,i) + vyt(:,i)*dt + 0.5*ay0*dt**2
             zt(:,i+1) = zt(:,i) + vzt(:,i)*dt + 0.5*az0*dt**2
@@ -372,7 +381,6 @@ MODULE integrator
         REAL*8, DIMENSION(nparticles) :: ax0,ay0,az0
         REAL*8, DIMENSION(nparticles) :: phiSG,phiHP,phiP,phiBAR
         REAL*8, DIMENSION(nparticles,nparticles) :: phiNBODY
-        REAL*8 :: currenttime
         REAL*8 :: TESCTHRESHOLD = -999.0
         INTEGER :: i,j
         integer, dimension(nparticles) :: indexes
@@ -406,12 +414,6 @@ MODULE integrator
         axf = 0.0
         ayf = 0.0
         azf = 0.0
-        ! if we are using the host perturber, then we need to find the host time index
-        IF (DOHOSTPERTURBER) then
-            currenttime=timehost(1)
-        ELSE    
-            currenttime=0.0
-        ENDIF
         ! set up the initial positions
         x0 = xf
         y0 = yf
@@ -456,7 +458,7 @@ MODULE integrator
             CALL writestream(0,nparticles,x0,y0,z0,vx0,vy0,vz0)
         end if
         DO i=1,(ntimesteps)
-            currenttime=currenttime + dt
+            currenttime=currenttime + BackwardForwardSign*dt
             xf = x0 + vx0*dt + 0.5*ax0*dt**2
             yf = y0 + vy0*dt + 0.5*ay0*dt**2
             zf = z0 + vz0*dt + 0.5*az0*dt**2
@@ -549,6 +551,10 @@ MODULE integrator
             DO i=1,nparticles
                 close(FILEUNITBASE+i)
             END DO
+        END IF
+        
+        IF (DOBACKWARDORBIT) then
+            DOBACKWARDORBIT=.FALSE.
         END IF
 
         IF (DOWRITESTREAM) THEN

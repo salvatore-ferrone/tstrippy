@@ -55,7 +55,8 @@ def main(targetGC):
         axisconfig={'xlabel':"X [kpc]",'ylabel':"Y [kpc]",'aspect':'equal','title':title}
         fname = outdir+"bar_sensitivity_T_{:.0e}_years_dt_{:.0e}_years.png".format(integrationtime,timestep)
         fig,axis=plot_orbits([plotdata0,plotdata1],[pltobj0,pltobj1],axisconfig)
-        fig.savefig(fname)
+        fig.tight_layout()
+        fig.savefig(fname,dpi=300, bbox_inches='tight', pad_inches=0.1)
         plt.close(fig)
 
     print("Finished timestep time sensitivity")
@@ -75,7 +76,22 @@ def main(targetGC):
 
     print("Finished integration time sensitivity")
 
-    
+    # do long time and small timestep
+    integrationtime = 5e9
+    timesteps = [1e5,1e4,1e3,1e2]
+    for timestep in timesteps:
+        backwardorbit, forwardorbit=backward_and_forward_orbit(integrationtime,timestep,Galaxy,initialkinematics,bar)
+        plotdata0={"x":backwardorbit[0],"y":backwardorbit[1]}
+        plotdata1={"x":forwardorbit[0],"y":forwardorbit[1]}
+        title=title="Cluster: {}. dt={:.0e} yr, T={:.0e} yr".format(targetGC,timestep,integrationtime)
+        axisconfig={'xlabel':"X [kpc]",'ylabel':"Y [kpc]",'aspect':'equal','title':title}
+        fname = outdir+"bar_sensitivity_T_{:.0e}_years_dt_{:.0e}_years.png".format(integrationtime,timestep)
+        fig,axis=plot_orbits([plotdata0,plotdata1],[pltobj0,pltobj1],axisconfig)
+        fig.savefig(fname)
+        plt.close(fig)
+
+    print("Finished long time and small timestep")
+
 
 
     return None
@@ -149,7 +165,6 @@ def plot_orbits(plotData,plotProperties,axisconfig={
     return fig,axis
 
 
-
 def forward_orbit(integrationparameters,staticgalaxy,initialkinematics,galacticbar):
     nObj = 1 # only integrating one object
     currenttime,dt,Ntimestep=integrationparameters
@@ -163,7 +178,6 @@ def forward_orbit(integrationparameters,staticgalaxy,initialkinematics,galacticb
     starttime = datetime.datetime.now()
     xForward,yForward,zForward,vxForward,vyForward,vzForward=tstrippy.integrator.leapfrogintime(Ntimestep,nObj)
     endtime=datetime.datetime.now()
-    print("Forward orbit took",endtime-starttime)
     tstrippy.integrator.deallocate()
     return xForward,yForward,zForward,vxForward,vyForward,vzForward
 
@@ -183,10 +197,8 @@ def backward_orbit(integrationparameters,staticgalaxy,initialkinematics,galactic
     starttime = datetime.datetime.now()
     xBackward,yBackward,zBackward,vxBackward,vyBackward,vzBackward=tstrippy.integrator.leapfrogintime(Ntimestep,nObj)
     endtime=datetime.datetime.now()
-    print("Backward orbit took",endtime-starttime)
     tstrippy.integrator.deallocate()
     return xBackward,yBackward,zBackward,vxBackward,vyBackward,vzBackward
-
 
 
 def loadunits():
@@ -199,7 +211,6 @@ def loadunits():
     unitG=u.Unit(unitbasis['G'])
     G = const.G.to(unitG).value
     return unitT, unitV, unitD, unitM, unitG, G
-
 
 
 def loadGalaxy():
@@ -233,7 +244,6 @@ def bar_movement_ferrone2023():
     return barpolycoeff
 
 
-
 def pick_globular_cluster(targetGC, MWrefframe):
     unitT, unitV, unitD, unitM, unitG, G = loadunits()
 
@@ -254,9 +264,6 @@ def pick_globular_cluster(targetGC, MWrefframe):
     x0,y0,z0=x[clusterindex],y[clusterindex],z[clusterindex]
     vx0,vy0,vz0=vx[clusterindex],vy[clusterindex],vz[clusterindex]
     return x0,y0,z0,vx0,vy0,vz0
-
-
-
 
 
 if __name__ == "__main__":

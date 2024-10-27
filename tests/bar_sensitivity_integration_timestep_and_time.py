@@ -5,9 +5,19 @@ import astropy.coordinates as coord
 import numpy as np
 import matplotlib.pyplot as plt
 import datetime
-import matplotlib.colors as mcolors
 
 
+# make the font size bigger and also us Latex font
+plt.rc('text', usetex=True)
+plt.rc('font', size=12)
+plt.rc('axes', titlesize=15)
+plt.rc('axes', labelsize=15)
+plt.rc('xtick', labelsize=12)
+plt.rc('ytick', labelsize=12)
+plt.rc('legend', fontsize=12)
+plt.rc('figure', titlesize=15)
+
+outdir = "/home/sferrone/plots/tstrippy/tests/bar_sensitivity_integration_timestep_and_time/"
 
 def main(targetGC):
     # Load the units
@@ -30,10 +40,25 @@ def main(targetGC):
     initialkinematics = [x0,y0,z0,vx0,vy0,vz0]
     # Pick the target globular cluster
     integrationtime = 1e9
+
+
+    pltobj0={"label":"Backward orbit","color":"blue"}
+    pltobj1={"label":"Forward orbit","color":"orange"}
+
     timestep = 1e7
-    integrationparameters = [integrationtime,timestep]
-    backward_and_forward_orbit(integrationtime,timestep,Galaxy,initialkinematics,bar)
-    
+    timesteps = [1e7,1e6,1e5,1e4,1e3]
+    for timestep in timesteps:
+        backwardorbit, forwardorbit=backward_and_forward_orbit(integrationtime,timestep,Galaxy,initialkinematics,bar)
+        plotdata0={"x":backwardorbit[0],"y":backwardorbit[1]}
+        plotdata1={"x":forwardorbit[0],"y":forwardorbit[1]}
+        title=title="Cluster: {}. dt={:.0e} yr, T={:.0e} yr".format(targetGC,timestep,integrationtime)
+        axisconfig={'xlabel':"X [kpc]",'ylabel':"Y [kpc]",'aspect':'equal','title':title}
+
+        fname = outdir+"bar_sensitivity_T_{:.0e}_years_dt_{:.0e}_years.png".format(integrationtime,timestep)
+        fig,axis=plot_orbits([plotdata0,plotdata1],[pltobj0,pltobj1],axisconfig)
+        fig.savefig(fname)
+
+
     return None
 
 
@@ -56,13 +81,17 @@ def backward_and_forward_orbit(integrationtime,timestep,staticgalaxy,initialkine
     xBackward,yBackward,zBackward,vxBackward,vyBackward,vzBackward = \
         backward_orbit(integrationparameters,staticgalaxy,initialkinematics,galacticbar)
     
-
-    print("len(xBackward)",len(xBackward),)
-    plotdata0={"x":xBackward[0],"y":yBackward[0]}
-    pltobj0={"label":"Backward orbit","color":"blue"}
-
-    plot_orbits([plotdata0],[pltobj0])
-    return None
+    # extract the final conditions for the forward integration
+    xf,yf,zf,vxf,vyf,vzf = xBackward[0][-1],yBackward[0][-1],zBackward[0][-1],-vxBackward[0][-1],-vyBackward[0][-1],-vzBackward[0][-1]
+    # set the initial time 
+    currenttime = -T
+    initialkinematics = [xf,yf,zf,vxf,vyf,vzf]
+    integrationparameters = [currenttime,dt,Ntimestep]
+    xForward,yForward,zForward,vxForward,vyForward,vzForward = \
+        forward_orbit(integrationparameters,staticgalaxy,initialkinematics,galacticbar)
+    backwardorbit = [xBackward[0],yBackward[0],zBackward[0],-vxBackward[0],-vyBackward[0],-vzBackward[0]]
+    forwardorbit = [xForward[0],yForward[0],zForward[0],vxForward[0],vyForward[0],vzForward[0]]
+    return backwardorbit, forwardorbit
 
 
 def plot_orbits(plotData,plotProperties,axisconfig={
@@ -78,16 +107,16 @@ def plot_orbits(plotData,plotProperties,axisconfig={
     assert len(plotData) == len(plotProperties)
 
     nplots = len(plotData)
-    scattersizes = np.logspace(2,0,nplots)
-    linewidths = np.linspace(4,0.5,nplots)
-    fig,axis=plt.subplots(1,1,figsize=(6,5))
+    scattersizes = np.logspace(2,1,nplots)
+    linewidths = np.linspace(4,1,nplots)
+    fig,axis=plt.subplots(1,1,figsize=(6,7))
     for i in range(nplots):
         plotProperties[i]['linewidth']=linewidths[i]
-        plotProperties[i]['zorder']=nplots-i
+        plotProperties[i]['zorder']=i
         axis.plot(plotData[i]['x'],plotData[i]['y'],**plotProperties[i])
 
 
-    cmap = plt.get_cmap('tab10') 
+    cmap = plt.get_cmap('tab10_r') 
     for i in range(nplots):
         mylabel = plotProperties[i].get('label','')
         axis.scatter(plotData[i]['x'][0],plotData[i]['y'][0],s=scattersizes[i],label=mylabel+" Initial",color=plotProperties[i]['color'])
@@ -97,8 +126,27 @@ def plot_orbits(plotData,plotProperties,axisconfig={
     axis.legend(**legendconfig)
     axis.set(**axisconfig)
     fig.tight_layout()
-    fig.savefig("orbit_integration_timestep_and_time.png")
+    # fig.savefig("orbit_integration_timestep_and_time.png")
+    return fig,axis
 
+
+
+def forward_orbit(integrationparameters,staticgalaxy,initialkinematics,galacticbar):
+    nObj = 1 # only integrating one object
+    currenttime,dt,Ntimestep=integrationparameters
+    MWname, MWparams = staticgalaxy
+    x0,y0,z0,vx0,vy0,vz0 = initialkinematics
+    barname,barparams,barpolycoeff = galacticbar
+    tstrippy.integrator.setstaticgalaxy(MWname,MWparams)
+    tstrippy.integrator.setintegrationparameters(currenttime.value,dt.value,Ntimestep)
+    tstrippy.integrator.setinitialkinematics(x0,y0,z0,vx0,vy0,vz0)
+    tstrippy.integrator.initgalacticbar(barname,barparams,barpolycoeff)
+    starttime = datetime.datetime.now()
+    xForward,yForward,zForward,vxForward,vyForward,vzForward=tstrippy.integrator.leapfrogintime(Ntimestep,nObj)
+    endtime=datetime.datetime.now()
+    print("Forward orbit took",endtime-starttime)
+    tstrippy.integrator.deallocate()
+    return xForward,yForward,zForward,vxForward,vyForward,vzForward
 
 
 def backward_orbit(integrationparameters,staticgalaxy,initialkinematics,galacticbar):

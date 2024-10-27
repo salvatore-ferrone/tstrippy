@@ -45,52 +45,52 @@ def main(targetGC):
     pltobj0={"label":"Backward orbit","color":"blue"}
     pltobj1={"label":"Forward orbit","color":"orange"}
 
-    timestep = 1e7
-    timesteps = [1e7,1e6,1e5,1e4,1e3]
+    integrationtime = 1e9
+    timesteps = [1e7,8e6,5e6,4e6,1e6,1e5,1e4,1e2]
     for timestep in timesteps:
         backwardorbit, forwardorbit=backward_and_forward_orbit(integrationtime,timestep,Galaxy,initialkinematics,bar)
         plotdata0={"x":backwardorbit[0],"y":backwardorbit[1]}
         plotdata1={"x":forwardorbit[0],"y":forwardorbit[1]}
-        title=title="Cluster: {}. dt={:.0e} yr, T={:.0e} yr".format(targetGC,timestep,integrationtime)
+        title=title="Cluster: {}. dt={:.4e} yr, T={:.4e} yr".format(targetGC,timestep,integrationtime)
         axisconfig={'xlabel':"X [kpc]",'ylabel':"Y [kpc]",'aspect':'equal','title':title}
-        fname = outdir+"bar_sensitivity_T_{:.0e}_years_dt_{:.0e}_years.png".format(integrationtime,timestep)
+        fname = outdir+"dt_sensitivity_T_{:.0e}_years_dt_{:.0e}_years.png".format(integrationtime,timestep)
         fig,axis=plot_orbits([plotdata0,plotdata1],[pltobj0,pltobj1],axisconfig)
         fig.tight_layout()
         fig.savefig(fname,dpi=300, bbox_inches='tight', pad_inches=0.1)
         plt.close(fig)
+    print("Finished timestep  sensitivity")
 
-    print("Finished timestep time sensitivity")
-    integrationtimes = [1e8,1e9,2e9,3.5e9,4e9,4.5e9,5e9]
-    timestep = 1e5
 
+    # try and find exactly when we go wrong 
+    timestep = 1e4
+    integrationtimes = np.arange(1e9,5e9,21)
     for integrationtime in integrationtimes:
         backwardorbit, forwardorbit=backward_and_forward_orbit(integrationtime,timestep,Galaxy,initialkinematics,bar)
         plotdata0={"x":backwardorbit[0],"y":backwardorbit[1]}
         plotdata1={"x":forwardorbit[0],"y":forwardorbit[1]}
-        title=title="Cluster: {}. dt={:.0e} yr, T={:.0e} yr".format(targetGC,timestep,integrationtime)
+        title=title="Cluster: {}. dt={:.4e} yr, T={:.4e} yr".format(targetGC,timestep,integrationtime)
         axisconfig={'xlabel':"X [kpc]",'ylabel':"Y [kpc]",'aspect':'equal','title':title}
-        fname = outdir+"bar_sensitivity_T_{:.0e}_years_dt_{:.0e}_years.png".format(integrationtime,timestep)
+        fname = outdir+"integration_time_sensitivity_dt_{:.4e}_years_T_{:.4e}_years.png".format(timestep,integrationtime)
         fig,axis=plot_orbits([plotdata0,plotdata1],[pltobj0,pltobj1],axisconfig)
-        fig.savefig(fname)
+        fig.savefig(fname,dpi=300, bbox_inches='tight', pad_inches=0.1)
         plt.close(fig)
-
     print("Finished integration time sensitivity")
 
-    # do long time and small timestep
-    integrationtime = 5e9
-    timesteps = [1e5,1e4,1e3,1e2]
-    for timestep in timesteps:
-        backwardorbit, forwardorbit=backward_and_forward_orbit(integrationtime,timestep,Galaxy,initialkinematics,bar)
-        plotdata0={"x":backwardorbit[0],"y":backwardorbit[1]}
-        plotdata1={"x":forwardorbit[0],"y":forwardorbit[1]}
-        title=title="Cluster: {}. dt={:.0e} yr, T={:.0e} yr".format(targetGC,timestep,integrationtime)
-        axisconfig={'xlabel':"X [kpc]",'ylabel':"Y [kpc]",'aspect':'equal','title':title}
-        fname = outdir+"bar_sensitivity_T_{:.0e}_years_dt_{:.0e}_years.png".format(integrationtime,timestep)
-        fig,axis=plot_orbits([plotdata0,plotdata1],[pltobj0,pltobj1],axisconfig)
-        fig.savefig(fname)
-        plt.close(fig)
 
-    print("Finished long time and small timestep")
+    # # do long time and small timestep
+    # integrationtime = 5e9
+    # timesteps = [1e5,1e4,1e3,1e2]
+    # for timestep in timesteps:
+    #     backwardorbit, forwardorbit=backward_and_forward_orbit(integrationtime,timestep,Galaxy,initialkinematics,bar)
+    #     plotdata0={"x":backwardorbit[0],"y":backwardorbit[1]}
+    #     plotdata1={"x":forwardorbit[0],"y":forwardorbit[1]}
+    #     title=title="Cluster: {}. dt={:.0e} yr, T={:.0e} yr".format(targetGC,timestep,integrationtime)
+    #     axisconfig={'xlabel':"X [kpc]",'ylabel':"Y [kpc]",'aspect':'equal','title':title}
+    #     fname = outdir+"bar_sensitivity_T_{:.0e}_years_dt_{:.0e}_years.png".format(integrationtime,timestep)
+    #     fig,axis=plot_orbits([plotdata0,plotdata1],[pltobj0,pltobj1],axisconfig)
+    #     fig.savefig(fname,dpi=300, bbox_inches='tight', pad_inches=0.1)
+    #     plt.close(fig)
+    # print("Finished long time and small timestep")
 
 
 

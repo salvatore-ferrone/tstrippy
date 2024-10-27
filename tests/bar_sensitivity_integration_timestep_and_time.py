@@ -53,10 +53,29 @@ def main(targetGC):
         plotdata1={"x":forwardorbit[0],"y":forwardorbit[1]}
         title=title="Cluster: {}. dt={:.0e} yr, T={:.0e} yr".format(targetGC,timestep,integrationtime)
         axisconfig={'xlabel':"X [kpc]",'ylabel':"Y [kpc]",'aspect':'equal','title':title}
-
         fname = outdir+"bar_sensitivity_T_{:.0e}_years_dt_{:.0e}_years.png".format(integrationtime,timestep)
         fig,axis=plot_orbits([plotdata0,plotdata1],[pltobj0,pltobj1],axisconfig)
         fig.savefig(fname)
+        plt.close(fig)
+
+    print("Finished timestep time sensitivity")
+    integrationtimes = [1e8,1e9,2e9,3.5e9,4e9,4.5e9,5e9]
+    timestep = 1e5
+
+    for integrationtime in integrationtimes:
+        backwardorbit, forwardorbit=backward_and_forward_orbit(integrationtime,timestep,Galaxy,initialkinematics,bar)
+        plotdata0={"x":backwardorbit[0],"y":backwardorbit[1]}
+        plotdata1={"x":forwardorbit[0],"y":forwardorbit[1]}
+        title=title="Cluster: {}. dt={:.0e} yr, T={:.0e} yr".format(targetGC,timestep,integrationtime)
+        axisconfig={'xlabel':"X [kpc]",'ylabel':"Y [kpc]",'aspect':'equal','title':title}
+        fname = outdir+"bar_sensitivity_T_{:.0e}_years_dt_{:.0e}_years.png".format(integrationtime,timestep)
+        fig,axis=plot_orbits([plotdata0,plotdata1],[pltobj0,pltobj1],axisconfig)
+        fig.savefig(fname)
+        plt.close(fig)
+
+    print("Finished integration time sensitivity")
+
+    
 
 
     return None

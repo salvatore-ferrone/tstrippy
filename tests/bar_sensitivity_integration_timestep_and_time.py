@@ -1,3 +1,4 @@
+import os 
 import tstrippy
 import astropy.units as u
 import astropy.constants as const
@@ -21,6 +22,9 @@ outdir = "/home/sferrone/plots/tstrippy/tests/bar_sensitivity_integration_timest
 
 def main(targetGC):
     # Load the units
+
+    myoutdir = outdir+"/{}/".format(targetGC)
+    os.makedirs(myoutdir,exist_ok=True)
     unitT, unitV, unitD, unitM, unitG, G=loadunits()
     # Load the galaxy parameters
     MWparams, MWrefframe = loadGalaxy()
@@ -38,22 +42,21 @@ def main(targetGC):
     Galaxy = ["pouliasis2017pii", MWparams]
     bar = ["longmuralibar", barparams, barpolycoeff]
     initialkinematics = [x0,y0,z0,vx0,vy0,vz0]
-    # Pick the target globular cluster
-    integrationtime = 1e9
 
 
     pltobj0={"label":"Backward orbit","color":"blue"}
     pltobj1={"label":"Forward orbit","color":"orange"}
 
-    integrationtime = 1e9
-    timesteps = [1e7,8e6,5e6,4e6,1e6,1e5,1e4,1e2]
+    integrationtime = 5e9
+    timesteps = [1e5,1e4,1e3]
     for timestep in timesteps:
         backwardorbit, forwardorbit=backward_and_forward_orbit(integrationtime,timestep,Galaxy,initialkinematics,bar)
+        print("Finished timestep: ",timestep," years", " with integration time: ",integrationtime," years")
         plotdata0={"x":backwardorbit[0],"y":backwardorbit[1]}
         plotdata1={"x":forwardorbit[0],"y":forwardorbit[1]}
         title=title="Cluster: {}. dt={:.4e} yr, T={:.4e} yr".format(targetGC,timestep,integrationtime)
         axisconfig={'xlabel':"X [kpc]",'ylabel':"Y [kpc]",'aspect':'equal','title':title}
-        fname = outdir+"dt_sensitivity_T_{:.0e}_years_dt_{:.0e}_years.png".format(integrationtime,timestep)
+        fname = myoutdir+"dt_sensitivity_T_{:.0e}_years_dt_{:.0e}_years.png".format(integrationtime,timestep)
         fig,axis=plot_orbits([plotdata0,plotdata1],[pltobj0,pltobj1],axisconfig)
         fig.tight_layout()
         fig.savefig(fname,dpi=300, bbox_inches='tight', pad_inches=0.1)
@@ -62,19 +65,38 @@ def main(targetGC):
 
 
     # try and find exactly when we go wrong 
-    timestep = 1e4
-    integrationtimes = np.arange(1e9,5e9,21)
+    timestep = 1e6
+    integrationtimes = np.linspace(1e9,5e9,21)
     for integrationtime in integrationtimes:
         backwardorbit, forwardorbit=backward_and_forward_orbit(integrationtime,timestep,Galaxy,initialkinematics,bar)
+        print("Finished integration time: ",integrationtime," years", " with timestep: ",timestep," years")
         plotdata0={"x":backwardorbit[0],"y":backwardorbit[1]}
         plotdata1={"x":forwardorbit[0],"y":forwardorbit[1]}
         title=title="Cluster: {}. dt={:.4e} yr, T={:.4e} yr".format(targetGC,timestep,integrationtime)
         axisconfig={'xlabel':"X [kpc]",'ylabel':"Y [kpc]",'aspect':'equal','title':title}
-        fname = outdir+"integration_time_sensitivity_dt_{:.4e}_years_T_{:.4e}_years.png".format(timestep,integrationtime)
+        fname = myoutdir+"integration_time_sensitivity_dt_{:.4e}_years_T_{:.4e}_years.png".format(integrationtime,timestep)
         fig,axis=plot_orbits([plotdata0,plotdata1],[pltobj0,pltobj1],axisconfig)
         fig.savefig(fname,dpi=300, bbox_inches='tight', pad_inches=0.1)
         plt.close(fig)
     print("Finished integration time sensitivity")
+
+
+    
+    timestep = 1e6
+    integrationtimes = np.linspace(1e9,5e9,20)
+    for integrationtime in integrationtimes:
+        backwardorbit, forwardorbit=backward_and_forward_orbit(integrationtime,timestep,Galaxy,initialkinematics,bar)
+        print("Finished integration time: ",integrationtime," years", " with timestep: ",timestep," years")
+        plotdata0={"x":backwardorbit[0],"y":backwardorbit[1]}
+        plotdata1={"x":forwardorbit[0],"y":forwardorbit[1]}
+        title=title="Cluster: {}. dt={:.4e} yr, T={:.4e} yr".format(targetGC,timestep,integrationtime)
+        axisconfig={'xlabel':"X [kpc]",'ylabel':"Y [kpc]",'aspect':'equal','title':title}
+        fname = myoutdir+"odd_timestep_sensitivity_dt_{:.4e}_years_T_{:.4e}_years.png".format(integrationtime,timestep,targetGC)
+        fig,axis=plot_orbits([plotdata0,plotdata1],[pltobj0,pltobj1],axisconfig)
+        fig.savefig(fname,dpi=300, bbox_inches='tight', pad_inches=0.1)
+        plt.close(fig)
+    print("Off timestep sensitivity")
+
 
 
     # # do long time and small timestep
@@ -267,5 +289,5 @@ def pick_globular_cluster(targetGC, MWrefframe):
 
 
 if __name__ == "__main__":
-    targetGC = "NGC5139"
+    targetGC = "Ter2"
     main(targetGC)

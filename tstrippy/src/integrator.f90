@@ -23,7 +23,6 @@ MODULE integrator
     LOGICAL, PUBLIC :: DOHOSTPERTURBER = .FALSE.
     LOGICAL, PUBLIC :: DOGALACTICBAR = .FALSE.
     LOGICAL, PUBLIC :: DOBACKWARDORBIT = .FALSE.
-    INTEGER, PUBLIC :: BackwardForwardSign = 1 
     ! Variables to keep track of the physics that has been set
     LOGICAL, PUBLIC :: GALAXYISSET = .FALSE.
     LOGICAL, PUBLIC :: INITIALKINEMATICSSET = .FALSE.
@@ -36,8 +35,8 @@ MODULE integrator
     REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: aSG,aHP,aP,aNBODY,aBAR,aTOTAL
     LOGICAL, PUBLIC :: DEBUGBARORIENTATION = .FALSE.
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: bartheta
-    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
     ! DECLARE MODULE WIDE VARIABLES
+    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
     REAL*8,DIMENSION(:),ALLOCATABLE,PUBLIC :: xf,yf,zf,vxf,vyf,vzf,tesc,nbodyparams
     procedure(), pointer,public :: milkywaypotential
     REAL*8,DIMENSION(:),PUBLIC,allocatable :: milkwayparams
@@ -73,20 +72,6 @@ MODULE integrator
         GALAXYISSET=.TRUE.
     END SUBROUTINE setstaticgalaxy
 
-    SUBROUTINE setbackwardorbit()
-        if (INITIALKINEMATICSSET.eqv..FALSE.) then
-            print*, "ERROR: setinitialkinematics must be called before setbackwardorbit"
-            stop
-        end if
-
-
-        vxf = -vxf
-        vyf = -vyf
-        vzf = -vzf
-        BackwardForwardSign = -1
-        
-        DOBACKWARDORBIT = .TRUE.
-    END SUBROUTINE setbackwardorbit
 
     SUBROUTINE setinitialkinematics(N,x,y,z,vx,vy,vz)
         ! set the initial kinematics of the particles
@@ -108,13 +93,37 @@ MODULE integrator
         ! define the total integration time, the timestep, and the number of timesteps
         REAL*8, intent(in) :: t0,dt0
         INTEGER, intent(in) :: nsteps
+        integer :: i
         currenttime = t0
         dt = dt0
         ntimesteps = nsteps
         ntimepoints = nsteps + 1
+        allocate(timestamps(ntimepoints))
+        timestamps(1) = t0
+        DO i=2,ntimepoints
+            timestamps(i) = timestamps(i-1) + dt
+        END DO
         INTEGRATIONPARAMETERSSET = .TRUE.
     END SUBROUTINE setintegrationparameters
     
+
+    SUBROUTINE setbackwardorbit()
+        if (INITIALKINEMATICSSET.eqv..FALSE.) then
+            print*, "ERROR: setinitialkinematics must be called before setbackwardorbit"
+            stop
+        end if
+        vxf = -vxf
+        vyf = -vyf
+        vzf = -vzf
+        ! reset the timestamps to go backward
+        timestamps(1) = currenttime
+        DO i=2,ntimepoints
+            timestamps(i) = timestamps(i-1) - dt
+        END DO
+        DOBACKWARDORBIT = .TRUE.
+    END SUBROUTINE setbackwardorbit
+
+
     SUBROUTINE setdebugaccelerations()
         if (INITIALKINEMATICSSET .eqv. .FALSE.) then
             print*, "ERROR: setinitialkinematics must be called before setdebugaccelerations"
@@ -400,7 +409,7 @@ MODULE integrator
             aTOTAL(3,1) = az0(1)
         end if
         DO i=1,(nstep)
-            currenttime=currenttime + BackwardForwardSign*dt
+            currenttime=timestamps(i)
             xt(:,i+1) = xt(:,i) + vxt(:,i)*dt + 0.5*ax0*dt**2
             yt(:,i+1) = yt(:,i) + vyt(:,i)*dt + 0.5*ay0*dt**2
             zt(:,i+1) = zt(:,i) + vzt(:,i)*dt + 0.5*az0*dt**2
@@ -553,7 +562,7 @@ MODULE integrator
             CALL writestream(0,nparticles,x0,y0,z0,vx0,vy0,vz0)
         end if
         DO i=1,(ntimesteps)
-            currenttime=currenttime + BackwardForwardSign*dt
+            currenttime=timestamps(i)
             xf = x0 + vx0*dt + 0.5*ax0*dt**2
             yf = y0 + vy0*dt + 0.5*ay0*dt**2
             zf = z0 + vz0*dt + 0.5*az0*dt**2
@@ -656,7 +665,6 @@ MODULE integrator
         
         IF (DOBACKWARDORBIT) then
             DOBACKWARDORBIT=.FALSE.
-            BackwardForwardSign = 1 
         END IF
 
         IF (DOWRITESTREAM) THEN

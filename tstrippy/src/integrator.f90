@@ -10,28 +10,35 @@ MODULE integrator
     IMPLICIT NONE
     PRIVATE 
     ! DECLARE SUBROUTINES
-    PUBLIC :: setstaticgalaxy,setintegrationparameters,setinitialkinematics,setbackwardorbit
-    PUBLIC :: setdebugaccelerations
+    PUBLIC :: setstaticgalaxy,setintegrationparameters,setinitialkinematics
+    PUBLIC :: setdebugaccelerations, setdebugbarorientation,setbackwardorbit
     PUBLIC :: inithostperturber,initnbodysystem,initgalacticbar,initperturbers
     PUBLIC :: leapfrogtofinalpositions,leapfrogintime
     PUBLIC :: initwriteparticleorbits,writeparticleorbits
     PUBLIC :: initwritestream,writestream
     PUBLIC :: deallocate
-    ! DECLARE MODULE WIDE VARIABLES
-    REAL*8,DIMENSION(:),ALLOCATABLE,PUBLIC :: xf,yf,zf,vxf,vyf,vzf,tesc,nbodyparams
+    ! DECIDE WHICH PHYSICS TO INCLUDE
     LOGICAL, PUBLIC :: DONBODY = .FALSE.
     LOGICAL, PUBLIC :: DOPERTURBERS = .FALSE.
     LOGICAL, PUBLIC :: DOHOSTPERTURBER = .FALSE.
     LOGICAL, PUBLIC :: DOGALACTICBAR = .FALSE.
+    LOGICAL, PUBLIC :: DOBACKWARDORBIT = .FALSE.
+    INTEGER, PUBLIC :: BackwardForwardSign = 1 
+    ! Variables to keep track of the physics that has been set
     LOGICAL, PUBLIC :: GALAXYISSET = .FALSE.
     LOGICAL, PUBLIC :: INITIALKINEMATICSSET = .FALSE.
+    LOGICAL, PUBLIC :: INTEGRATIONPARAMETERSSET = .FALSE.
+    ! DECIDE IF WE WILL BE SAVING WHOLE ORBITS OR SNAPSHOTS
     LOGICAL, PUBLIC :: DOWRITEORBITS = .FALSE.
     LOGICAL, PUBLIC :: DOWRITESTREAM = .FALSE.
-    LOGICAL, PUBLIC :: DOBACKWARDORBIT = .FALSE.
-    INTEGER, PUBLIC :: BackwardForwardSign 
     ! DEBUGGING VARIABLES 
     LOGICAL, PUBLIC :: DEBUGACCELERATIONS = .FALSE. ! save the accelerations for debugging
     REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: aSG,aHP,aP,aNBODY,aBAR,aTOTAL
+    LOGICAL, PUBLIC :: DEBUGBARORIENTATION = .FALSE.
+    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: bartheta
+    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
+    ! DECLARE MODULE WIDE VARIABLES
+    REAL*8,DIMENSION(:),ALLOCATABLE,PUBLIC :: xf,yf,zf,vxf,vyf,vzf,tesc,nbodyparams
     procedure(), pointer,public :: milkywaypotential
     REAL*8,DIMENSION(:),PUBLIC,allocatable :: milkwayparams
     REAL*8, PUBLIC :: currenttime,dt
@@ -67,6 +74,17 @@ MODULE integrator
     END SUBROUTINE setstaticgalaxy
 
     SUBROUTINE setbackwardorbit()
+        if (INITIALKINEMATICSSET.eqv..FALSE.) then
+            print*, "ERROR: setinitialkinematics must be called before setbackwardorbit"
+            stop
+        end if
+
+
+        vxf = -vxf
+        vyf = -vyf
+        vzf = -vzf
+        BackwardForwardSign = -1
+        
         DOBACKWARDORBIT = .TRUE.
     END SUBROUTINE setbackwardorbit
 
@@ -79,17 +97,9 @@ MODULE integrator
         xf = x
         yf = y
         zf = z
-        if (DOBACKWARDORBIT) then
-            vxf = -vx
-            vyf = -vy
-            vzf = -vz
-            BackwardForwardSign = -1
-        else
-            vxf = vx
-            vyf = vy
-            vzf = vz
-            BackwardForwardSign = 1
-        end if
+        vxf = vx
+        vyf = vy
+        vzf = vz
         tesc = -9990.0
         INITIALKINEMATICSSET = .TRUE.
     END SUBROUTINE setinitialkinematics
@@ -102,10 +112,10 @@ MODULE integrator
         dt = dt0
         ntimesteps = nsteps
         ntimepoints = nsteps + 1
+        INTEGRATIONPARAMETERSSET = .TRUE.
     END SUBROUTINE setintegrationparameters
     
     SUBROUTINE setdebugaccelerations()
-        DEBUGACCELERATIONS = .TRUE.
         if (INITIALKINEMATICSSET .eqv. .FALSE.) then
             print*, "ERROR: setinitialkinematics must be called before setdebugaccelerations"
             stop
@@ -115,10 +125,25 @@ MODULE integrator
             print*, "ERROR: DEBUGACCELERATIONS only works for one particle"
             stop
         end if
+        DEBUGACCELERATIONS = .TRUE.
         allocate(aSG(3,ntimepoints),aHP(3,ntimepoints),aP(3,ntimepoints))
         allocate(aNBODY(3,ntimepoints),aBAR(3,ntimepoints),aTOTAL(3,ntimepoints))
     END SUBROUTINE setdebugaccelerations
 
+    SUBROUTINE setdebugbarorientation()
+        if (INTEGRATIONPARAMETERSSET .eqv. .FALSE.) then
+            print*, "ERROR: setintegrationparameters must be called before setdebugbarorientation"
+            stop
+        end if
+        if (DOGALACTICBAR.eqv..FALSE.) then
+            print*, "ERROR: setgalacticbar must be called before setdebugbarorientation"
+            stop
+        end if
+        DEBUGBARORIENTATION = .TRUE.
+        allocate(bartheta(ntimepoints))
+        allocate(timestamps(ntimepoints))
+    END SUBROUTINE setdebugbarorientation
+    
     subroutine initnbodysystem(N,massesnbody,scaleradiinbody)
         ! initialize the nbody system
         ! meaning that everytime the system is evaluated, we also compute the Nbody forces
@@ -263,7 +288,6 @@ MODULE integrator
 
 
     SUBROUTINE leapfrogintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
-        
         ! integrate the positions and velocities forward in time
         INTEGER, intent(in) :: nstep,NP ! number of time steps
         ! return the positions and velocities at each timestep to the user
@@ -318,32 +342,37 @@ MODULE integrator
         vyt=0
         vzt=0
         i=0
-        xt(:,i+1) = xf
-        yt(:,i+1) = yf
-        zt(:,i+1) = zf
-        vxt(:,i+1) = vxf
-        vyt(:,i+1) = vyf
-        vzt(:,i+1) = vzf
+        xt(:,1) = xf
+        yt(:,1) = yf
+        zt(:,1) = zf
+        vxt(:,1) = vxf
+        vyt(:,1) = vyf
+        vzt(:,1) = vzf
         ! compute the accelerations at the initial time
-        call milkywaypotential(milkwayparams,NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axSG,aySG,azSG,phiSG)
+        call milkywaypotential(milkwayparams,NP,xt(:,1),yt(:,1),zt(:,1),axSG,aySG,azSG,phiSG)
         IF (DOGALACTICBAR) THEN
             CALL updatebarorientation(currenttime)
-            CALL barforce(NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axBAR,ayBAR,azBAR,phiBAR)
+            CALL barforce(NP,xt(:,1),yt(:,1),zt(:,1),axBAR,ayBAR,azBAR,phiBAR)
+            if (DEBUGBARORIENTATION) then
+                bartheta(1) = theta
+                timestamps(1)=currenttime
+            end if            
+
         END IF
         if (DOHOSTPERTURBER) then
             CALL findhosttimeindex(currenttime)
-            CALL computeforcebyhosts(NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axHP,ayHP,azHP,phiHP)
+            CALL computeforcebyhosts(NP,xt(:,1),yt(:,1),zt(:,1),axHP,ayHP,azHP,phiHP)
             ! measure the energy of the particles with respect to the host
-            vx2host = vxt(:,i+1)-vxhost(hosttimeindex)
-            vy2host = vyt(:,i+1)-vyhost(hosttimeindex)
-            vz2host = vzt(:,i+1)-vzhost(hosttimeindex)
+            vx2host = vxt(:,1)-vxhost(hosttimeindex)
+            vy2host = vyt(:,1)-vyhost(hosttimeindex)
+            vz2host = vzt(:,1)-vzhost(hosttimeindex)
             Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
             ! update the escape time
             isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
             tesc(PACK(indexes,isescaper)) = currenttime
         end if
         IF (DONBODY) then              
-            CALL NBODYPLUMMERS(nbodyparams,NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axNBODY,ayNBODY,azNBODY,phiNBODY)
+            CALL NBODYPLUMMERS(nbodyparams,NP,xt(:,1),yt(:,1),zt(:,1),axNBODY,ayNBODY,azNBODY,phiNBODY)
         end if 
 
         ax0=axSG+axHP+axP+axNBODY+axBAR
@@ -370,7 +399,8 @@ MODULE integrator
             aTOTAL(2,1) = ay0(1)
             aTOTAL(3,1) = az0(1)
         end if
-
+        print*, "DOBACWARDORBIT", DOBACKWARDORBIT
+        print*, "BackwardForwardSign", BackwardForwardSign
         DO i=1,(nstep)
             currenttime=currenttime + BackwardForwardSign*dt
             xt(:,i+1) = xt(:,i) + vxt(:,i)*dt + 0.5*ax0*dt**2
@@ -385,6 +415,10 @@ MODULE integrator
                 ! print*, "Setting initial bar orientation"
                 CALL updatebarorientation(currenttime)
                 CALL barforce(NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axBAR,ayBAR,azBAR,phiBAR)
+                if (DEBUGBARORIENTATION) then
+                    bartheta(i+1) = theta
+                    timestamps(i+1)=currenttime
+                end if
             END IF
             IF (DONBODY) then
                 CALL NBODYPLUMMERS(nbodyparams,NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axNBODY,ayNBODY,azNBODY,phiNBODY)
@@ -588,9 +622,11 @@ MODULE integrator
         integer::i
         if (INITIALKINEMATICSSET) then 
             DEALLOCATE(xf,yf,zf,vxf,vyf,vzf,tesc)
+            INTEGRATIONPARAMETERSSET = .FALSE.
         end if 
         IF (GALAXYISSET) then
             DEALLOCATE(milkwayparams)
+            GALAXYISSET = .FALSE.
         END IF 
         
         if (DOHOSTPERTURBER) then
@@ -622,6 +658,7 @@ MODULE integrator
         
         IF (DOBACKWARDORBIT) then
             DOBACKWARDORBIT=.FALSE.
+            BackwardForwardSign = 1 
         END IF
 
         IF (DOWRITESTREAM) THEN
@@ -632,6 +669,12 @@ MODULE integrator
         if (DEBUGACCELERATIONS) then
             DEALLOCATE(aSG,aHP,aP,aNBODY,aBAR,aTOTAL)
             DEBUGACCELERATIONS=.FALSE.
+        end if
+
+        if (DEBUGBARORIENTATION) then 
+            DEALLOCATE(bartheta)
+            DEBUGBARORIENTATION=.FALSE.
+            deallocate(timestamps)
         end if
     END SUBROUTINE DEALLOCATE
 

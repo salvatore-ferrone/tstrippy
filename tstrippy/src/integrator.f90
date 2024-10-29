@@ -424,7 +424,6 @@ MODULE integrator
                 CALL barforce(NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axBAR,ayBAR,azBAR,phiBAR)
                 if (DEBUGBARORIENTATION) then
                     bartheta(i+1) = theta
-                    timestamps(i+1)=currenttime
                 end if
             END IF
             IF (DONBODY) then
@@ -492,6 +491,8 @@ MODULE integrator
         REAL*8, DIMENSION(nparticles) :: x0,y0,z0,vx0,vy0,vz0
         ! for finding the energy with repsect to the host and updating the escape time
         REAL*8, DIMENSION(nparticles) :: vx2host,vy2host,vz2host,Energy 
+        
+        print*, "leapfrogtofinalpositions"
         ! give each particle an index
         do i = 1,nparticles
             indexes(i) = i
@@ -629,6 +630,7 @@ MODULE integrator
         integer::i
         if (INITIALKINEMATICSSET) then 
             DEALLOCATE(xf,yf,zf,vxf,vyf,vzf,tesc)
+            deallocate(timestamps)
             INTEGRATIONPARAMETERSSET = .FALSE.
         end if 
         IF (GALAXYISSET) then
@@ -680,7 +682,6 @@ MODULE integrator
         if (DEBUGBARORIENTATION) then 
             DEALLOCATE(bartheta)
             DEBUGBARORIENTATION=.FALSE.
-            deallocate(timestamps)
         end if
     END SUBROUTINE DEALLOCATE
 

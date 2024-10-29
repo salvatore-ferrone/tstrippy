@@ -11,6 +11,7 @@ MODULE integrator
     PRIVATE 
     ! DECLARE SUBROUTINES
     PUBLIC :: setstaticgalaxy,setintegrationparameters,setinitialkinematics,setbackwardorbit
+    PUBLIC :: setdebugaccelerations
     PUBLIC :: inithostperturber,initnbodysystem,initgalacticbar,initperturbers
     PUBLIC :: leapfrogtofinalpositions,leapfrogintime
     PUBLIC :: initwriteparticleorbits,writeparticleorbits
@@ -23,10 +24,14 @@ MODULE integrator
     LOGICAL, PUBLIC :: DOHOSTPERTURBER = .FALSE.
     LOGICAL, PUBLIC :: DOGALACTICBAR = .FALSE.
     LOGICAL, PUBLIC :: GALAXYISSET = .FALSE.
+    LOGICAL, PUBLIC :: INITIALKINEMATICSSET = .FALSE.
     LOGICAL, PUBLIC :: DOWRITEORBITS = .FALSE.
     LOGICAL, PUBLIC :: DOWRITESTREAM = .FALSE.
     LOGICAL, PUBLIC :: DOBACKWARDORBIT = .FALSE.
     INTEGER, PUBLIC :: BackwardForwardSign 
+    ! DEBUGGING VARIABLES 
+    LOGICAL, PUBLIC :: DEBUGACCELERATIONS = .FALSE. ! save the accelerations for debugging
+    REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: aSG,aHP,aP,aNBODY,aBAR,aTOTAL
     procedure(), pointer,public :: milkywaypotential
     REAL*8,DIMENSION(:),PUBLIC,allocatable :: milkwayparams
     REAL*8, PUBLIC :: currenttime,dt
@@ -86,6 +91,7 @@ MODULE integrator
             BackwardForwardSign = 1
         end if
         tesc = -9990.0
+        INITIALKINEMATICSSET = .TRUE.
     END SUBROUTINE setinitialkinematics
 
     SUBROUTINE setintegrationparameters(t0,dt0,nsteps)
@@ -98,6 +104,20 @@ MODULE integrator
         ntimepoints = nsteps + 1
     END SUBROUTINE setintegrationparameters
     
+    SUBROUTINE setdebugaccelerations()
+        DEBUGACCELERATIONS = .TRUE.
+        if (INITIALKINEMATICSSET .eqv. .FALSE.) then
+            print*, "ERROR: setinitialkinematics must be called before setdebugaccelerations"
+            stop
+        end if
+        
+        if (nparticles.ne.1) then
+            print*, "ERROR: DEBUGACCELERATIONS only works for one particle"
+            stop
+        end if
+        allocate(aSG(3,ntimepoints),aHP(3,ntimepoints),aP(3,ntimepoints))
+        allocate(aNBODY(3,ntimepoints),aBAR(3,ntimepoints),aTOTAL(3,ntimepoints))
+    END SUBROUTINE setdebugaccelerations
 
     subroutine initnbodysystem(N,massesnbody,scaleradiinbody)
         ! initialize the nbody system
@@ -329,6 +349,28 @@ MODULE integrator
         ax0=axSG+axHP+axP+axNBODY+axBAR
         ay0=aySG+ayHP+ayP+ayNBODY+ayBAR
         az0=azSG+azHP+azP+azNBODY+azBAR
+        ! for debugging 
+        if (DEBUGACCELERATIONS) then
+            aSG(1,1) = axSG(1)
+            aSG(2,1) = aySG(1)
+            aSG(3,1) = azSG(1)
+            aHP(1,1) = axHP(1)
+            aHP(2,1) = ayHP(1)
+            aHP(3,1) = azHP(1)
+            aP(1,1) = axP(1)
+            aP(2,1) = ayP(1)
+            aP(3,1) = azP(1)
+            aNBODY(1,1) = axNBODY(1)
+            aNBODY(2,1) = ayNBODY(1)
+            aNBODY(3,1) = azNBODY(1)
+            aBAR(1,1) = axBAR(1)
+            aBAR(2,1) = ayBAR(1)
+            aBAR(3,1) = azBAR(1)
+            aTOTAL(1,1) = ax0(1)
+            aTOTAL(2,1) = ay0(1)
+            aTOTAL(3,1) = az0(1)
+        end if
+
         DO i=1,(nstep)
             currenttime=currenttime + BackwardForwardSign*dt
             xt(:,i+1) = xt(:,i) + vxt(:,i)*dt + 0.5*ax0*dt**2
@@ -367,6 +409,27 @@ MODULE integrator
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
                 tesc(PACK(indexes,isescaper)) = currenttime    
             end if
+            if (DEBUGACCELERATIONS) then
+                aSG(1,i+1) = axSG(1)
+                aSG(2,i+1) = aySG(1)
+                aSG(3,i+1) = azSG(1)
+                aHP(1,i+1) = axHP(1)
+                aHP(2,i+1) = ayHP(1)
+                aHP(3,i+1) = azHP(1)
+                aP(1,i+1) = axP(1)
+                aP(2,i+1) = ayP(1)
+                aP(3,i+1) = azP(1)
+                aNBODY(1,i+1) = axNBODY(1)
+                aNBODY(2,i+1) = ayNBODY(1)
+                aNBODY(3,i+1) = azNBODY(1)
+                aBAR(1,i+1) = axBAR(1)
+                aBAR(2,i+1) = ayBAR(1)
+                aBAR(3,i+1) = azBAR(1)
+                aTOTAL(1,i+1) = axf(1)
+                aTOTAL(2,i+1) = ayf(1)
+                aTOTAL(3,i+1) = azf(1)
+            end if
+
         END DO
     END SUBROUTINE leapfrogintime
 
@@ -523,14 +586,18 @@ MODULE integrator
     SUBROUTINE DEALLOCATE
         ! deallocate the arrays
         integer::i
-        DEALLOCATE(xf,yf,zf,vxf,vyf,vzf,tesc)
+        if (INITIALKINEMATICSSET) then 
+            DEALLOCATE(xf,yf,zf,vxf,vyf,vzf,tesc)
+        end if 
         IF (GALAXYISSET) then
-        DEALLOCATE(milkwayparams)
+            DEALLOCATE(milkwayparams)
         END IF 
+        
         if (DOHOSTPERTURBER) then
             CALL hostdeallocation
             DOHOSTPERTURBER=.FALSE.
         end if
+        
         IF (DOPERTURBERS) then
             CALL perturberdeallocation
             DOPERTURBERS=.FALSE.
@@ -560,6 +627,12 @@ MODULE integrator
         IF (DOWRITESTREAM) THEN
             DOWRITESTREAM=.FALSE.
         END IF
+
+
+        if (DEBUGACCELERATIONS) then
+            DEALLOCATE(aSG,aHP,aP,aNBODY,aBAR,aTOTAL)
+            DEBUGACCELERATIONS=.FALSE.
+        end if
     END SUBROUTINE DEALLOCATE
 
 

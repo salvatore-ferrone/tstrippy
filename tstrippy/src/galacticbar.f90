@@ -61,6 +61,7 @@ MODULE galacticbar
         thetaTemp=0
         DO i=1,size(barorientationpolynomailcoeffs)
             thetaTemp=thetaTemp+barorientationpolynomailcoeffs(i)*time**(i-1)
+            
         END DO
         theta=MOD(thetaTemp,2*pi)
         ! print*, "time, theta = ", time,theta

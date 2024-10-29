@@ -410,7 +410,7 @@ MODULE integrator
             aTOTAL(3,1) = az0(1)
         end if
         DO i=1,(nstep)
-            currenttime=timestamps(i)
+            currenttime=timestamps(i+1)
             xt(:,i+1) = xt(:,i) + vxt(:,i)*dt + 0.5*ax0*dt**2
             yt(:,i+1) = yt(:,i) + vyt(:,i)*dt + 0.5*ay0*dt**2
             zt(:,i+1) = zt(:,i) + vzt(:,i)*dt + 0.5*az0*dt**2
@@ -563,7 +563,7 @@ MODULE integrator
             CALL writestream(0,nparticles,x0,y0,z0,vx0,vy0,vz0)
         end if
         DO i=1,(ntimesteps)
-            currenttime=timestamps(i)
+            currenttime=timestamps(i+1)
             xf = x0 + vx0*dt + 0.5*ax0*dt**2
             yf = y0 + vy0*dt + 0.5*ay0*dt**2
             zf = z0 + vz0*dt + 0.5*az0*dt**2

@@ -108,6 +108,8 @@ MODULE integrator
     
 
     SUBROUTINE setbackwardorbit()
+        integer :: i
+
         if (INITIALKINEMATICSSET.eqv..FALSE.) then
             print*, "ERROR: setinitialkinematics must be called before setbackwardorbit"
             stop
@@ -150,7 +152,6 @@ MODULE integrator
         end if
         DEBUGBARORIENTATION = .TRUE.
         allocate(bartheta(ntimepoints))
-        allocate(timestamps(ntimepoints))
     END SUBROUTINE setdebugbarorientation
     
     subroutine initnbodysystem(N,massesnbody,scaleradiinbody)
@@ -419,7 +420,6 @@ MODULE integrator
                 CALL computeforcebyhosts(NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axHP,ayHP,azHP,phiHP)
             end if 
             IF (DOGALACTICBAR) THEN
-                ! print*, "Setting initial bar orientation"
                 CALL updatebarorientation(currenttime)
                 CALL barforce(NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axBAR,ayBAR,azBAR,phiBAR)
                 if (DEBUGBARORIENTATION) then

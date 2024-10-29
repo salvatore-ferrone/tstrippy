@@ -570,7 +570,7 @@ MODULE integrator
             call milkywaypotential(milkwayparams,nparticles,xf,yf,zf,axSG,aySG,azSG,phiSG)
             IF (DOGALACTICBAR) THEN
                 CALL updatebarorientation(currenttime)
-                CALL barforce(nparticles,x0,y0,z0,axBAR,ayBAR,azBAR,phiBAR)
+                CALL barforce(nparticles,xf,yf,zf,axBAR,ayBAR,azBAR,phiBAR)
             END IF    
             if (DOHOSTPERTURBER) then
                 CALL advancehosttimeindex()

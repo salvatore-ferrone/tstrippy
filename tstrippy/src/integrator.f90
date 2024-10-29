@@ -399,8 +399,6 @@ MODULE integrator
             aTOTAL(2,1) = ay0(1)
             aTOTAL(3,1) = az0(1)
         end if
-        print*, "DOBACWARDORBIT", DOBACKWARDORBIT
-        print*, "BackwardForwardSign", BackwardForwardSign
         DO i=1,(nstep)
             currenttime=currenttime + BackwardForwardSign*dt
             xt(:,i+1) = xt(:,i) + vxt(:,i)*dt + 0.5*ax0*dt**2

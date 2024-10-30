@@ -582,14 +582,14 @@ MODULE integrator
             IF (DONBODY) then
                 CALL NBODYPLUMMERS(nbodyparams,nparticles,xf,yf,zf,axNBODY,ayNBODY,azNBODY,phiNBODY)
             end if     
-            ! measure the energy of the particles with respect to the host
             axf=axSG+axHP+axP+axNBODY+axBAR
             ayf=aySG+ayHP+ayP+ayNBODY+ayBAR
             azf=azSG+azHP+azP+azNBODY+azBAR
+
             vxf = vx0 + 0.5*(ax0+axf)*dt
             vyf = vy0 + 0.5*(ay0+ayf)*dt
             vzf = vz0 + 0.5*(az0+azf)*dt   
-            ! update the positions and velocities
+
             x0=xf
             y0=yf
             z0=zf
@@ -607,7 +607,6 @@ MODULE integrator
                 ! update the escape time
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
                 tesc(PACK(indexes,isescaper)) = currenttime
-                    
             end if
 
             IF (DOWRITEORBITS) then

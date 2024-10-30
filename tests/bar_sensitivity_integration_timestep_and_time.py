@@ -212,9 +212,9 @@ def backward_orbit(integrationparameters,staticgalaxy,initialkinematics,galactic
     barname,barparams,barpolycoeff = galacticbar
 
     tstrippy.integrator.setstaticgalaxy(MWname,MWparams)
-    tstrippy.integrator.setbackwardorbit()
     tstrippy.integrator.setintegrationparameters(currenttime.value,dt.value,Ntimestep)
     tstrippy.integrator.setinitialkinematics(x0,y0,z0,vx0,vy0,vz0)
+    tstrippy.integrator.setbackwardorbit()
     tstrippy.integrator.initgalacticbar(barname,barparams,barpolycoeff)
     starttime = datetime.datetime.now()
     xBackward,yBackward,zBackward,vxBackward,vyBackward,vzBackward=tstrippy.integrator.leapfrogintime(Ntimestep,nObj)

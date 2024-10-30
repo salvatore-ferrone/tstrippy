@@ -365,7 +365,6 @@ MODULE integrator
             CALL barforce(NP,xt(:,1),yt(:,1),zt(:,1),axBAR,ayBAR,azBAR,phiBAR)
             if (DEBUGBARORIENTATION) then
                 bartheta(1) = theta
-                timestamps(1)=currenttime
             end if            
 
         END IF
@@ -492,7 +491,7 @@ MODULE integrator
         ! for finding the energy with repsect to the host and updating the escape time
         REAL*8, DIMENSION(nparticles) :: vx2host,vy2host,vz2host,Energy 
         
-        print*, "leapfrogtofinalpositions"
+
         ! give each particle an index
         do i = 1,nparticles
             indexes(i) = i
@@ -568,17 +567,17 @@ MODULE integrator
             yf = y0 + vy0*dt + 0.5*ay0*dt**2
             zf = z0 + vz0*dt + 0.5*az0*dt**2
             call milkywaypotential(milkwayparams,nparticles,xf,yf,zf,axSG,aySG,azSG,phiSG)
-            IF (DOGALACTICBAR) THEN
-                CALL updatebarorientation(currenttime)
-                CALL barforce(nparticles,xf,yf,zf,axBAR,ayBAR,azBAR,phiBAR)
-            END IF    
             if (DOHOSTPERTURBER) then
                 CALL advancehosttimeindex()
                 CALL computeforcebyhosts(nparticles,xf,yf,zf,axHP,ayHP,azHP,phiHP)
             end if 
+            IF (DOGALACTICBAR) THEN
+                CALL updatebarorientation(currenttime)
+                CALL barforce(nparticles,xf,yf,zf,axBAR,ayBAR,azBAR,phiBAR)
+            END IF    
             if (DOPERTURBERS) THEN
                 call advanceperturbertimeindex(currenttime)
-                call computeforcebyperturbers(nparticles,x0,y0,z0,axP,ayP,azP,phiP)
+                call computeforcebyperturbers(nparticles,xf,yf,zf,axP,ayP,azP,phiP)
             end IF            
             IF (DONBODY) then
                 CALL NBODYPLUMMERS(nbodyparams,nparticles,xf,yf,zf,axNBODY,ayNBODY,azNBODY,phiNBODY)
@@ -586,7 +585,7 @@ MODULE integrator
             ! measure the energy of the particles with respect to the host
             axf=axSG+axHP+axP+axNBODY+axBAR
             ayf=aySG+ayHP+ayP+ayNBODY+ayBAR
-            azf=azSG+azHP+azP+azNBODY+axBAR
+            azf=azSG+azHP+azP+azNBODY+azBAR
             vxf = vx0 + 0.5*(ax0+axf)*dt
             vyf = vy0 + 0.5*(ay0+ayf)*dt
             vzf = vz0 + 0.5*(az0+azf)*dt   

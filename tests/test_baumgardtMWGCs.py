@@ -3,12 +3,12 @@ import numpy as np
 from astropy import units as u
 # test initialization
 def test_instantiation():
-    myobj = tstrippy.dataParsers.baumgardtMWGCs()
-    assert isinstance(myobj, tstrippy.dataParsers.baumgardtMWGCs)
+    myobj = tstrippy.Parsers.baumgardtMWGCs()
+    assert isinstance(myobj, tstrippy.Parsers.baumgardtMWGCs)
     return None
 
 def test_initialization():
-    myobj = tstrippy.dataParsers.baumgardtMWGCs()
+    myobj = tstrippy.Parsers.baumgardtMWGCs()
     assert isinstance(myobj.units, dict)
     assert isinstance(myobj._unitkeys, list)
     for key in myobj._unitkeys:
@@ -44,7 +44,7 @@ def test_getGCCovarianceMatrix():
     GCnames=["Pal5","NGC3201", "Pal10", "NGC5466", "NGC4147", "NGC4590", "NGC5024", "NGC5053", "NGC5272"]
     nsamps=int(1e2)
     tolerance=5
-    myobj = tstrippy.dataParsers.baumgardtMWGCs()
+    myobj = tstrippy.Parsers.baumgardtMWGCs()
     # pick a random GC name
     
     for GCname in GCnames:

@@ -11,23 +11,36 @@ MODULE integrator
     PRIVATE 
     ! DECLARE SUBROUTINES
     PUBLIC :: setstaticgalaxy,setintegrationparameters,setinitialkinematics
+    PUBLIC :: setdebugaccelerations, setdebugbarorientation,setbackwardorbit
     PUBLIC :: inithostperturber,initnbodysystem,initgalacticbar,initperturbers
     PUBLIC :: leapfrogtofinalpositions,leapfrogintime
     PUBLIC :: initwriteparticleorbits,writeparticleorbits
     PUBLIC :: initwritestream,writestream
     PUBLIC :: deallocate
-    ! DECLARE MODULE WIDE VARIABLES
-    REAL*8,DIMENSION(:),ALLOCATABLE,PUBLIC :: xf,yf,zf,vxf,vyf,vzf,tesc,nbodyparams
+    ! DECIDE WHICH PHYSICS TO INCLUDE
     LOGICAL, PUBLIC :: DONBODY = .FALSE.
     LOGICAL, PUBLIC :: DOPERTURBERS = .FALSE.
     LOGICAL, PUBLIC :: DOHOSTPERTURBER = .FALSE.
     LOGICAL, PUBLIC :: DOGALACTICBAR = .FALSE.
+    LOGICAL, PUBLIC :: DOBACKWARDORBIT = .FALSE.
+    ! Variables to keep track of the physics that has been set
     LOGICAL, PUBLIC :: GALAXYISSET = .FALSE.
+    LOGICAL, PUBLIC :: INITIALKINEMATICSSET = .FALSE.
+    LOGICAL, PUBLIC :: INTEGRATIONPARAMETERSSET = .FALSE.
+    ! DECIDE IF WE WILL BE SAVING WHOLE ORBITS OR SNAPSHOTS
     LOGICAL, PUBLIC :: DOWRITEORBITS = .FALSE.
     LOGICAL, PUBLIC :: DOWRITESTREAM = .FALSE.
+    ! DEBUGGING VARIABLES 
+    LOGICAL, PUBLIC :: DEBUGACCELERATIONS = .FALSE. ! save the accelerations for debugging
+    REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: aSG,aHP,aP,aNBODY,aBAR,aTOTAL
+    LOGICAL, PUBLIC :: DEBUGBARORIENTATION = .FALSE.
+    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: bartheta
+    ! DECLARE MODULE WIDE VARIABLES
+    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
+    REAL*8,DIMENSION(:),ALLOCATABLE,PUBLIC :: xf,yf,zf,vxf,vyf,vzf,tesc,nbodyparams
     procedure(), pointer,public :: milkywaypotential
     REAL*8,DIMENSION(:),PUBLIC,allocatable :: milkwayparams
-    REAL*8, PUBLIC :: t,dt
+    REAL*8, PUBLIC :: currenttime,dt
     INTEGER, PUBLIC :: ntimesteps,ntimepoints,nparticles,nwriteskip
     INTEGER, PUBLIC :: FILEUNITBASE 
     CHARACTER*500, PUBLIC :: outname,outdir,streamdir,streamname
@@ -59,16 +72,7 @@ MODULE integrator
         GALAXYISSET=.TRUE.
     END SUBROUTINE setstaticgalaxy
 
-    SUBROUTINE setintegrationparameters(t0,dt0,nsteps)
-        ! define the total integration time, the timestep, and the number of timesteps
-        REAL*8, intent(in) :: t0,dt0
-        INTEGER, intent(in) :: nsteps
-        t = t0
-        dt = dt0
-        ntimesteps = nsteps
-        ntimepoints = nsteps + 1
-    END SUBROUTINE setintegrationparameters
-    
+
     SUBROUTINE setinitialkinematics(N,x,y,z,vx,vy,vz)
         ! set the initial kinematics of the particles
         INTEGER, intent(in) :: N
@@ -82,8 +86,74 @@ MODULE integrator
         vyf = vy
         vzf = vz
         tesc = -9990.0
+        INITIALKINEMATICSSET = .TRUE.
     END SUBROUTINE setinitialkinematics
 
+    SUBROUTINE setintegrationparameters(t0,dt0,nsteps)
+        ! define the total integration time, the timestep, and the number of timesteps
+        REAL*8, intent(in) :: t0,dt0
+        INTEGER, intent(in) :: nsteps
+        integer :: i
+        currenttime = t0
+        dt = dt0
+        ntimesteps = nsteps
+        ntimepoints = nsteps + 1
+        allocate(timestamps(ntimepoints))
+        timestamps(1) = t0
+        DO i=2,ntimepoints
+            timestamps(i) = timestamps(i-1) + dt
+        END DO
+        INTEGRATIONPARAMETERSSET = .TRUE.
+    END SUBROUTINE setintegrationparameters
+    
+
+    SUBROUTINE setbackwardorbit()
+        integer :: i
+
+        if (INITIALKINEMATICSSET.eqv..FALSE.) then
+            print*, "ERROR: setinitialkinematics must be called before setbackwardorbit"
+            stop
+        end if
+        vxf = -vxf
+        vyf = -vyf
+        vzf = -vzf
+        ! reset the timestamps to go backward
+        timestamps(1) = currenttime
+        DO i=2,ntimepoints
+            timestamps(i) = timestamps(i-1) - dt
+        END DO
+        DOBACKWARDORBIT = .TRUE.
+    END SUBROUTINE setbackwardorbit
+
+
+    SUBROUTINE setdebugaccelerations()
+        if (INITIALKINEMATICSSET .eqv. .FALSE.) then
+            print*, "ERROR: setinitialkinematics must be called before setdebugaccelerations"
+            stop
+        end if
+        
+        if (nparticles.ne.1) then
+            print*, "ERROR: DEBUGACCELERATIONS only works for one particle"
+            stop
+        end if
+        DEBUGACCELERATIONS = .TRUE.
+        allocate(aSG(3,ntimepoints),aHP(3,ntimepoints),aP(3,ntimepoints))
+        allocate(aNBODY(3,ntimepoints),aBAR(3,ntimepoints),aTOTAL(3,ntimepoints))
+    END SUBROUTINE setdebugaccelerations
+
+    SUBROUTINE setdebugbarorientation()
+        if (INTEGRATIONPARAMETERSSET .eqv. .FALSE.) then
+            print*, "ERROR: setintegrationparameters must be called before setdebugbarorientation"
+            stop
+        end if
+        if (DOGALACTICBAR.eqv..FALSE.) then
+            print*, "ERROR: setgalacticbar must be called before setdebugbarorientation"
+            stop
+        end if
+        DEBUGBARORIENTATION = .TRUE.
+        allocate(bartheta(ntimepoints))
+    END SUBROUTINE setdebugbarorientation
+    
     subroutine initnbodysystem(N,massesnbody,scaleradiinbody)
         ! initialize the nbody system
         ! meaning that everytime the system is evaluated, we also compute the Nbody forces
@@ -228,7 +298,6 @@ MODULE integrator
 
 
     SUBROUTINE leapfrogintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
-        
         ! integrate the positions and velocities forward in time
         INTEGER, intent(in) :: nstep,NP ! number of time steps
         ! return the positions and velocities at each timestep to the user
@@ -243,7 +312,6 @@ MODULE integrator
         REAL*8, DIMENSION(NP) :: ax0,ay0,az0
         REAL*8, DIMENSION(NP) :: phiSG,phiHP,phiP,phiBAR
         REAL*8, DIMENSION(NP,NP) :: phiNBODY
-        REAL*8 :: currenttime
         REAL*8 :: TESCTHRESHOLD = -999.0
         INTEGER :: i,j
         integer, dimension(NP) :: indexes
@@ -284,44 +352,64 @@ MODULE integrator
         vyt=0
         vzt=0
         i=0
-        if (DOHOSTPERTURBER) then
-            currenttime=timehost(1)
-        else
-            currenttime=0.0
-        end if
-        xt(:,i+1) = xf
-        yt(:,i+1) = yf
-        zt(:,i+1) = zf
-        vxt(:,i+1) = vxf
-        vyt(:,i+1) = vyf
-        vzt(:,i+1) = vzf
+        xt(:,1) = xf
+        yt(:,1) = yf
+        zt(:,1) = zf
+        vxt(:,1) = vxf
+        vyt(:,1) = vyf
+        vzt(:,1) = vzf
         ! compute the accelerations at the initial time
-        call milkywaypotential(milkwayparams,NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axSG,aySG,azSG,phiSG)
+        call milkywaypotential(milkwayparams,NP,xt(:,1),yt(:,1),zt(:,1),axSG,aySG,azSG,phiSG)
         IF (DOGALACTICBAR) THEN
             CALL updatebarorientation(currenttime)
-            CALL barforce(NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axBAR,ayBAR,azBAR,phiBAR)
+            CALL barforce(NP,xt(:,1),yt(:,1),zt(:,1),axBAR,ayBAR,azBAR,phiBAR)
+            if (DEBUGBARORIENTATION) then
+                bartheta(1) = theta
+            end if            
+
         END IF
         if (DOHOSTPERTURBER) then
             CALL findhosttimeindex(currenttime)
-            CALL computeforcebyhosts(NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axHP,ayHP,azHP,phiHP)
+            CALL computeforcebyhosts(NP,xt(:,1),yt(:,1),zt(:,1),axHP,ayHP,azHP,phiHP)
             ! measure the energy of the particles with respect to the host
-            vx2host = vxt(:,i+1)-vxhost(hosttimeindex)
-            vy2host = vyt(:,i+1)-vyhost(hosttimeindex)
-            vz2host = vzt(:,i+1)-vzhost(hosttimeindex)
+            vx2host = vxt(:,1)-vxhost(hosttimeindex)
+            vy2host = vyt(:,1)-vyhost(hosttimeindex)
+            vz2host = vzt(:,1)-vzhost(hosttimeindex)
             Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
             ! update the escape time
             isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
             tesc(PACK(indexes,isescaper)) = currenttime
         end if
         IF (DONBODY) then              
-            CALL NBODYPLUMMERS(nbodyparams,NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axNBODY,ayNBODY,azNBODY,phiNBODY)
+            CALL NBODYPLUMMERS(nbodyparams,NP,xt(:,1),yt(:,1),zt(:,1),axNBODY,ayNBODY,azNBODY,phiNBODY)
         end if 
 
         ax0=axSG+axHP+axP+axNBODY+axBAR
         ay0=aySG+ayHP+ayP+ayNBODY+ayBAR
         az0=azSG+azHP+azP+azNBODY+azBAR
+        ! for debugging 
+        if (DEBUGACCELERATIONS) then
+            aSG(1,1) = axSG(1)
+            aSG(2,1) = aySG(1)
+            aSG(3,1) = azSG(1)
+            aHP(1,1) = axHP(1)
+            aHP(2,1) = ayHP(1)
+            aHP(3,1) = azHP(1)
+            aP(1,1) = axP(1)
+            aP(2,1) = ayP(1)
+            aP(3,1) = azP(1)
+            aNBODY(1,1) = axNBODY(1)
+            aNBODY(2,1) = ayNBODY(1)
+            aNBODY(3,1) = azNBODY(1)
+            aBAR(1,1) = axBAR(1)
+            aBAR(2,1) = ayBAR(1)
+            aBAR(3,1) = azBAR(1)
+            aTOTAL(1,1) = ax0(1)
+            aTOTAL(2,1) = ay0(1)
+            aTOTAL(3,1) = az0(1)
+        end if
         DO i=1,(nstep)
-            currenttime=currenttime + dt
+            currenttime=timestamps(i+1)
             xt(:,i+1) = xt(:,i) + vxt(:,i)*dt + 0.5*ax0*dt**2
             yt(:,i+1) = yt(:,i) + vyt(:,i)*dt + 0.5*ay0*dt**2
             zt(:,i+1) = zt(:,i) + vzt(:,i)*dt + 0.5*az0*dt**2
@@ -333,6 +421,9 @@ MODULE integrator
             IF (DOGALACTICBAR) THEN
                 CALL updatebarorientation(currenttime)
                 CALL barforce(NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axBAR,ayBAR,azBAR,phiBAR)
+                if (DEBUGBARORIENTATION) then
+                    bartheta(i+1) = theta
+                end if
             END IF
             IF (DONBODY) then
                 CALL NBODYPLUMMERS(nbodyparams,NP,xt(:,i+1),yt(:,i+1),zt(:,i+1),axNBODY,ayNBODY,azNBODY,phiNBODY)
@@ -357,6 +448,27 @@ MODULE integrator
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
                 tesc(PACK(indexes,isescaper)) = currenttime    
             end if
+            if (DEBUGACCELERATIONS) then
+                aSG(1,i+1) = axSG(1)
+                aSG(2,i+1) = aySG(1)
+                aSG(3,i+1) = azSG(1)
+                aHP(1,i+1) = axHP(1)
+                aHP(2,i+1) = ayHP(1)
+                aHP(3,i+1) = azHP(1)
+                aP(1,i+1) = axP(1)
+                aP(2,i+1) = ayP(1)
+                aP(3,i+1) = azP(1)
+                aNBODY(1,i+1) = axNBODY(1)
+                aNBODY(2,i+1) = ayNBODY(1)
+                aNBODY(3,i+1) = azNBODY(1)
+                aBAR(1,i+1) = axBAR(1)
+                aBAR(2,i+1) = ayBAR(1)
+                aBAR(3,i+1) = azBAR(1)
+                aTOTAL(1,i+1) = axf(1)
+                aTOTAL(2,i+1) = ayf(1)
+                aTOTAL(3,i+1) = azf(1)
+            end if
+
         END DO
     END SUBROUTINE leapfrogintime
 
@@ -371,7 +483,6 @@ MODULE integrator
         REAL*8, DIMENSION(nparticles) :: ax0,ay0,az0
         REAL*8, DIMENSION(nparticles) :: phiSG,phiHP,phiP,phiBAR
         REAL*8, DIMENSION(nparticles,nparticles) :: phiNBODY
-        REAL*8 :: currenttime
         REAL*8 :: TESCTHRESHOLD = -999.0
         INTEGER :: i,j
         integer, dimension(nparticles) :: indexes
@@ -379,6 +490,8 @@ MODULE integrator
         REAL*8, DIMENSION(nparticles) :: x0,y0,z0,vx0,vy0,vz0
         ! for finding the energy with repsect to the host and updating the escape time
         REAL*8, DIMENSION(nparticles) :: vx2host,vy2host,vz2host,Energy 
+        
+
         ! give each particle an index
         do i = 1,nparticles
             indexes(i) = i
@@ -405,12 +518,6 @@ MODULE integrator
         axf = 0.0
         ayf = 0.0
         azf = 0.0
-        ! if we are using the host perturber, then we need to find the host time index
-        IF (DOHOSTPERTURBER) then
-            currenttime=timehost(1)
-        ELSE    
-            currenttime=0.0
-        ENDIF
         ! set up the initial positions
         x0 = xf
         y0 = yf
@@ -455,34 +562,34 @@ MODULE integrator
             CALL writestream(0,nparticles,x0,y0,z0,vx0,vy0,vz0)
         end if
         DO i=1,(ntimesteps)
-            currenttime=currenttime + dt
+            currenttime=timestamps(i+1)
             xf = x0 + vx0*dt + 0.5*ax0*dt**2
             yf = y0 + vy0*dt + 0.5*ay0*dt**2
             zf = z0 + vz0*dt + 0.5*az0*dt**2
             call milkywaypotential(milkwayparams,nparticles,xf,yf,zf,axSG,aySG,azSG,phiSG)
-            IF (DOGALACTICBAR) THEN
-                CALL updatebarorientation(currenttime)
-                CALL barforce(nparticles,x0,y0,z0,axBAR,ayBAR,azBAR,phiBAR)
-            END IF    
             if (DOHOSTPERTURBER) then
                 CALL advancehosttimeindex()
                 CALL computeforcebyhosts(nparticles,xf,yf,zf,axHP,ayHP,azHP,phiHP)
             end if 
+            IF (DOGALACTICBAR) THEN
+                CALL updatebarorientation(currenttime)
+                CALL barforce(nparticles,xf,yf,zf,axBAR,ayBAR,azBAR,phiBAR)
+            END IF    
             if (DOPERTURBERS) THEN
                 call advanceperturbertimeindex(currenttime)
-                call computeforcebyperturbers(nparticles,x0,y0,z0,axP,ayP,azP,phiP)
+                call computeforcebyperturbers(nparticles,xf,yf,zf,axP,ayP,azP,phiP)
             end IF            
             IF (DONBODY) then
                 CALL NBODYPLUMMERS(nbodyparams,nparticles,xf,yf,zf,axNBODY,ayNBODY,azNBODY,phiNBODY)
             end if     
-            ! measure the energy of the particles with respect to the host
             axf=axSG+axHP+axP+axNBODY+axBAR
             ayf=aySG+ayHP+ayP+ayNBODY+ayBAR
-            azf=azSG+azHP+azP+azNBODY+axBAR
+            azf=azSG+azHP+azP+azNBODY+azBAR
+
             vxf = vx0 + 0.5*(ax0+axf)*dt
             vyf = vy0 + 0.5*(ay0+ayf)*dt
             vzf = vz0 + 0.5*(az0+azf)*dt   
-            ! update the positions and velocities
+
             x0=xf
             y0=yf
             z0=zf
@@ -500,7 +607,6 @@ MODULE integrator
                 ! update the escape time
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
                 tesc(PACK(indexes,isescaper)) = currenttime
-                    
             end if
 
             IF (DOWRITEORBITS) then
@@ -520,14 +626,21 @@ MODULE integrator
     SUBROUTINE DEALLOCATE
         ! deallocate the arrays
         integer::i
-        DEALLOCATE(xf,yf,zf,vxf,vyf,vzf,tesc)
+        if (INITIALKINEMATICSSET) then 
+            DEALLOCATE(xf,yf,zf,vxf,vyf,vzf,tesc)
+            deallocate(timestamps)
+            INTEGRATIONPARAMETERSSET = .FALSE.
+        end if 
         IF (GALAXYISSET) then
-        DEALLOCATE(milkwayparams)
+            DEALLOCATE(milkwayparams)
+            GALAXYISSET = .FALSE.
         END IF 
+        
         if (DOHOSTPERTURBER) then
             CALL hostdeallocation
             DOHOSTPERTURBER=.FALSE.
         end if
+        
         IF (DOPERTURBERS) then
             CALL perturberdeallocation
             DOPERTURBERS=.FALSE.
@@ -549,10 +662,25 @@ MODULE integrator
                 close(FILEUNITBASE+i)
             END DO
         END IF
+        
+        IF (DOBACKWARDORBIT) then
+            DOBACKWARDORBIT=.FALSE.
+        END IF
 
         IF (DOWRITESTREAM) THEN
             DOWRITESTREAM=.FALSE.
         END IF
+
+
+        if (DEBUGACCELERATIONS) then
+            DEALLOCATE(aSG,aHP,aP,aNBODY,aBAR,aTOTAL)
+            DEBUGACCELERATIONS=.FALSE.
+        end if
+
+        if (DEBUGBARORIENTATION) then 
+            DEALLOCATE(bartheta)
+            DEBUGBARORIENTATION=.FALSE.
+        end if
     END SUBROUTINE DEALLOCATE
 
 

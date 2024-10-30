@@ -14,6 +14,7 @@ Welcome to tstrippy's documentation!
    baumgardt_catalog.ipynb
    galactic_orbits.ipynb
    bar.ipynb
+   reverse_integrability.ipynb
    api/index.rst
 
 .. Indices and tables

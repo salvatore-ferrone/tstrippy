@@ -63,6 +63,7 @@ MODULE galacticbar
             thetaTemp=thetaTemp+barorientationpolynomailcoeffs(i)*time**(i-1)
         END DO
         theta=MOD(thetaTemp,2*pi)
+        ! print*, "time, theta = ", time,theta
     END SUBROUTINE updatebarorientation
 
 
@@ -98,7 +99,7 @@ MODULE galacticbar
         REAL*8, DIMENSION(N) :: axbar,aybar,azbar
         CALL transformtobarframe(N,xp,yp,zp,xbar,ybar,zbar)
         CALL barpotential(barpotentialparameters,N,xbar,ybar,zbar,axbar,aybar,azbar,phi)
-        CALL transformtogalacticframe(N,axbar,aybar,azbar,ax,ay,az)
+        CALL transformtogalacticframe(N,axbar,aybar,azbar,ax,ay,az) ! is it correct to transform the acceleration?
     END SUBROUTINE barforce
 
     SUBROUTINE bardeallocation()

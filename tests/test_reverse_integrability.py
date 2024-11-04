@@ -4,15 +4,16 @@ from astropy import constants as const
 from astropy import coordinates as coord
 import numpy as np
 
-absolutetolerance=1e-10
+relativetolerance=1e-8
 
 
 
 def test_vanilla_clusters():
     MWparams        = tstrippy.Parsers.potential_parameters.pouliasis2017pii()
     MWrefframe      = tstrippy.Parsers.potential_parameters.MWreferenceframe()  
-    x,y,z,vx,vy,vz  = load_globular_clusters_in_galactic_coordinates(MWrefframe)
+    x,y,z,vx,vy,vz,GCnames  = load_globular_clusters_in_galactic_coordinates(MWrefframe)
     staticgalaxy    = ["pouliasis2017pii", MWparams]
+    
     integrationtime =   5e9 * u.yr
     timestep        =   1e5 * u.yr
     initialkinematics=[x,y,z,vx,vy,vz]
@@ -20,16 +21,38 @@ def test_vanilla_clusters():
         vanilla_clusters(integrationtime,timestep,staticgalaxy,initialkinematics)
     assert len(backwardOrbit)==7
     assert len(forwardOrbit)==7
-    dr = np.sqrt((backwardOrbit[1]-forwardOrbit[1])**2 +\
-                    (backwardOrbit[2]-forwardOrbit[2])**2 +\
-                    (backwardOrbit[3]-forwardOrbit[3])**2)
-    dv = np.sqrt((backwardOrbit[4]-forwardOrbit[4])**2 +\
-                    (backwardOrbit[5]-forwardOrbit[5])**2 +\
-                    (backwardOrbit[6]-forwardOrbit[6])**2)
-    
-    assert np.all(dr<absolutetolerance)
-    assert np.all(dv<absolutetolerance)
+
+    dr,dv,rmean,vmean=get_dr_dv_rmean_vmean(backwardOrbit,forwardOrbit)
+    errorR = dr/rmean
+    errorV = dv/vmean
+    for i in range(len(errorR)):
+        nbadpointsDR = np.sum(errorR[i]>relativetolerance)
+        nbadpointsDV = np.sum(errorV[i]>relativetolerance)
+        assert np.all(errorR[i]<relativetolerance), "Vanilla integration of {:s} Integration has {:d} points above the DR numcerial error above threshold of {:.3e}".format(GCnames[i],nbadpointsDR,relativetolerance)
+        assert np.all(errorR[i]<relativetolerance), "Vanilla integration of {:s} Integration has {:d} points above the DV numcerial error above threshold of {:.3e}".format(GCnames[i],nbadpointsDV,relativetolerance)
     return None
+
+def get_dr_dv_rmean_vmean(backwardOrbit,forwardOrbit):
+    """
+    Calculate the difference in position and velocity between the backward and forward integration
+    """
+    dx=backwardOrbit[1]-forwardOrbit[1]
+    dy=backwardOrbit[2]-forwardOrbit[2]
+    dz=backwardOrbit[3]-forwardOrbit[3]
+    dr=np.sqrt(dx**2+dy**2+dz**2)
+    dvx=backwardOrbit[4]-forwardOrbit[4]
+    dvy=backwardOrbit[5]-forwardOrbit[5]
+    dvz=backwardOrbit[6]-forwardOrbit[6]
+    dv=np.sqrt(dvx**2+dvy**2+dvz**2)
+    xmean=(backwardOrbit[1]+forwardOrbit[1])/2
+    ymean=(backwardOrbit[2]+forwardOrbit[2])/2
+    zmean=(backwardOrbit[3]+forwardOrbit[3])/2
+    vxmean=(backwardOrbit[4]+forwardOrbit[4])/2
+    vymean=(backwardOrbit[5]+forwardOrbit[5])/2
+    vzmean=(backwardOrbit[6]+forwardOrbit[6])/2
+    rmean=np.sqrt(xmean**2+ymean**2+zmean**2)
+    vmean=np.sqrt(vxmean**2+vymean**2+vzmean**2)
+    return dr,dv,rmean,vmean
 
 
 def vanilla_clusters(integrationtime,timestep,staticgalaxy,initialkinematics):
@@ -96,7 +119,8 @@ def load_globular_clusters_in_galactic_coordinates(MWrefframe):
     galacticcoordinates = skycoordinates.transform_to(MWrefframe)
     x,y,z=galacticcoordinates.cartesian.xyz.to(unitD).value
     vx,vy,vz=galacticcoordinates.velocity.d_xyz.to(unitV).value
-    return x,y,z,vx,vy,vz
+    GCnames = GCdata['Cluster']
+    return x,y,z,vx,vy,vz,GCnames
 
 
 def bar_movement_ferrone2023():

@@ -20,7 +20,8 @@ Welcome to tstrippy's documentation!
    :maxdepth: 1
    :caption: Numerical Stability:
    
-   reverse_integrability.ipynb
+   reverse_integrability_vanilla.ipynb
+   reverse_integrability_bar.ipynb
 
 
 .. toctree::

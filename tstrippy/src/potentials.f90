@@ -80,7 +80,7 @@ MODULE potentials
 
         Tplus=sqrt((abar+x)**2.+y*y+(bbar+sqrt(cbar*cbar+z*z))**2.)
         Tminus=sqrt((abar-x)**2.+y*y+(bbar+sqrt(cbar*cbar+z*z))**2.)
-        phi=-(G*M/2./abar)*log((x-abar+Tminus)/(x+abar+Tplus))
+        phi=(G*M/2./abar)*log((x-abar+Tminus)/(x+abar+Tplus))
 
 
         ax=-2.*G*M*x/((Tplus*Tminus)*(Tplus+Tminus))

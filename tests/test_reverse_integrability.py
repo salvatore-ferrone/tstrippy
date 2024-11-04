@@ -9,6 +9,9 @@ relativetolerance=1e-8
 
 
 def test_vanilla_clusters():
+    """
+        Axis-symmetric time static potential
+    """
     MWparams        = tstrippy.Parsers.potential_parameters.pouliasis2017pii()
     MWrefframe      = tstrippy.Parsers.potential_parameters.MWreferenceframe()  
     x,y,z,vx,vy,vz,GCnames  = load_globular_clusters_in_galactic_coordinates(MWrefframe)

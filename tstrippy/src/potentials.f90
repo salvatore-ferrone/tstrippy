@@ -80,10 +80,12 @@ MODULE potentials
 
         Tplus=sqrt((abar+x)**2.+y*y+(bbar+sqrt(cbar*cbar+z*z))**2.)
         Tminus=sqrt((abar-x)**2.+y*y+(bbar+sqrt(cbar*cbar+z*z))**2.)
-        phi=-(g*M/2./abar)*log((x-abar+Tminus)/(x+abar+Tplus))
-        ax=-2.*g*M*x/((Tplus*Tminus)*(Tplus+Tminus))
-        ay=-g*M*y/((2.*Tplus*Tminus)*(y*y+(bbar+sqrt(z*z+cbar*cbar))**2.))*(Tplus+Tminus-4*x*x/(Tplus+Tminus))
-        az=-g*M*z/((2.*Tplus*Tminus)*(y*y+(bbar+sqrt(z*z+cbar*cbar))**2.))*(Tplus+Tminus-4*x*x/(Tplus+Tminus))*&
+        phi=-(G*M/2./abar)*log((x-abar+Tminus)/(x+abar+Tplus))
+
+
+        ax=-2.*G*M*x/((Tplus*Tminus)*(Tplus+Tminus))
+        ay=-G*M*y/((2.*Tplus*Tminus)*(y*y+(bbar+sqrt(z*z+cbar*cbar))**2.))*(Tplus+Tminus-4*x*x/(Tplus+Tminus))
+        az=-G*M*z/((2.*Tplus*Tminus)*(y*y+(bbar+sqrt(z*z+cbar*cbar))**2.))*(Tplus+Tminus-4*x*x/(Tplus+Tminus))*&
         ((bbar+sqrt(z*z+cbar*cbar))/sqrt(z*z+cbar*cbar))
 
 

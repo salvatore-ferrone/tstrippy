@@ -19,6 +19,7 @@ Welcome to tstrippy's documentation!
 .. toctree::
    :maxdepth: 1
    :caption: Numerical Stability:
+   
    reverse_integrability.ipynb
 
 

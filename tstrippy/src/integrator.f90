@@ -536,15 +536,15 @@ MODULE integrator
         REAL*8  :: w ! for convience for coefficients
         w = sqrt(2.0D0**(1.0D0/3.0D0) + 2.0D0**(-1.0D0/3.0D0) -1.0D0 )/6.0D0 ! D0 is for double precision
 
-        c1 =  w + 0.5
+        c1 =  w + 0.5D0
         c2 = -w
         c3 = -w
-        c4 =  w + 0.5
+        c4 =  w + 0.5D0
 
-        d1 =  2.0*w+1.0
-        d2 = -4.0*w-1.0
-        d3 =  2.0*w+1.0
-        d4 =  0.0
+        d1 =  2.0D0*w+1.0D0
+        d2 = -4.0D0*w-1.0D0
+        d3 =  2.0D0*w+1.0D0
+        d4 =  0.0D0
         ! give each particle an index
         do i = 1,NP
             indexes(i) = i

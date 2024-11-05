@@ -14,7 +14,7 @@ MODULE integrator
     PUBLIC :: setdebugaccelerations, setdebugbarorientation,setbackwardorbit
     PUBLIC :: inithostperturber,initnbodysystem,initgalacticbar,initperturbers
     PUBLIC :: leapfrogtofinalpositions,leapfrogintime
-    PUBLIC :: ruthforestintime,printRuthCoefficients
+    PUBLIC :: ruthforestintime
     PUBLIC :: HIT
     PUBLIC :: initwriteparticleorbits,writeparticleorbits
     PUBLIC :: initwritestream,writestream
@@ -608,6 +608,27 @@ MODULE integrator
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
                 tesc(PACK(indexes,isescaper)) = currenttime
             end if
+
+            ! if (DEBUGACCELERATIONS) then
+            !     aSG(1,i+1) = axSG
+            !     aSG(2,i+1) = aySG
+            !     aSG(3,i+1) = azSG
+            !     aHP(1,i+1) = axHP
+            !     aHP(2,i+1) = ayHP
+            !     aHP(3,i+1) = azHP
+            !     aP(1,i+1) = axP
+            !     aP(2,i+1) = ayP
+            !     aP(3,i+1) = azP
+            !     aNBODY(1,i+1) = axNBODY
+            !     aNBODY(2,i+1) = ayNBODY
+            !     aNBODY(3,i+1) = azNBODY
+            !     aBAR(1,i+1) = axBAR
+            !     aBAR(2,i+1) = ayBAR
+            !     aBAR(3,i+1) = azBAR
+            !     aTOTAL(1,i+1) = axSG+axHP+axP+axNBODY+axBAR
+            !     aTOTAL(2,i+1) = aySG+ayHP+ayP+ayNBODY+ayBAR
+            !     aTOTAL(3,i+1) = azSG+azHP+azP+azNBODY+azBAR
+            ! end if 
 
         end do
 

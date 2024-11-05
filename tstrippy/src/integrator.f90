@@ -14,6 +14,7 @@ MODULE integrator
     PUBLIC :: setdebugaccelerations, setdebugbarorientation,setbackwardorbit
     PUBLIC :: inithostperturber,initnbodysystem,initgalacticbar,initperturbers
     PUBLIC :: leapfrogtofinalpositions,leapfrogintime
+    PUBLIC :: HIT
     PUBLIC :: initwriteparticleorbits,writeparticleorbits
     PUBLIC :: initwritestream,writestream
     PUBLIC :: deallocate
@@ -622,6 +623,80 @@ MODULE integrator
         END DO
     END SUBROUTINE leapfrogtofinalpositions
 
+    SUBROUTINE HIT(NP,x,y,z,ax,ay,az,phi)
+        ! compute the acceleration of the particles at a given position 
+        INTEGER, INTENT(IN) :: NP
+        REAL*8, DIMENSION(NP), INTENT(IN) :: x,y,z
+        REAL*8, DIMENSION(NP), INTENT(OUT) :: ax,ay,az
+        REAL*8, DIMENSION(NP), INTENT(OUT) :: phi
+        REAL*8, DIMENSION(NP) :: axSG,      aySG,   azSG
+        REAL*8, DIMENSION(NP) :: axHP,      ayHP,   azHP
+        REAL*8, DIMENSION(NP) :: axP,       ayP,    azP
+        REAL*8, DIMENSION(NP) :: axNBODY,   ayNBODY,azNBODY
+        REAL*8, DIMENSION(NP) :: axBAR,     ayBAR,  azBAR
+        REAL*8, DIMENSION(NP) :: phiSG,phiHP,phiP,phiBAR,phiNBODY
+        REAL*8, DIMENSION(NP,NP) :: phiTensor
+        INTEGER :: i,j ! loop variables for summing over phiTensor
+
+        ! initalize the accelerations at zero
+        axSG = 0.0
+        aySG = 0.0
+        azSG = 0.0
+        axHP = 0.0
+        ayHP = 0.0
+        azHP = 0.0
+        axP = 0.0
+        ayP = 0.0
+        azP = 0.0
+        axNBODY = 0.0
+        ayNBODY = 0.0
+        azNBODY = 0.0
+        axBAR=0.0
+        ayBAR=0.0
+        azBAR=0.0
+        phiSG=0.0
+        phiHP=0.0
+        phiP=0.0
+        phiBAR=0.0
+        phiNBODY=0.0
+        
+        if (GALAXYISSET) then
+            call milkywaypotential(milkwayparams,nparticles,x,y,z,axSG,aySG,azSG,phiSG)
+        end if
+
+        if (DOHOSTPERTURBER) then
+            CALL findhosttimeindex(currenttime)
+            call computeforcebyhosts(nparticles,x,y,z,axHP,ayHP,azHP,phiHP)
+        end if
+
+        if (DOPERTURBERS) then
+            call findperturbertimeindex(currenttime)
+            call computeforcebyperturbers(nparticles,x,y,z,axP,ayP,azP,phiP)
+        end if
+
+        if (DONBODY) then
+            call NBODYPLUMMERS(nbodyparams,nparticles,x,y,z,axNBODY,ayNBODY,azNBODY,phiTensor)
+        end if
+
+        if (DOGALACTICBAR) then
+            CALL updatebarorientation(currenttime)
+            call barforce(nparticles,x,y,z,axBAR,ayBAR,azBAR,phiBAR)
+        end if
+
+        ax=axSG+axHP+axP+axNBODY+axBAR
+        ay=aySG+ayHP+ayP+ayNBODY+ayBAR
+        az=azSG+azHP+azP+azNBODY+azBAR
+
+        DO i=1,NP
+            DO j=i,NP
+                phiNBODY(i) = phiNBODY(i) + phiTensor(i,j)
+            END DO
+        END DO
+        
+        phi=phiSG+phiHP+phiP+phiBAR+phiNBODY
+        
+
+    END SUBROUTINE HIT
 
     SUBROUTINE DEALLOCATE
         ! deallocate the arrays

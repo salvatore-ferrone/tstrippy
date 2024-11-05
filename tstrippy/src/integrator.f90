@@ -165,7 +165,7 @@ MODULE integrator
             stop
         end if
         if (DOGALACTICBAR.eqv..FALSE.) then
-            print*, "ERROR: setgalacticbar must be called before setdebugbarorientation"
+            print*, "ERROR: initgalacticbar must be called before setdebugbarorientation"
             stop
         end if
         DEBUGBARORIENTATION = .TRUE.
@@ -507,6 +507,14 @@ MODULE integrator
         ! THE coefficients for the Ruth-Forest integrator Waltz
         REAL*8  :: c1,c2,c3,c4,d1,d2,d3,d4 ! c for the positions, d for the velocities
         REAL*8  :: w ! for convience for coefficients
+        INTEGER :: integration_sign
+
+        if (DOBACKWARDORBIT) then
+            integration_sign = -1
+        else
+            integration_sign = 1
+        end if
+
         w = sqrt(2.0D0**(1.0D0/3.0D0) + 2.0D0**(-1.0D0/3.0D0) -1.0D0 )/6.0D0 ! D0 is for double precision
 
         c1 =  w + 0.5D0
@@ -542,7 +550,7 @@ MODULE integrator
         vxt(:,1) = vxf
         vyt(:,1) = vyf
         vzt(:,1) = vzf
-
+        currenttime=timestamps(1)
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
             vx2host = vxf-vxhost(hosttimeindex)
@@ -577,13 +585,16 @@ MODULE integrator
             aTOTAL(3,1) = azSG(1)+azHP(1)+azP(1)+azNBODY(1)+azBAR(1)
         end if 
 
+        IF (DEBUGBARORIENTATION) then
+            bartheta(1) = theta
+        end if
         do i=1,nstep
             currenttime=timestamps(i)
             ! drift
             xf = xf + c1*vxf*dt
             yf = yf + c1*vyf*dt
             zf = zf + c1*vzf*dt
-            currenttime = currenttime + c1*dt
+            currenttime = currenttime + integration_sign*c1*dt
             ! kick
             call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
             vxf = vxf + d1*axf*dt
@@ -594,7 +605,7 @@ MODULE integrator
             yf = yf + c2*vyf*dt
             zf = zf + c2*vzf*dt
             ! kick
-            currenttime = currenttime + c2*dt
+            currenttime = currenttime + integration_sign*c2*dt
             call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
             vxf = vxf + d2*axf*dt
             vyf = vyf + d2*ayf*dt
@@ -604,7 +615,7 @@ MODULE integrator
             yf = yf + c3*vyf*dt
             zf = zf + c3*vzf*dt
             ! kick
-            currenttime = currenttime + c3*dt
+            currenttime = currenttime + integration_sign*c3*dt
             call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
             vxf = vxf + d3*axf*dt
             vyf = vyf + d3*ayf*dt
@@ -614,7 +625,7 @@ MODULE integrator
             yf = yf + c4*vyf*dt
             zf = zf + c4*vzf*dt
             ! kick
-            currenttime = currenttime + c4*dt
+            currenttime = currenttime + integration_sign*c4*dt
             call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
             vxf = vxf + d4*axf*dt
             vyf = vyf + d4*ayf*dt
@@ -658,6 +669,9 @@ MODULE integrator
                 aTOTAL(3,i+1) = azSG(1)+azHP(1)+azP(1)+azNBODY(1)+azBAR(1)
             end if 
 
+            IF (DEBUGBARORIENTATION) then
+                bartheta(i+1) = theta
+            end if
         end do
 
     end subroutine ruthforestintime

@@ -14,6 +14,7 @@ MODULE integrator
     PUBLIC :: setdebugaccelerations, setdebugbarorientation,setbackwardorbit
     PUBLIC :: inithostperturber,initnbodysystem,initgalacticbar,initperturbers
     PUBLIC :: leapfrogtofinalpositions,leapfrogintime
+    PUBLIC :: ruthforestintime,printRuthCoefficients
     PUBLIC :: HIT
     PUBLIC :: initwriteparticleorbits,writeparticleorbits
     PUBLIC :: initwritestream,writestream
@@ -487,6 +488,157 @@ MODULE integrator
             end if        
         END DO
     END SUBROUTINE leapfrogtofinalpositions
+
+
+    subroutine printRuthCoefficients()
+        REAL*8  :: c1,c2,c3,c4,d1,d2,d3,d4 ! c for the positions, d for the velocities
+        REAL*8  :: w ! for convience for coefficients
+        w = sqrt(2.0D0**(1.0D0/3.0D0) + 2.0D0**(-1.0D0/3.0D0) -1.0D0 )/6.0D0
+
+        c1 =  w + 0.5
+        c2 = -w
+        c3 = -w
+        c4 =  w + 0.5
+
+        d1 =  2.0*w+1.0
+        d2 = -4.0*w-1.0
+        d3 =  2.0*w+1.0
+        d4 =  0.0
+        
+        print*, "c1 = ",c1
+        print*, "c2 = ",c2
+        print*, "c3 = ",c3
+        print*, "c4 = ",c4
+        print*, "d1 = ",d1
+        print*, "d2 = ",d2
+        print*, "d3 = ",d3
+        print*, "d4 = ",d4
+        print*, "c1+c2+c3+c4 = ",c1+c2+c3+c4
+        print*, "d1+d2+d3+d4 = ",d1+d2+d3+d4
+        print*, "w = ",w
+    end subroutine printRuthCoefficients
+    SUBROUTINE ruthforestintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
+        ! integrate the positions and velocities forward in time
+        ! return the positions and velocities at each timestep to the user
+        INTEGER, intent(in) :: nstep,NP ! number of time steps
+        REAL*8, DIMENSION(NP,nstep+1), INTENT(OUT) :: xt,yt,zt,vxt,vyt,vzt
+        ! initialize the accelerations
+        REAL*8, DIMENSION(NP) :: axf,ayf,azf
+        REAL*8, DIMENSION(NP) :: phi
+        REAL*8 :: TESCTHRESHOLD = -999.0
+        INTEGER :: i
+        integer, dimension(NP) :: indexes
+        logical, dimension(NP) :: isescaper
+        ! for finding the energy with repsect to the host and updating the escape time
+        REAL*8, DIMENSION(NP) :: vx2host,vy2host,vz2host,Energy 
+        ! THE coefficients for the Ruth-Forest integrator Waltz
+        REAL*8  :: c1,c2,c3,c4,d1,d2,d3,d4 ! c for the positions, d for the velocities
+        REAL*8  :: w ! for convience for coefficients
+        w = sqrt(2.0D0**(1.0D0/3.0D0) + 2.0D0**(-1.0D0/3.0D0) -1.0D0 )/6.0D0 ! D0 is for double precision
+
+        c1 =  w + 0.5
+        c2 = -w
+        c3 = -w
+        c4 =  w + 0.5
+
+        d1 =  2.0*w+1.0
+        d2 = -4.0*w-1.0
+        d3 =  2.0*w+1.0
+        d4 =  0.0
+        ! give each particle an index
+        do i = 1,NP
+            indexes(i) = i
+        end do
+        ! reset the index 
+        i=0
+        ! initalize the accelerations at zero
+        axf = 0.0
+        ayf = 0.0
+        azf = 0.0
+        phi = 0.0
+        ! initialize the positions and velocities
+        xt=0
+        yt=0
+        zt=0
+        vxt=0
+        vyt=0
+        vzt=0
+        xt(:,1) = xf
+        yt(:,1) = yf
+        zt(:,1) = zf
+        vxt(:,1) = vxf
+        vyt(:,1) = vyf
+        vzt(:,1) = vzf
+
+        if (DOHOSTPERTURBER) then
+            ! measure the energy of the particles with respect to the host
+            vx2host = vxf-vxhost(hosttimeindex)
+            vy2host = vyf-vyhost(hosttimeindex)
+            vz2host = vzf-vzhost(hosttimeindex)
+            Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
+            ! update the escape time
+            isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
+            tesc(PACK(indexes,isescaper)) = currenttime
+        end if
+
+        do i=1,nstep
+            ! drift
+            xf = xf + c1*vxf*dt
+            yf = yf + c1*vyf*dt
+            zf = zf + c1*vzf*dt
+            ! kick
+            call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
+            vxf = vxf + d1*axf*dt
+            vyf = vyf + d1*ayf*dt
+            vzf = vzf + d1*azf*dt
+            ! drift
+            xf = xf + c2*vxf*dt
+            yf = yf + c2*vyf*dt
+            zf = zf + c2*vzf*dt
+            ! kick
+            call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
+            vxf = vxf + d2*axf*dt
+            vyf = vyf + d2*ayf*dt
+            vzf = vzf + d2*azf*dt
+            ! drift
+            xf = xf + c3*vxf*dt
+            yf = yf + c3*vyf*dt
+            zf = zf + c3*vzf*dt
+            ! kick
+            call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
+            vxf = vxf + d3*axf*dt
+            vyf = vyf + d3*ayf*dt
+            vzf = vzf + d3*azf*dt
+            ! drift
+            xf = xf + c4*vxf*dt
+            yf = yf + c4*vyf*dt
+            zf = zf + c4*vzf*dt
+            ! kick
+            call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
+            vxf = vxf + d4*axf*dt
+            vyf = vyf + d4*ayf*dt
+            vzf = vzf + d4*azf*dt
+            xt(:,i+1) = xf
+            yt(:,i+1) = yf
+            zt(:,i+1) = zf
+            vxt(:,i+1) = vxf
+            vyt(:,i+1) = vyf
+            vzt(:,i+1) = vzf
+
+            if (DOHOSTPERTURBER) then
+                ! measure the energy of the particles with respect to the host
+                vx2host = vxf-vxhost(hosttimeindex)
+                vy2host = vyf-vyhost(hosttimeindex)
+                vz2host = vzf-vzhost(hosttimeindex)
+                Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
+                ! update the escape time
+                isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
+                tesc(PACK(indexes,isescaper)) = currenttime
+            end if
+
+        end do
+
+    end subroutine ruthforestintime
 
     SUBROUTINE HIT(NP,x,y,z,ax,ay,az,phi)
         ! compute the acceleration of the particles at a given position 

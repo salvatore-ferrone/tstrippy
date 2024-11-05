@@ -554,11 +554,36 @@ MODULE integrator
             tesc(PACK(indexes,isescaper)) = currenttime
         end if
 
+
+        if (DEBUGACCELERATIONS) then
+            call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
+            aSG(1,1) = axSG(1)
+            aSG(2,1) = aySG(1)
+            aSG(3,1) = azSG(1)
+            aHP(1,1) = axHP(1)
+            aHP(2,1) = ayHP(1)
+            aHP(3,1) = azHP(1)
+            aP(1,1) = axP(1)
+            aP(2,1) = ayP(1)
+            aP(3,1) = azP(1)
+            aNBODY(1,1) = axNBODY(1)
+            aNBODY(2,1) = ayNBODY(1)
+            aNBODY(3,1) = azNBODY(1)
+            aBAR(1,1) = axBAR(1)
+            aBAR(2,1) = ayBAR(1)
+            aBAR(3,1) = azBAR(1)
+            aTOTAL(1,1) = axSG(1)+axHP(1)+axP(1)+axNBODY(1)+axBAR(1)
+            aTOTAL(2,1) = aySG(1)+ayHP(1)+ayP(1)+ayNBODY(1)+ayBAR(1)
+            aTOTAL(3,1) = azSG(1)+azHP(1)+azP(1)+azNBODY(1)+azBAR(1)
+        end if 
+
         do i=1,nstep
+            currenttime=timestamps(i)
             ! drift
             xf = xf + c1*vxf*dt
             yf = yf + c1*vyf*dt
             zf = zf + c1*vzf*dt
+            currenttime = currenttime + c1*dt
             ! kick
             call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
             vxf = vxf + d1*axf*dt
@@ -569,6 +594,7 @@ MODULE integrator
             yf = yf + c2*vyf*dt
             zf = zf + c2*vzf*dt
             ! kick
+            currenttime = currenttime + c2*dt
             call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
             vxf = vxf + d2*axf*dt
             vyf = vyf + d2*ayf*dt
@@ -578,6 +604,7 @@ MODULE integrator
             yf = yf + c3*vyf*dt
             zf = zf + c3*vzf*dt
             ! kick
+            currenttime = currenttime + c3*dt
             call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
             vxf = vxf + d3*axf*dt
             vyf = vyf + d3*ayf*dt
@@ -587,6 +614,7 @@ MODULE integrator
             yf = yf + c4*vyf*dt
             zf = zf + c4*vzf*dt
             ! kick
+            currenttime = currenttime + c4*dt
             call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
             vxf = vxf + d4*axf*dt
             vyf = vyf + d4*ayf*dt
@@ -609,26 +637,26 @@ MODULE integrator
                 tesc(PACK(indexes,isescaper)) = currenttime
             end if
 
-            ! if (DEBUGACCELERATIONS) then
-            !     aSG(1,i+1) = axSG
-            !     aSG(2,i+1) = aySG
-            !     aSG(3,i+1) = azSG
-            !     aHP(1,i+1) = axHP
-            !     aHP(2,i+1) = ayHP
-            !     aHP(3,i+1) = azHP
-            !     aP(1,i+1) = axP
-            !     aP(2,i+1) = ayP
-            !     aP(3,i+1) = azP
-            !     aNBODY(1,i+1) = axNBODY
-            !     aNBODY(2,i+1) = ayNBODY
-            !     aNBODY(3,i+1) = azNBODY
-            !     aBAR(1,i+1) = axBAR
-            !     aBAR(2,i+1) = ayBAR
-            !     aBAR(3,i+1) = azBAR
-            !     aTOTAL(1,i+1) = axSG+axHP+axP+axNBODY+axBAR
-            !     aTOTAL(2,i+1) = aySG+ayHP+ayP+ayNBODY+ayBAR
-            !     aTOTAL(3,i+1) = azSG+azHP+azP+azNBODY+azBAR
-            ! end if 
+            if (DEBUGACCELERATIONS) then
+                aSG(1,i+1) = axSG(1)
+                aSG(2,i+1) = aySG(1)
+                aSG(3,i+1) = azSG(1)
+                aHP(1,i+1) = axHP(1)
+                aHP(2,i+1) = ayHP(1)
+                aHP(3,i+1) = azHP(1)
+                aP(1,i+1) = axP(1)
+                aP(2,i+1) = ayP(1)
+                aP(3,i+1) = azP(1)
+                aNBODY(1,i+1) = axNBODY(1)
+                aNBODY(2,i+1) = ayNBODY(1)
+                aNBODY(3,i+1) = azNBODY(1)
+                aBAR(1,i+1) = axBAR(1)
+                aBAR(2,i+1) = ayBAR(1)
+                aBAR(3,i+1) = azBAR(1)
+                aTOTAL(1,i+1) = axSG(1)+axHP(1)+axP(1)+axNBODY(1)+axBAR(1)
+                aTOTAL(2,i+1) = aySG(1)+ayHP(1)+ayP(1)+ayNBODY(1)+ayBAR(1)
+                aTOTAL(3,i+1) = azSG(1)+azHP(1)+azP(1)+azNBODY(1)+azBAR(1)
+            end if 
 
         end do
 

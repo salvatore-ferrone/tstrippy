@@ -490,33 +490,6 @@ MODULE integrator
     END SUBROUTINE leapfrogtofinalpositions
 
 
-    subroutine printRuthCoefficients()
-        REAL*8  :: c1,c2,c3,c4,d1,d2,d3,d4 ! c for the positions, d for the velocities
-        REAL*8  :: w ! for convience for coefficients
-        w = sqrt(2.0D0**(1.0D0/3.0D0) + 2.0D0**(-1.0D0/3.0D0) -1.0D0 )/6.0D0
-
-        c1 =  w + 0.5
-        c2 = -w
-        c3 = -w
-        c4 =  w + 0.5
-
-        d1 =  2.0*w+1.0
-        d2 = -4.0*w-1.0
-        d3 =  2.0*w+1.0
-        d4 =  0.0
-        
-        print*, "c1 = ",c1
-        print*, "c2 = ",c2
-        print*, "c3 = ",c3
-        print*, "c4 = ",c4
-        print*, "d1 = ",d1
-        print*, "d2 = ",d2
-        print*, "d3 = ",d3
-        print*, "d4 = ",d4
-        print*, "c1+c2+c3+c4 = ",c1+c2+c3+c4
-        print*, "d1+d2+d3+d4 = ",d1+d2+d3+d4
-        print*, "w = ",w
-    end subroutine printRuthCoefficients
     SUBROUTINE ruthforestintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
         ! integrate the positions and velocities forward in time
         ! return the positions and velocities at each timestep to the user

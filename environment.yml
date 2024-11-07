@@ -5,6 +5,7 @@ channels:
 dependencies:
   - python=3.9.20
   - numpy==1.22
+  - gcc==11.2.0
   - setuptools=68.2
   - astropy==5.0
   - matplotlib==3.5

@@ -126,6 +126,8 @@ MODULE integrator
     
 
     SUBROUTINE setbackwardorbit()
+        ! Changes the sign of the velocities and the timestamps
+        ! the timestamps take the current time and subtract dt from it over NSTEPS
         integer :: i
 
         if (INITIALKINEMATICSSET.eqv..FALSE.) then

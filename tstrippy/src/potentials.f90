@@ -271,86 +271,93 @@ MODULE potentials
             END DO
         END DO
     end SUBROUTINE pointmassconfiguration
-end module potentials
 
 
 
 
 
+    ! King profile lookup table ADDED STRAIGHT FROM CO-PILOT AND NEEDS TO BE TESTED/ 
+
+    TYPE :: KingLookupTable
+        REAL*8, ALLOCATABLE, DIMENSION(:) :: r_table, phi_table, dphidr_table
+        INTEGER :: table_size
+    END TYPE KingLookupTable
 
 
-! MODULE HELPERFUNCTIONS
-!     contains
 
-!     ! SUBROUTINE GETSUBROUTINEPOINTER(potentialname,potentialpointer)
-!     !     IMPLICIT NONE
-!     !     CHARACTER*200, INTENT(IN) :: potentialname
-!     !     PROCEDURE(),POINTER :: potentialpointer
-!     !     ! initialize the variable that points to a subroutine
-!     !     if (potentialname.EQ."PII") THEN
-!     !         potentialpointer=>pouliasis2017PII
-!     !     ELSE 
-!     !         write(*,*) "ERROR: potential not recognized"
-!     !         stop
-!     !     endif 
-!     ! END SUBROUTINE GETSUBROUTINEPOINTER
+    SUBROUTINE initialize_king(params, table)
+        ! Create lookup table for King profile and store it in memory.
+        ! This function numerically solves for the potential and dphidr at each r and stores the values in a table.
+        REAL*8, INTENT(IN), DIMENSION(3) :: params
+        TYPE(KingLookupTable), POINTER :: table
+        REAL*8 :: r_max, dr, r, phi, dphidr
+        INTEGER :: i
 
-!     SUBROUTINE WRITEOUTTENSOR(outpath,integrationstep,tensor,N)
-!         IMPLICIT NONE
-!         ! intended to write out phiTensor from NBODYPLUMMERS
-!         ! maybe it can be applied to more things
-!         INTEGER,INTENT(IN) :: N
-!         CHARACTER*200, INTENT(IN) :: outpath
-!         INTEGER,INTENT(IN) ::integrationstep
-!         REAL*8,INTENT(IN),DIMENSION(N,N) :: tensor
-!         INTEGER :: fileIDbase
-!         CHARACTER*200 :: fname
-!         CHARACTER*4:: exten
-!         exten = '.bin'
-!         fileIDbase = 1235436
-!         write(fname,fmt='(A9,I0.6)') "potential",integrationstep
-!         fname = TRIM(outpath)//TRIM(ADJUSTL(fname))//exten
-!         open(unit=fileIDbase+integrationstep, file=fname,FORM="UNFORMATTED")
-!         write(fileIDbase+integrationstep) N,N
-!         write(fileIDbase+integrationstep) tensor
-!         close(unit=fileIDbase+integrationstep)
-!     END SUBROUTINE WRITEOUTTENSOR     
-! END MODULE HELPERFUNCTIONS
+        r_max = params(1)
+        table%table_size = params(2)
+        dr = r_max / (table%table_size - 1)
 
-! SUBROUTINE WRITESTREAM(videopath,istep,xp,yp,zp,vxp,vyp,vzp,axp,ayp,azp,Np)
-!     ! Write out the positions and velocities of the particles to unformatted fortran files
-!     ! intended to be used with scipy.io.FortranFile
-!     ! fp = FortranFile('pos-step-0.bin', 'r')
-!     ! Np, Ncol = fp.read_ints(dtype=np.int32)
-!     ! xp = fp.read_reals(dtype=np.float64)
-!     ! yp = fp.read_reals(dtype=np.float64)
-!     ! zp = fp.read_reals(dtype=np.float64)
-!     ! etc until az.
-!     ! NOTE! When writing unformatted fortran files, I needed to change all the floats from REAL to REAL*8. 
-!     ! otherwise the code didn't work. The error with scipy was that the total byte size was not a multiple of 8. 
-!     IMPLICIT NONE
-!     INTEGER,INTENT(IN) :: istep,Np
-!     CHARACTER*200,INTENT(IN) :: videopath
-!     CHARACTER*200 :: videoname
-!     REAL*8,INTENT(IN),DIMENSION(Np)::xp,yp,zp,vxp,vyp,vzp,axp,ayp,azp
-!     character*200::fmt
-!     CHARACTER*4::exten
-!     INTEGER::fileID
-!     exten='.bin'   
-!     fileID = 10009 
-!     fmt='(A9,I0.7)'
-!     write(videoname,fmt=fmt) "pos-step-",istep-1
-!     videoname = TRIM(videopath)//TRIM(ADJUSTL(videoname))//exten
-!     open(unit=fileID, file=videoname,FORM="UNFORMATTED")
-!     write(fileID) Np,9
-!     write(fileID) xp
-!     write(fileID) yp
-!     write(fileID) zp
-!     write(fileID) vxp
-!     write(fileID) vyp
-!     write(fileID) vzp
-!     write(fileID) axp
-!     write(fileID) ayp
-!     write(fileID) azp
-!     close(unit=fileID)
-! END SUBROUTINE WRITESTREAM
+        ALLOCATE(table%r_table(table%table_size))
+        ALLOCATE(table%phi_table(table%table_size))
+        ALLOCATE(table%dphidr_table(table%table_size))
+
+        DO i = 1, table%table_size
+            r = (i - 1) * dr
+            ! Compute phi and dphidr for the King profile at r
+            ! Replace the following lines with the actual computation
+            phi = -1.0 / (r + 1.0)
+            dphidr = 1.0 / (r + 1.0)**2
+
+            table%r_table(i) = r
+            table%phi_table(i) = phi
+            table%dphidr_table(i) = dphidr
+        END DO
+    END SUBROUTINE initialize_king
+
+    SUBROUTINE king(params, N, x, y, z, ax, ay, az, phi, table)
+        ! This function accesses the lookup table and interpolates the force given the position x, y, z
+        ! and then returns the corresponding acceleration.
+        REAL*8, INTENT(IN), DIMENSION(3) :: params
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        TYPE(KingLookupTable), POINTER :: table
+        REAL*8 :: r, phi_val, dphidr_val
+        INTEGER :: i
+
+        DO i = 1, N
+            r = SQRT(x(i)**2 + y(i)**2 + z(i)**2)
+            CALL interpolate_king(r, phi_val, dphidr_val, table)
+
+            ax(i) = -dphidr_val * x(i) / r
+            ay(i) = -dphidr_val * y(i) / r
+            az(i) = -dphidr_val * z(i) / r
+            phi(i) = phi_val
+        END DO
+    END SUBROUTINE king
+
+    SUBROUTINE interpolate_king(r, phi, dphidr, table)
+        ! Interpolate the values from the lookup table
+        REAL*8, INTENT(IN) :: r
+        REAL*8, INTENT(OUT) :: phi, dphidr
+        TYPE(KingLookupTable), POINTER :: table
+        INTEGER :: i
+
+        IF (r <= table%r_table(1)) THEN
+            phi = table%phi_table(1)
+            dphidr = table%dphidr_table(1)
+        ELSE IF (r >= table%r_table(table%table_size)) THEN
+            phi = table%phi_table(table%table_size)
+            dphidr = table%dphidr_table(table%table_size)
+        ELSE
+            DO i = 1, table%table_size - 1
+                IF (table%r_table(i) <= r .AND. r < table%r_table(i + 1)) THEN
+                    phi = table%phi_table(i) + (table%phi_table(i + 1) - table%phi_table(i)) * (r - table%r_table(i)) / (table%r_table(i + 1) - table%r_table(i))
+                    dphidr = table%dphidr_table(i) + (table%dphidr_table(i + 1) - table%dphidr_table(i)) * (r - table%r_table(i)) / (table%r_table(i + 1) - table%r_table(i))
+                    EXIT
+                END IF
+            END DO
+        END IF
+    END SUBROUTINE interpolate_king
+
+END MODULE potentials

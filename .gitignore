@@ -15,3 +15,6 @@ dist/
 # Other
 .DS_Store
 *.log
+
+# anything with scrap in the name 
+*scrap*

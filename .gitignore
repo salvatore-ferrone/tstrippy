@@ -15,3 +15,5 @@ dist/
 # Other
 .DS_Store
 *.log
+
+*scrap*

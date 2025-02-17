@@ -1,3 +1,5 @@
+!python -m numpy.f2py -c temp.f90 -m temp
+
 ! adding another comment!!
 MODULE temp 
     ! USE, INTRINSIC :: ISO_C_BINDING
@@ -79,19 +81,18 @@ MODULE temp
         ! set the initial condition
         yout(1,:) = y0
         tout(1) = t0
-        print*, y0
-        ! DO i = 2, npoints
-        !     ! update the equation
-        !     call my_system(tout(i-1),yout(i-1,:),k1,params)
-        !     y_temp =  yout(i-1) + 0.5d0*dt*k1
-        !     call my_system(tout(i-1) + 0.5d0*dt, y_temp, k2, params)
-        !     y_temp = yout(i-1) + 0.5d0*dt*k2
-        !     call my_system(tout(i-1) + 0.5d0*dt, y_temp, k3, params)
-        !     y_temp = yout(i-1) + 0.5d0*dt*k3
-        !     call my_system(tout(i-1) + dt, yout(i-1) + dt*k3, k4, params)
-        !     yout(i) = yout(i-1) + (k1 + 2.0d0 * k2 + 2.0d0 * k3 + k4) * dt / 6.0d0
-        !     tout(i) = tout(i-1) + dt
-        ! END DO 
+        DO i = 2, npoints
+            ! update the equation
+            call my_system(tout(i-1),yout(i-1,:),k1,params)
+            y_temp =  yout(i-1,:) + 0.5d0*dt*k1
+            call my_system(tout(i-1) + 0.5d0*dt, y_temp, k2, params)
+            y_temp = yout(i-1,:) + 0.5d0*dt*k2
+            call my_system(tout(i-1) + 0.5d0*dt, y_temp, k3, params)
+            y_temp = yout(i-1,:) + dt*k3
+            call my_system(tout(i-1) + dt, y_temp, k4, params)
+            yout(i,:) = yout(i-1,:) + (k1 + 2.0d0 * k2 + 2.0d0 * k3 + k4) * dt / 6.0d0
+            tout(i) = tout(i-1) + dt
+        END DO 
     end subroutine rk4
 
 end module temp 

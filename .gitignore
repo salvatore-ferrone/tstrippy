@@ -16,4 +16,5 @@ dist/
 .DS_Store
 *.log
 
+# scrap
 *scrap*

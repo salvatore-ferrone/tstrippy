@@ -1,6 +1,6 @@
 MODULE potentials
     contains
-
+    REAL*8, PARAMETER :: pi = 2.0d0 * acos(0.0d0)
     SUBROUTINE hernquist(params,N,x,y,z,ax,ay,az,phi)
         ! Hernquist potential
         ! params = [G, M, a]
@@ -271,86 +271,13 @@ MODULE potentials
             END DO
         END DO
     end SUBROUTINE pointmassconfiguration
+
+
+
+
+
 end module potentials
 
 
 
 
-
-
-
-! MODULE HELPERFUNCTIONS
-!     contains
-
-!     ! SUBROUTINE GETSUBROUTINEPOINTER(potentialname,potentialpointer)
-!     !     IMPLICIT NONE
-!     !     CHARACTER*200, INTENT(IN) :: potentialname
-!     !     PROCEDURE(),POINTER :: potentialpointer
-!     !     ! initialize the variable that points to a subroutine
-!     !     if (potentialname.EQ."PII") THEN
-!     !         potentialpointer=>pouliasis2017PII
-!     !     ELSE 
-!     !         write(*,*) "ERROR: potential not recognized"
-!     !         stop
-!     !     endif 
-!     ! END SUBROUTINE GETSUBROUTINEPOINTER
-
-!     SUBROUTINE WRITEOUTTENSOR(outpath,integrationstep,tensor,N)
-!         IMPLICIT NONE
-!         ! intended to write out phiTensor from NBODYPLUMMERS
-!         ! maybe it can be applied to more things
-!         INTEGER,INTENT(IN) :: N
-!         CHARACTER*200, INTENT(IN) :: outpath
-!         INTEGER,INTENT(IN) ::integrationstep
-!         REAL*8,INTENT(IN),DIMENSION(N,N) :: tensor
-!         INTEGER :: fileIDbase
-!         CHARACTER*200 :: fname
-!         CHARACTER*4:: exten
-!         exten = '.bin'
-!         fileIDbase = 1235436
-!         write(fname,fmt='(A9,I0.6)') "potential",integrationstep
-!         fname = TRIM(outpath)//TRIM(ADJUSTL(fname))//exten
-!         open(unit=fileIDbase+integrationstep, file=fname,FORM="UNFORMATTED")
-!         write(fileIDbase+integrationstep) N,N
-!         write(fileIDbase+integrationstep) tensor
-!         close(unit=fileIDbase+integrationstep)
-!     END SUBROUTINE WRITEOUTTENSOR     
-! END MODULE HELPERFUNCTIONS
-
-! SUBROUTINE WRITESTREAM(videopath,istep,xp,yp,zp,vxp,vyp,vzp,axp,ayp,azp,Np)
-!     ! Write out the positions and velocities of the particles to unformatted fortran files
-!     ! intended to be used with scipy.io.FortranFile
-!     ! fp = FortranFile('pos-step-0.bin', 'r')
-!     ! Np, Ncol = fp.read_ints(dtype=np.int32)
-!     ! xp = fp.read_reals(dtype=np.float64)
-!     ! yp = fp.read_reals(dtype=np.float64)
-!     ! zp = fp.read_reals(dtype=np.float64)
-!     ! etc until az.
-!     ! NOTE! When writing unformatted fortran files, I needed to change all the floats from REAL to REAL*8. 
-!     ! otherwise the code didn't work. The error with scipy was that the total byte size was not a multiple of 8. 
-!     IMPLICIT NONE
-!     INTEGER,INTENT(IN) :: istep,Np
-!     CHARACTER*200,INTENT(IN) :: videopath
-!     CHARACTER*200 :: videoname
-!     REAL*8,INTENT(IN),DIMENSION(Np)::xp,yp,zp,vxp,vyp,vzp,axp,ayp,azp
-!     character*200::fmt
-!     CHARACTER*4::exten
-!     INTEGER::fileID
-!     exten='.bin'   
-!     fileID = 10009 
-!     fmt='(A9,I0.7)'
-!     write(videoname,fmt=fmt) "pos-step-",istep-1
-!     videoname = TRIM(videopath)//TRIM(ADJUSTL(videoname))//exten
-!     open(unit=fileID, file=videoname,FORM="UNFORMATTED")
-!     write(fileID) Np,9
-!     write(fileID) xp
-!     write(fileID) yp
-!     write(fileID) zp
-!     write(fileID) vxp
-!     write(fileID) vyp
-!     write(fileID) vzp
-!     write(fileID) axp
-!     write(fileID) ayp
-!     write(fileID) azp
-!     close(unit=fileID)
-! END SUBROUTINE WRITESTREAM

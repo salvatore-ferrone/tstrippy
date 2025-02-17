@@ -15,7 +15,7 @@ dependencies:
   - pip==24.2
   - nbsphinx
   - ipykernel
-
+  - scipy
   # - pip:
     # - -e . 
 

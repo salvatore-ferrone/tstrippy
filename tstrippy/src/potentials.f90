@@ -276,8 +276,96 @@ MODULE potentials
 
 
 
-end module potentials
+    ! King profile lookup table ADDED STRAIGHT FROM CO-PILOT AND NEEDS TO BE TESTED/ 
+
+    ! TYPE :: KingLookupTable
+    !     REAL*8, ALLOCATABLE, DIMENSION(:) :: r_table, phi_table, dphidr_table
+    !     INTEGER :: table_size
+    ! END TYPE KingLookupTable
+
+    ! SUBROUTINE king_density_function_of_W(w,rho)
+    !     ! Compute the density function of the King profile as a function of the dimensionless potential W.
+    !     REAL*8, INTENT(IN) :: w
+    !     REAL*8, INTENT(OUT) :: rho
+    !     ! temp variable 
+    !     REAL*8 :: sqW ! square root of W
+    !     ! Replace the following line with the actual computation
+    ! END SUBROUTINE king_density_function_of_W
+
+    ! SUBROUTINE initialize_king(params, table)
+    !     ! Create lookup table for King profile and store it in memory.
+    !     ! This function numerically solves for the potential and dphidr at each r and stores the values in a table.
+    !     REAL*8, INTENT(IN), DIMENSION(3) :: params
+    !     TYPE(KingLookupTable), POINTER :: table
+    !     REAL*8 :: r_max, dr, r, phi, dphidr
+    !     INTEGER :: i
+
+    !     r_max = params(1)
+    !     table%table_size = params(2)
+    !     dr = r_max / (table%table_size - 1)
+
+    !     ALLOCATE(table%r_table(table%table_size))
+    !     ALLOCATE(table%phi_table(table%table_size))
+    !     ALLOCATE(table%dphidr_table(table%table_size))
+
+    !     DO i = 1, table%table_size
+    !         r = (i - 1) * dr
+    !         ! Compute phi and dphidr for the King profile at r
+    !         ! Replace the following lines with the actual computation
+    !         phi = -1.0 / (r + 1.0)
+    !         dphidr = 1.0 / (r + 1.0)**2
+
+    !         table%r_table(i) = r
+    !         table%phi_table(i) = phi
+    !         table%dphidr_table(i) = dphidr
+    !     END DO
+    ! END SUBROUTINE initialize_king
+
+    ! SUBROUTINE king(params, N, x, y, z, ax, ay, az, phi, table)
+    !     ! This function accesses the lookup table and interpolates the force given the position x, y, z
+    !     ! and then returns the corresponding acceleration.
+    !     REAL*8, INTENT(IN), DIMENSION(3) :: params
+    !     INTEGER, INTENT(IN) :: N
+    !     REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+    !     REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+    !     TYPE(KingLookupTable), POINTER :: table
+    !     REAL*8 :: r, phi_val, dphidr_val
+    !     INTEGER :: i
+
+    !     DO i = 1, N
+    !         r = SQRT(x(i)**2 + y(i)**2 + z(i)**2)
+    !         CALL interpolate_king(r, phi_val, dphidr_val, table)
+
+    !         ax(i) = -dphidr_val * x(i) / r
+    !         ay(i) = -dphidr_val * y(i) / r
+    !         az(i) = -dphidr_val * z(i) / r
+    !         phi(i) = phi_val
+    !     END DO
+    ! END SUBROUTINE king
+
+    ! SUBROUTINE interpolate_king(r, phi, dphidr, table)
+    !     ! Interpolate the values from the lookup table
+    !     REAL*8, INTENT(IN) :: r
+    !     REAL*8, INTENT(OUT) :: phi, dphidr
+    !     TYPE(KingLookupTable), POINTER :: table
+    !     INTEGER :: i
+
+    !     IF (r <= table%r_table(1)) THEN
+    !         phi = table%phi_table(1)
+    !         dphidr = table%dphidr_table(1)
+    !     ELSE IF (r >= table%r_table(table%table_size)) THEN
+    !         phi = table%phi_table(table%table_size)
+    !         dphidr = table%dphidr_table(table%table_size)
+    !     ELSE
+    !         DO i = 1, table%table_size - 1
+    !             IF (table%r_table(i) <= r .AND. r < table%r_table(i + 1)) THEN
+    !                 phi = table%phi_table(i) + (table%phi_table(i + 1) - table%phi_table(i)) * (r - table%r_table(i)) / (table%r_table(i + 1) - table%r_table(i))
+    !                 dphidr = table%dphidr_table(i) + (table%dphidr_table(i + 1) - table%dphidr_table(i)) * (r - table%r_table(i)) / (table%r_table(i + 1) - table%r_table(i))
+    !                 EXIT
+    !             END IF
+    !         END DO
+    !     END IF
+    ! END SUBROUTINE interpolate_king
 
 
-
-
+END MODULE potentials

@@ -42,18 +42,18 @@ MODULE temp
         system_name="king_ode_in_r"
         CALL rk4(system_name, [0.0d0, rbreak], y0, nparams, params, midpoint, nvars, t_eval, yout)
             ! rk4(system_name,t_span,y0,nparams,params,npoints,nvars,tout,yout)
-        r(:midpoint) = t_eval
-        W(:midpoint) = yout(:,1)
-        dWdr(:midpoint) = yout(:,2)
+        r(1:midpoint) = t_eval
+        W(1:midpoint) = yout(:,1)
+        dWdr(1:midpoint) = yout(:,2)
 
         ! Second half: solve for r given W
         ! allocate the size of the output arrays
         DEALLOCATE(t_eval)
         DEALLOCATE(yout)
 
-        ALLOCATE(t_eval(npoints - midpoint + 1))
-        ALLOCATE(yout(npoints - midpoint + 1,nvars))
-        CALL linspace(W(midpoint),0.0d0, npoints - midpoint + 1, t_eval) ! independent variable is now W
+        ALLOCATE(t_eval(npoints - midpoint ))
+        ALLOCATE(yout(npoints - midpoint ,nvars))
+        CALL linspace(W(midpoint),0.0d0, npoints - midpoint , t_eval) ! independent variable is now W
 
         ! store the rest of the output for W 
         W(midpoint:) = t_eval
@@ -62,11 +62,10 @@ MODULE temp
         y0(2) = dWdr(midpoint)
         ! set the size of things
         system_name="king_ode_in_w"
-        CALL rk4(system_name, [W(midpoint), 0.0d0], y0, nparams, params, npoints - midpoint + 1, nvars, t_eval, yout)
+        CALL rk4(system_name, [W(midpoint), 0.0d0], y0, nparams, params, npoints - midpoint , nvars, t_eval, yout)
         ! store the rest of the output for r
         r(midpoint:) = yout(:,1)
         dWdr(midpoint:) = yout(:,2)
-
 
     END SUBROUTINE solve_king_potential_profile
 

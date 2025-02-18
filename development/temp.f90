@@ -45,7 +45,7 @@ MODULE temp
         nparams = 1
         nvars = 2        
         ALLOCATE(t_eval(midpoint))
-        ALLOCATE(yout(midpoint,nvars))
+        ALLOCATE(yout(nvars,midpoint))
         CALL linspace(0.0d0, rbreak, midpoint, t_eval)
         ! set the initial condition, which is the central potential and zero force at the center
         y0(1) = W0
@@ -56,8 +56,8 @@ MODULE temp
         CALL rk4(system_name, t_span, y0, nparams, params, midpoint, nvars, t_eval, yout)
             ! rk4(system_name,t_span,y0,nparams,params,npoints,nvars,tout,yout)
         r(1:midpoint) = t_eval
-        W(1:midpoint) = yout(:,1)
-        dWdr(1:midpoint) = yout(:,2)
+        W(1:midpoint) = yout(1,:)
+        dWdr(1:midpoint) = yout(2,:)
 
         ! Second half: solve for r given W
         ! allocate the size of the output arrays
@@ -65,7 +65,7 @@ MODULE temp
         DEALLOCATE(yout)
 
         ALLOCATE(t_eval(npoints - midpoint ))
-        ALLOCATE(yout(npoints - midpoint ,nvars))
+        ALLOCATE(yout(nvars,npoints - midpoint))
         CALL linspace(W(midpoint),0.0d0, npoints - midpoint , t_eval) ! independent variable is now W
 
         ! store the rest of the output for W 
@@ -78,8 +78,8 @@ MODULE temp
         t_span = [W(midpoint), 0.0d0]
         CALL rk4(system_name, t_span, y0, nparams, params, npoints - midpoint , nvars, t_eval, yout)
         ! store the rest of the output for r
-        r(midpoint:) = yout(:,1)
-        dWdr(midpoint:) = yout(:,2)
+        r(1+midpoint:npoints+1) = yout(1,:)
+        dWdr(1+midpoint:npoints+1) = yout(2,:)
 
     END SUBROUTINE solve_king_potential_profile
 
@@ -92,7 +92,7 @@ MODULE temp
         REAL*8 :: rho 
         REAL*8 :: sqW 
         sqW = SQRT(W)
-        rho = EXP(W) * erf_custom(W) - (2.0/SQRT(PI))*sqW * (1.0 + 2.0*W/3.0)
+        rho = EXP(W) * erf_custom(sqW) - (2.0/SQRT(PI))*sqW * (1.0 + 2.0*W/3.0)
     end FUNCTION
 
     FUNCTION KingScaleRadius(W0) result(r0)
@@ -159,21 +159,26 @@ MODULE temp
 
 
 
-    subroutine rk4(system_name,t_span,y0,nparams,params,npoints,nvars,tout,yout)
-        REAL*8, intent(in), dimension(nvars):: y0
-        REAL*8, intent(in), dimension(2):: t_span
-        INTEGER, INTENT(in) :: npoints,nparams,nvars
-        REAL*8, intent(out), dimension(npoints) :: tout
-        REAL*8, intent(out), dimension(npoints,nvars) :: yout 
-        REAL*8, dimension(nparams), intent(IN):: params
-        REAL*8 :: dt,t0,tf
-        REAL*8, dimension(nvars) :: k1,k2,k3,k4,y_temp
+    subroutine rk4(system_name, t_span, y0, nparams, params, npoints, nvars, tout, yout)
+        IMPLICIT NONE
         character*100, intent(in) :: system_name
-
-        ! coefficients for the coefficients 
-        integer :: i
-        t0=t_span(1)
-        tf=t_span(2)
+        REAL*8, INTENT(IN), DIMENSION(2) :: t_span
+        REAL*8, INTENT(IN), DIMENSION(nvars) :: y0
+        INTEGER, INTENT(IN) :: npoints, nparams, nvars
+        REAL*8, INTENT(OUT), DIMENSION(npoints) :: tout
+        REAL*8, INTENT(OUT), DIMENSION(nvars, npoints) :: yout
+        REAL*8, DIMENSION(nparams), INTENT(IN) :: params
+        REAL*8 :: dt, t0, tf
+        REAL*8, DIMENSION(nvars) :: k1, k2, k3, k4, y_temp
+        INTEGER :: i
+    
+        ! Set the initial condition
+        t0 = t_span(1)
+        tf = t_span(2)
+        dt = (tf - t0) / (npoints - 1)
+        yout(:, 1) = y0
+        tout(1) = t0
+    
         if (system_name.eq."exponential_decay") then 
             my_system=>exponential_decay
         else if (system_name.eq."double_system_of_equations") then 
@@ -186,23 +191,18 @@ MODULE temp
             print*, system_name, "error, system of equations not implemented"
             stop 
         end if 
-        ! compute the time step 
-        dt = (tf-t0) / (npoints - 1 )
-        ! set the initial condition
-        yout(1,:) = y0
-        tout(1) = t0
+    ! Runge-Kutta 4th order method
         DO i = 2, npoints
-            ! update the equation
-            call my_system(tout(i-1),yout(i-1,:),k1,params)
-            y_temp =  yout(i-1,:) + 0.5d0*dt*k1
-            call my_system(tout(i-1) + 0.5d0*dt, y_temp, k2, params)
-            y_temp = yout(i-1,:) + 0.5d0*dt*k2
-            call my_system(tout(i-1) + 0.5d0*dt, y_temp, k3, params)
-            y_temp = yout(i-1,:) + dt*k3
-            call my_system(tout(i-1) + dt, y_temp, k4, params)
-            yout(i,:) = yout(i-1,:) + (k1 + 2.0d0 * k2 + 2.0d0 * k3 + k4) * dt / 6.0d0
+            CALL my_system(tout(i-1), yout(:, i-1), k1, params)
+            y_temp = yout(:, i-1) + 0.5d0 * dt * k1
+            CALL my_system(tout(i-1) + 0.5d0 * dt, y_temp, k2, params)
+            y_temp = yout(:, i-1) + 0.5d0 * dt * k2
+            CALL my_system(tout(i-1) + 0.5d0 * dt, y_temp, k3, params)
+            y_temp = yout(:, i-1) + dt * k3
+            CALL my_system(tout(i-1) + dt, y_temp, k4, params)
+            yout(:, i) = yout(:, i-1) + (k1 + 2.0d0 * k2 + 2.0d0 * k3 + k4) * dt / 6.0d0
             tout(i) = tout(i-1) + dt
-        END DO 
+        END DO
     end subroutine rk4
 
     

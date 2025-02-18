@@ -9,12 +9,24 @@ MODULE temp
     REAL*8, PARAMETER :: PI = 2.0d0 * acos(0.0d0)
     contains 
 
+
+    subroutine test_index_slicing(npoints,x)
+        INTEGER, INTENT(IN) :: npoints
+        REAL*8, intent(OUT), DIMENSION(npoints) :: x
+        INTEGER :: i
+        x = 0.0d0
+        DO i = 1, npoints /2 
+            x(i) = i
+        END DO
+        x(npoints/2:) = -1
+    end subroutine test_index_slicing
+
     SUBROUTINE solve_king_potential_profile(W0,npoints,r,W,dwdr)
         REAL*8, INTENT(IN) :: W0
         INTEGER, INTENT(IN) :: npoints
         REAL*8, INTENT(OUT), DIMENSION(npoints) :: r, W, dwdr
         REAL*8 :: rbreak 
-        REAL*8, DIMENSION(2) :: y0
+        REAL*8, DIMENSION(2) :: y0,t_span
         REAL*8, DIMENSION(:, :),allocatable :: yout
         REAL*8, DIMENSION(:), ALLOCATABLE :: t_eval
         REAL*8, DIMENSION(1) :: params
@@ -40,7 +52,8 @@ MODULE temp
         y0(2) = 0.0d0
         ! set the size of things
         system_name="king_ode_in_r"
-        CALL rk4(system_name, [0.0d0, rbreak], y0, nparams, params, midpoint, nvars, t_eval, yout)
+        t_span = [0.0d0, rbreak]
+        CALL rk4(system_name, t_span, y0, nparams, params, midpoint, nvars, t_eval, yout)
             ! rk4(system_name,t_span,y0,nparams,params,npoints,nvars,tout,yout)
         r(1:midpoint) = t_eval
         W(1:midpoint) = yout(:,1)
@@ -62,7 +75,8 @@ MODULE temp
         y0(2) = dWdr(midpoint)
         ! set the size of things
         system_name="king_ode_in_w"
-        CALL rk4(system_name, [W(midpoint), 0.0d0], y0, nparams, params, npoints - midpoint , nvars, t_eval, yout)
+        t_span = [W(midpoint), 0.0d0]
+        CALL rk4(system_name, t_span, y0, nparams, params, npoints - midpoint , nvars, t_eval, yout)
         ! store the rest of the output for r
         r(midpoint:) = yout(:,1)
         dWdr(midpoint:) = yout(:,2)

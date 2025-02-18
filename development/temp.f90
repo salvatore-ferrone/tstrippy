@@ -10,7 +10,7 @@ MODULE temp
     contains 
 
 
-    subroutine test_index_slicing(npoints,x)
+    SUBROUTINE test_index_slicing(npoints,x)
         INTEGER, INTENT(IN) :: npoints
         REAL*8, intent(OUT), DIMENSION(npoints) :: x
         INTEGER :: i
@@ -19,7 +19,7 @@ MODULE temp
             x(i) = i
         END DO
         x(npoints/2:) = -1
-    end subroutine test_index_slicing
+    END SUBROUTINE test_index_slicing
 
     SUBROUTINE solve_king_potential_profile(W0,npoints,r,W,dwdr)
         REAL*8, INTENT(IN) :: W0
@@ -158,8 +158,7 @@ MODULE temp
     END SUBROUTINE king_ode_in_w
 
 
-
-    subroutine rk4(system_name, t_span, y0, nparams, params, npoints, nvars, tout, yout)
+    SUBROUTINE rk4(system_name, t_span, y0, nparams, params, npoints, nvars, tout, yout)
         IMPLICIT NONE
         character*100, intent(in) :: system_name
         REAL*8, INTENT(IN), DIMENSION(2) :: t_span
@@ -191,7 +190,7 @@ MODULE temp
             print*, system_name, "error, system of equations not implemented"
             stop 
         end if 
-    ! Runge-Kutta 4th order method
+        ! Runge-Kutta 4th order method
         DO i = 2, npoints
             CALL my_system(tout(i-1), yout(:, i-1), k1, params)
             y_temp = yout(:, i-1) + 0.5d0 * dt * k1
@@ -203,7 +202,7 @@ MODULE temp
             yout(:, i) = yout(:, i-1) + (k1 + 2.0d0 * k2 + 2.0d0 * k3 + k4) * dt / 6.0d0
             tout(i) = tout(i-1) + dt
         END DO
-    end subroutine rk4
+    END SUBROUTINE rk4
 
     
     SUBROUTINE linspace(start, end, n, result)

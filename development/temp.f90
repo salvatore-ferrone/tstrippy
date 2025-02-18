@@ -9,6 +9,67 @@ MODULE temp
     REAL*8, PARAMETER :: PI = 2.0d0 * acos(0.0d0)
     contains 
 
+    SUBROUTINE solve_king_potential_profile(W0,npoints,r,W,dwdr)
+        REAL*8, INTENT(IN) :: W0
+        INTEGER, INTENT(IN) :: npoints
+        REAL*8, INTENT(OUT), DIMENSION(npoints) :: r, W, dwdr
+        REAL*8 :: rbreak 
+        REAL*8, DIMENSION(2) :: y0
+        REAL*8, DIMENSION(:, :),allocatable :: yout
+        REAL*8, DIMENSION(:), ALLOCATABLE :: t_eval
+        REAL*8, DIMENSION(1) :: params
+        INTEGER :: i, midpoint, nparams, nvars
+        character(len=100) :: system_name
+        params(1) = 0.0d0 ! unused
+        ! Initialize arrays
+        r = 0.0d0
+        W = 0.0d0
+        dWdr = 0.0d0
+        ! Calculate the break radius
+        rbreak = king_break_radius(W0)
+        ! First half: solve for W given r
+        midpoint = npoints / 2
+        ! allocate the size of the output arrays
+        nparams = 1
+        nvars = 2        
+        ALLOCATE(t_eval(midpoint))
+        ALLOCATE(yout(midpoint,nvars))
+        CALL linspace(0.0d0, rbreak, midpoint, t_eval)
+        ! set the initial condition, which is the central potential and zero force at the center
+        y0(1) = W0
+        y0(2) = 0.0d0
+        ! set the size of things
+        system_name="king_ode_in_r"
+        CALL rk4(system_name, [0.0d0, rbreak], y0, nparams, params, midpoint, nvars, t_eval, yout)
+            ! rk4(system_name,t_span,y0,nparams,params,npoints,nvars,tout,yout)
+        r(:midpoint) = t_eval
+        W(:midpoint) = yout(:,1)
+        dWdr(:midpoint) = yout(:,2)
+
+        ! Second half: solve for r given W
+        ! allocate the size of the output arrays
+        DEALLOCATE(t_eval)
+        DEALLOCATE(yout)
+
+        ALLOCATE(t_eval(npoints - midpoint + 1))
+        ALLOCATE(yout(npoints - midpoint + 1,nvars))
+        CALL linspace(W(midpoint),0.0d0, npoints - midpoint + 1, t_eval) ! independent variable is now W
+
+        ! store the rest of the output for W 
+        W(midpoint:) = t_eval
+        ! set the initial condition, which is the central potential and zero force at the center
+        y0(1) = r(midpoint)
+        y0(2) = dWdr(midpoint)
+        ! set the size of things
+        system_name="king_ode_in_w"
+        CALL rk4(system_name, [W(midpoint), 0.0d0], y0, nparams, params, npoints - midpoint + 1, nvars, t_eval, yout)
+        ! store the rest of the output for r
+        r(midpoint:) = yout(:,1)
+        dWdr(midpoint:) = yout(:,2)
+
+
+    END SUBROUTINE solve_king_potential_profile
+
 
 
     FUNCTION KingDensityW(W) RESULT(rho)
@@ -44,10 +105,11 @@ MODULE temp
         end if
     end FUNCTION
 
-    SUBROUTINE king_ode_in_r(t,y,dydt)
+    SUBROUTINE king_ode_in_r(t,y,dydt,params)
         REAL*8, INTENT(IN) :: t
         REAL*8, INTENT(IN),dimension(2) :: y
         REAL*8, INTENT(OUT),dimension(2) :: dydt
+        REAL*8, intent(in), dimension(1) :: params ! unused
         REAL*8 :: r,W, dwdr, d2wdr2, rho 
         ! unpack the variables 
         r = t
@@ -64,9 +126,10 @@ MODULE temp
         dydt(2) = d2wdr2
     END SUBROUTINE king_ode_in_r
 
-    SUBROUTINE king_ode_in_w(t,y,dydt)
+    SUBROUTINE king_ode_in_w(t,y,dydt,params)
         REAL*8, INTENT(IN) :: t
         REAL*8, INTENT(IN),dimension(2) :: y
+        REAL*8, intent(IN), dimension(1) :: params ! unused
         REAL*8, INTENT(OUT),dimension(2) :: dydt
         REAL*8 :: r,W, dwdr, d2wdr2, rho, term1, term2
         ! unpack the variables, in this case W is the independent variable 
@@ -76,7 +139,6 @@ MODULE temp
         rho = KingDensityW(W)
         term1 = -1.0*(1.0/dwdr)
         term2 = (4.0 * PI * rho + 2.0*dwdr/r)
-        print*, rho, term1, term2
         d2wdr2 = term1 * term2
         dydt(1) = 1.0/dwdr
         dydt(2) = d2wdr2
@@ -103,8 +165,12 @@ MODULE temp
             my_system=>exponential_decay
         else if (system_name.eq."double_system_of_equations") then 
             my_system=>double_system_of_equations
+        else if (system_name.eq."king_ode_in_r") then 
+            my_system=>king_ode_in_r
+        else if (system_name.eq."king_ode_in_w") then 
+            my_system=>king_ode_in_w
         else
-            print*, "error, system of equations not implemented"
+            print*, system_name, "error, system of equations not implemented"
             stop 
         end if 
         ! compute the time step 
@@ -126,7 +192,24 @@ MODULE temp
         END DO 
     end subroutine rk4
 
-
+    
+    SUBROUTINE linspace(start, end, n, result)
+        IMPLICIT NONE
+        REAL*8, INTENT(IN) :: start, end
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(OUT), DIMENSION(n) :: result
+        INTEGER :: i
+        REAL*8 :: step
+    
+        IF (n > 1) THEN
+            step = (end - start) / (n - 1)
+            DO i = 1, n
+                result(i) = start + (i - 1) * step
+            END DO
+        ELSE
+            result(1) = start
+        END IF
+    END SUBROUTINE linspace
         
     FUNCTION erf_custom(x) RESULT(y)
         ! Abramowitz and Stegun approximation for the error function provided to me by co-pilot

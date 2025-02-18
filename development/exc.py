@@ -1,11 +1,14 @@
+import matplotlib.pyplot as plt
 from temp import temp 
 
-y0,t0,tf,npoints=1,0,1,10
-coeff=1.0/10.0
-equations = "double_system_of_equations"
-params = [coeff]
-y0 = [1,2]
-t,yt=temp.rk4(equations, [t0,tf], y0, params, npoints)
+npoints=1001
+r,w,dwdr=temp.solve_king_potential_profile(10.,npoints)
 
-print(yt)
-
+fig,axis=plt.subplots()
+axis.plot(r,w,'.')
+axis.plot(r,dwdr,'.')
+axis.set_xlabel('r')
+axis.legend(['w','dwdr'])
+axis.set_title('King Potential Profile')
+plt.show()
+fig.savefig('king_potential_profile.png')

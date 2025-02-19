@@ -18,7 +18,7 @@ MODULE temp
     !     REAL*8,INTENT(IN),dimension(4) :: params
     !     REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
     !     REAL*8,DIMENSION(N) :: r,amod
-    !     REAL*8 :: G,M,rc,rt ! G, Mass, core radius, tidal radius
+    !     REAL*8 :: G,W0,M,rt ! G, Mass, core radius, tidal radius
 
     !     G = params(1)
     !     M = params(2)
@@ -32,7 +32,57 @@ MODULE temp
     !         call initialize_king_potential_profile(W0, 1000)
     !     end if
     ! END subroutine king
-    
+
+    FUNCTION linear_interpolation_from_arrays(x,lenarray,xs,ys) RESULT(yout)
+        ! warning, this will extrapolate if fon e
+        REAL*8, INTENT(IN) :: x
+        INTEGER, INTENT(IN) :: lenarray
+        REAL*8, INTENT(IN), DIMENSION(lenarray) :: xs, ys
+        REAL*8 :: xtemp
+        REAL*8 :: yout
+        INTEGER :: index,downindex,upindex
+        index = get_nearest_index(lenarray, xs, x)
+        xtemp = xs(index)
+        if (xtemp.le.x) then
+            downindex = index
+            upindex = index+1
+        else
+            downindex = index-1
+            upindex = index
+        end if 
+
+        ! now make sure we are not out of bounds
+        if (downindex.lt.1) then
+            downindex = 1
+            upindex = 2
+        end if
+
+        if (upindex.gt.lenarray) then
+            upindex = lenarray
+            downindex = lenarray-1
+        end if
+
+        yout = linear_interpolation(x, xs(index), xs(index+1), ys(index), ys(index+1))
+    END FUNCTION linear_interpolation_from_arrays
+
+
+    FUNCTION get_nearest_index(lenarray, arr, value) RESULT(index)
+        INTEGER, intent(in) :: lenarray
+        REAL*8, INTENT(IN),dimension(lenarray) :: arr(:)
+        REAL*8, INTENT(IN) ::  value
+        INTEGER, DIMENSION(lenarray) :: minloc_result
+        INTEGER :: index
+        minloc_result = MINLOC(ABS(arr - value))
+        index = minloc_result(1)
+    END FUNCTION get_nearest_index
+
+    FUNCTION linear_interpolation(x, x0, x1, y0, y1) RESULT(y)
+        REAL*8, INTENT(IN) :: x, x0, x1, y0, y1
+        REAL*8 :: y
+        y = y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+    END FUNCTION linear_interpolation
+
+
     SUBROUTINE deallocate_all()
         if (initialized_king.eqv..TRUE.) then
             DEALLOCATE(r_, W_, dwdr_)

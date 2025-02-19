@@ -74,11 +74,7 @@ MODULE temp
         ! set the size of things
         system_name="king_ode_in_w"
         t_span = [W(midpoint), 0.0d0]
-        ! print*, "SECOND HALF"
-        ! print*, "midpoint", midpoint
-        ! print*, "t_span", t_span
-        ! print*, "y0", y0
-        ! print*, ""
+
         CALL rk4(system_name, t_span, y0, nparams, params, npoints - midpoint , nvars, t_eval, yout)
         ! store the rest of the output for r
         r(1+midpoint:npoints+1) = yout(1,:)
@@ -101,14 +97,6 @@ MODULE temp
         term2 = (2.0/SQRT(PI))*sqW
         term3 = 1.0 + 2.0*W/3.0
         rho = term1 - term2 * term3
-        ! print*, "KingDensityW"
-        ! print*, "    exp(w)", expW
-        ! print*, "    erf(sqrt(W))", erfW
-        ! print*, "    term1", term1  
-        ! print*, "    term2", term2
-        ! print*, "    term3", term3
-        ! print*, "    rho", rho
-
 
     end FUNCTION
 
@@ -154,13 +142,7 @@ MODULE temp
         end if 
         dydt(1) = dwdr
         dydt(2) = d2wdr2
-        ! print*, "king_ode_in_r"
-        ! print*, "   r",r
-        ! print*, "   rho", rho
-        ! print*, "   W",W
-        ! print*, "   dwdr", d2wdr2
-        ! print*, "   d2wdr2",d2wdr2  
-        ! print*, ""
+
     END SUBROUTINE king_ode_in_r
 
     SUBROUTINE king_ode_in_w(t,y,dydt,params)
@@ -179,15 +161,7 @@ MODULE temp
         d2wdr2 = term1 * term2
         dydt(1) = 1.0/dwdr
         dydt(2) = d2wdr2
-        ! print*, "king_ode_in_w"
-        ! print*, "   r",r
-        ! print*, "   rho", rho
-        ! print*, "   W",W
-        ! print*, "   dwdr", dwdr
-        ! print*, "   d2wdr2",d2wdr2
-        ! print*, "   term1", term1
-        ! print*, "   term2", term2
-        ! print*, ""
+
     END SUBROUTINE king_ode_in_w
 
 
@@ -224,42 +198,25 @@ MODULE temp
             stop 
         end if 
         i=1
-        ! print*, "FIRST STEP INITIAL CONDITIONS"
-        ! print*, "tout(i),", tout(i)
-        ! print*, "yout(1, i)", yout(1, i)
-        ! print*, "yout(2, i)", yout(2, i)
-        ! print*, ""
+
         ! Runge-Kutta 4th order method
         DO i = 2, npoints
             CALL my_system(tout(i-1), yout(:, i-1), k1, params)
             y_temp = yout(:, i-1) + 0.5d0 * dt * k1
-            ! print '(A, 1P, E15.3, E15.3, E15.3, E15.3)', "k1: ", y_temp(1), y_temp(2), k1(1), k1(2)
             
             CALL my_system(tout(i-1) + 0.5d0 * dt, y_temp, k2, params)
             y_temp = yout(:, i-1) + 0.5d0 * dt * k2
-            ! print '(A, 1P, E15.3, E15.3, E15.3, E15.3)', "k2: ", y_temp(1), y_temp(2), k2(1), k2(2)
             
             CALL my_system(tout(i-1) + 0.5d0 * dt, y_temp, k3, params)
             y_temp = yout(:, i-1) + dt * k3
-            ! print '(A, 1P, E15.3, E15.3, E15.3, E15.3)', "k3: ", y_temp(1), y_temp(2), k3(1), k3(2)
             
             CALL my_system(tout(i-1) + dt, y_temp, k4, params)
-            ! print '(A, 1P, E15.3, E15.3, E15.3, E15.3)', "k4: ", y_temp(1), y_temp(2), k4(1), k4(2)
             
             kterms = (k1 + (2.0d0 * k2) + (2.0d0 * k3) + k4) / 6.0d0
             yout(:, i) = yout(:, i-1) + kterms * dt
             tout(i) = t0 + (i-1)*dt
 
-        !     print*, ""
-        !     print*, "END OF STEP"
-        !     print*, "all k 1 terms", k1(1), k2(1), k3(1), k4(1)
-        !     print*, "all k 2 terms", k1(2), k2(2), k3(2), k4(2)
-        !     print*, "K TERMS", kterms(1), kterms(2)
-        !     print*, "STEP:", i
-        !     print*, "tout(i),", tout(i)
-        !     print*, "yout(1, i)", yout(1, i)
-        !     print*, "yout(2, i)", yout(2, i)    
-        !     print*, ""
+
         END DO
     END SUBROUTINE rk4
 

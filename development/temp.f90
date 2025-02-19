@@ -3,7 +3,7 @@
 MODULE temp 
     IMPLICIT NONE 
 
-    REAL*8 :: W0_,core_concentration_,scalefree_mass_
+    REAL*8 :: W0_,core_concentration_,scalefree_mass_,tidal_radius_
     INTEGER :: npoints_
     REAL*8, DIMENSION(:), ALLOCATABLE :: r_, W_, dwdr_
     LOGICAL :: initialized_king = .FALSE.
@@ -11,22 +11,42 @@ MODULE temp
     REAL*8, PARAMETER :: PI = 2.0d0 * acos(0.0d0)
     contains 
 
-    ! subroutine king_unscaled(params,N,x,y,z,ax,ay,az,phi)
-    !     ! king potential. Assumes system is already 
-    !     INTEGER, INTENT(IN) :: N
-    !     REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
-    !     REAL*8,INTENT(IN),dimension(4) :: params
-    !     REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
-    !     REAL*8,DIMENSION(N) :: r,amod
-    !     REAL*8 :: W0
+    subroutine king_unscaled(params,N,x,y,z,ax,ay,az,phi)
+        ! king potential. make sure the x,y,z is unscaled as well
+        INTEGER, INTENT(IN) :: N
+        REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
+        REAL*8,INTENT(IN),dimension(1) :: params
+        REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
+        REAL*8,DIMENSION(N) :: r
+        REAL*8 :: W0, amod
+        INTEGER :: i
 
-    !     W0 = params(1)
-
-    !     ! check if the king potential has been initialized
-    !     if (initialized_king.eqv..FALSE.) then
-    !         call initialize_king_potential_profile(W0, 1000)
-    !     end if
-    ! END subroutine king_unscaled
+        W0 = params(1)
+        ! check if the king potential has been initialized
+        if (initialized_king.eqv..FALSE.) then
+            call initialize_king_potential_profile(W0, 1000)
+        end if
+        ! compute r
+        r = sqrt(x**2 + y**2 + z**2)
+        DO i = 1,N
+            if (r(i).gt.tidal_radius_) THEN 
+                ! do a point mass if we're outside the tidal radius
+                amod = -scalefree_mass_/r(i)**2
+                ax(i) = amod*x(i)/r(i)
+                ay(i) = amod*y(i)/r(i)
+                az(i) = amod*z(i)/r(i)
+                phi(i) = -scalefree_mass_/r(i)
+            ELSE
+                ! do the king potential if we're inside the tidal radius
+                ! no need to worry about extrpolation since we already checked if we're inside the tidal radius
+                amod = linear_interpolation_from_arrays(r(i), npoints_, r_, dwdr_)
+                ax(i) = amod*x(i)/r(i)
+                ay(i) = amod*y(i)/r(i)
+                az(i) = amod*z(i)/r(i)
+                phi(i) = linear_interpolation_from_arrays(r(i), npoints_, r_, W_)
+            END if 
+        END DO
+    END subroutine king_unscaled
 
 
 
@@ -59,8 +79,8 @@ MODULE temp
 
         r0 = KingScaleRadius(W0)
         core_concentration_ = log10(r(npoints)/r0)
-
         scalefree_mass_ = -dwdr_(npoints)*r_(npoints)**2
+        tidal_radius_ = r(npoints)
         ! Deallocate local arrays
         DEALLOCATE(r, W, dwdr)
         initialized_king = .TRUE.

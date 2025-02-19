@@ -1,7 +1,9 @@
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
 from scipy import integrate
 from temp import temp 
+import galpy.df
 
 
 def king_density_function_of_W(W):
@@ -83,6 +85,24 @@ def solve_king_density_profile(W0,npoints=1001):
     return r, np.array([W, dWdr])
 
 
+def leapfrogstep(x,y,z,vx,vy,vz,dt):
+    """Leapfrog step"""
+    # kick 
+    ax0,ay0,az0,phi0=temp.king_unscaled([W0],x,y,z)
+    # drift 
+    xf = x + 0.5*vx*dt
+    yf = y + 0.5*vy*dt
+    zf = z + 0.5*vz*dt
+    # kick
+    axf,ayf,azf,phi=temp.king_unscaled([W0],xf,yf,zf)
+    # update the velocities
+    vxf = vx + 0.5*(ax0+axf)*dt
+    vyf = vy + 0.5*(ay0+ayf)*dt
+    vzf = vz + 0.5*(az0+azf)*dt
+    
+    # update the velocities
+    return xf,yf,zf,vxf,vyf,vzf
+
 if __name__=="__main__":
     npoints=1000
     nprint=3
@@ -92,13 +112,43 @@ if __name__=="__main__":
     r = temp.r_.copy()
     w = temp.w_.copy()
     dwdr = temp.dwdr_.copy()
+    r_tidal = temp.tidal_radius_
+    # sample from bovy
+    myking = galpy.df.kingdf(W0)
+    R,vR,vT,z,vz,phi=myking.sample(n=100,return_orbit=False)
+    xp,yp,zp = R*np.cos(phi),R*np.sin(phi),z
+    vxp,vyp,vzp = vR*np.cos(phi) - vT*np.sin(phi),vR*np.sin(phi) + vT*np.cos(phi),vz
+    ax,ay,az,phi=temp.king_unscaled([W0],xp,yp,zp)    
+    mag = np.sqrt(ax**2 + ay**2 + az**2)
+    speed = np.sqrt(vxp**2 + vyp**2 + vzp**2)
+    norm = mpl.colors.LogNorm(vmin=mag.min(),vmax=mag.max())
+    norm_speed = mpl.colors.Normalize(vmin=0,vmax=speed.max())
+    cmap = plt.cm.plasma
+    cmap_speed = plt.cm.plasma_r
+    colors = cmap(norm(mag))
+    colors = cmap_speed(norm_speed(speed))
+    fig,axis=plt.subplots(1,1,figsize=(5,6))
+    dt=1e-3
+    NSTEP = 1000
+    NSKIP = 10
+    c=0
+    for i in range(NSTEP):
+        xp,yp,zp,vxp,vyp,vzp = leapfrogstep(xp,yp,zp,vxp,vyp,vzp,dt)
+        ax,ay,az,phi=temp.king_unscaled([W0],xp,yp,zp)
+        mag = np.sqrt(ax**2 + ay**2 + az**2)
+        speed = np.sqrt(vxp**2 + vyp**2 + vzp**2)
 
-    r_break = r[npoints//2]
-    fig,axis=plt.subplots()
-    axis.plot(r,w,'.')
-    axis.stem([r_break],[w[npoints//2]],'r')
-    # axis.plot(r,dwdr,'.')
-    axis.set_xlabel('r')
-    axis.set_title('King Potential Profile')
-    plt.show()
-    fig.savefig('king_potential_profile.png')
+        if i%NSKIP == 0:
+            axis.cla()
+            axis.set_aspect("equal")
+            axis.set_xlim(-r_tidal/2,r_tidal/2)
+            axis.set_ylim(-r_tidal/2,r_tidal/2)
+            axis.set_xlabel("x [kpc]")
+            axis.set_ylabel("y [kpc]")
+            axis.set_title("King Model with W0={}".format(W0))
+            axis.quiver(xp,yp,ax/mag,ay/mag,color=colors)
+            axis.quiver(xp,yp,vxp/speed,vyp/speed,color="k",alpha=0.5)
+            fig.tight_layout()
+            plt.show()
+            fig.savefig("frame-{:d}.png".format(c))
+            c+=1

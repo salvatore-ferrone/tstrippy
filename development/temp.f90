@@ -3,21 +3,35 @@
 MODULE temp 
     IMPLICIT NONE 
 
+    REAL*8 :: W0_
+    INTEGER :: npoints_
+    REAL*8, DIMENSION(:), ALLOCATABLE :: r_, W_, dwdr_
     PROCEDURE(), pointer, public :: my_system
     REAL*8, PARAMETER :: PI = 2.0d0 * acos(0.0d0)
     contains 
 
-
-    SUBROUTINE test_index_slicing(npoints,x)
+    SUBROUTINE initialize_king_potential_profile(W0, npoints)
+        REAL*8, INTENT(IN) :: W0
         INTEGER, INTENT(IN) :: npoints
-        REAL*8, intent(OUT), DIMENSION(npoints) :: x
-        INTEGER :: i
-        x = 0.0d0
-        DO i = 1, npoints /2 
-            x(i) = i
-        END DO
-        x(npoints/2:) = -1
-    END SUBROUTINE test_index_slicing
+        REAL*8, ALLOCATABLE :: r(:), W(:), dwdr(:)
+
+        ! Allocate local arrays
+        ALLOCATE(r(npoints), W(npoints), dwdr(npoints))
+
+        ! Call the solve_king_potential_profile subroutine
+        CALL solve_king_potential_profile(W0, npoints, r, W, dwdr)
+
+        ! Store the results in global variables
+        W0_ = W0
+        ALLOCATE(r_(npoints), W_(npoints), dwdr_(npoints))
+        npoints_ = npoints
+        r_ = r
+        W_ = W
+        dwdr_ = dwdr
+
+        ! Deallocate local arrays
+        DEALLOCATE(r, W, dwdr)
+    END SUBROUTINE initialize_king_potential_profile
 
     SUBROUTINE solve_king_potential_profile(W0,npoints,r,W,dwdr)
         REAL*8, INTENT(IN) :: W0

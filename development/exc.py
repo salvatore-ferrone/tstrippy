@@ -87,23 +87,18 @@ if __name__=="__main__":
     npoints=1000
     nprint=3
     W0=11
-    r,w,dwdr=temp.solve_king_potential_profile(W0,npoints)
+    # r,w,dwdr=temp.solve_king_potential_profile(W0,npoints)
+    temp.initialize_king_potential_profile(W0,npoints)
+    r = temp.r_.copy()
+    w = temp.w_.copy()
+    dwdr = temp.dwdr_.copy()
 
-    for i in range(nprint):
-        print("fortran", r[i],w[i],dwdr[i])
-
-    # now solve with python
-
-    r, [w,dwdr] = solve_king_density_profile(W0,npoints)
-    for i in range(nprint):
-        print("python", r[i],w[i],dwdr[i])
-
-    # r_break = r[npoints//2]
-    # fig,axis=plt.subplots()
-    # axis.plot(r,w,'.')
-    # axis.stem([r_break],[w[npoints//2]],'r')
-    # # axis.plot(r,dwdr,'.')
-    # axis.set_xlabel('r')
-    # axis.set_title('King Potential Profile')
-    # plt.show()
-    # fig.savefig('king_potential_profile.png')
+    r_break = r[npoints//2]
+    fig,axis=plt.subplots()
+    axis.plot(r,w,'.')
+    axis.stem([r_break],[w[npoints//2]],'r')
+    # axis.plot(r,dwdr,'.')
+    axis.set_xlabel('r')
+    axis.set_title('King Potential Profile')
+    plt.show()
+    fig.savefig('king_potential_profile.png')

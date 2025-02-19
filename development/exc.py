@@ -114,41 +114,103 @@ if __name__=="__main__":
     dwdr = temp.dwdr_.copy()
     r_tidal = temp.tidal_radius_
     # sample from bovy
+    nparticles = 100
     myking = galpy.df.kingdf(W0)
-    R,vR,vT,z,vz,phi=myking.sample(n=100,return_orbit=False)
+    R,vR,vT,z,vz,phi=myking.sample(n=nparticles,return_orbit=False)
     xp,yp,zp = R*np.cos(phi),R*np.sin(phi),z
     vxp,vyp,vzp = vR*np.cos(phi) - vT*np.sin(phi),vR*np.sin(phi) + vT*np.cos(phi),vz
-    ax,ay,az,phi=temp.king_unscaled([W0],xp,yp,zp)    
-    mag = np.sqrt(ax**2 + ay**2 + az**2)
-    speed = np.sqrt(vxp**2 + vyp**2 + vzp**2)
-    norm = mpl.colors.LogNorm(vmin=mag.min(),vmax=mag.max())
-    norm_speed = mpl.colors.Normalize(vmin=0,vmax=speed.max())
-    cmap = plt.cm.plasma
-    cmap_speed = plt.cm.plasma_r
-    colors = cmap(norm(mag))
-    colors = cmap_speed(norm_speed(speed))
-    fig,axis=plt.subplots(1,1,figsize=(5,6))
-    dt=1e-3
-    NSTEP = 1000
-    NSKIP = 10
-    c=0
-    for i in range(NSTEP):
-        xp,yp,zp,vxp,vyp,vzp = leapfrogstep(xp,yp,zp,vxp,vyp,vzp,dt)
-        ax,ay,az,phi=temp.king_unscaled([W0],xp,yp,zp)
-        mag = np.sqrt(ax**2 + ay**2 + az**2)
-        speed = np.sqrt(vxp**2 + vyp**2 + vzp**2)
+    
+    dt = 1e-4
+    nstep=1000
+    xt,yt,zt,vxt,vyt,vzt=temp.leapfrog(dt,nstep,xp,yp,zp,vxp,vyp,vzp)
+    # compute the potential at each time step
+    phis = np.zeros(nstep+1)
+    for i in range(nstep+1):
+        phis[i] = temp.king_unscaled([W0],xt[i],yt[i],zt[i])[3]
 
-        if i%NSKIP == 0:
-            axis.cla()
-            axis.set_aspect("equal")
-            axis.set_xlim(-r_tidal/2,r_tidal/2)
-            axis.set_ylim(-r_tidal/2,r_tidal/2)
-            axis.set_xlabel("x [kpc]")
-            axis.set_ylabel("y [kpc]")
-            axis.set_title("King Model with W0={}".format(W0))
-            axis.quiver(xp,yp,ax/mag,ay/mag,color=colors)
-            axis.quiver(xp,yp,vxp/speed,vyp/speed,color="k",alpha=0.5)
-            fig.tight_layout()
-            plt.show()
-            fig.savefig("frame-{:d}.png".format(c))
-            c+=1
+    kinetic = 0.5*(vxt**2 + vyt**2 + vzt**2)
+    E_totals = kinetic + phis
+    norm = mpl.colors.Normalize(vmin=E_totals[0].min(),vmax=E_totals[0].max())
+    cmap = plt.cm.plasma
+    colors = cmap(norm(E_totals[0]))
+    Error = np.sqrt((E_totals - E_totals[0])**2)/E_totals[0]
+    fig,axis=plt.subplots(1,1,figsize=(5,6))
+    for i in range(nparticles):
+        axis.plot(np.arange(nstep+1)*dt,Error[:,i],color=colors[i],zorder=np.abs(E_totals[0,i]),alpha=0.5)
+    axis.set_yscale("log")
+    axis.set_xlabel("Time [Gyr]")
+    axis.set_ylabel("Relative Energy Error")
+    cbar = plt.colorbar(mpl.cm.ScalarMappable(norm=norm,cmap=cmap),ax=axis)
+    cbar.set_label("Initial Energy [km^2/s^2]")
+    fig.tight_layout()
+    fig.savefig("energy_error_fortran.png")
+    
+    
+    
+    # ax,ay,az,phi=temp.king_unscaled([W0],xp,yp,zp)    
+    # mag = np.sqrt(ax**2 + ay**2 + az**2)
+    # speed = np.sqrt(vxp**2 + vyp**2 + vzp**2)
+    # norm = mpl.colors.LogNorm(vmin=mag.min(),vmax=mag.max())
+    # norm_speed = mpl.colors.Normalize(vmin=0,vmax=speed.max())
+    # cmap = plt.cm.plasma
+    # cmap_speed = plt.cm.plasma_r
+    # colors = cmap(norm(mag))
+    # colors = cmap_speed(norm_speed(speed))
+    # dt=1e-5
+    # NSTEP = 1000
+    # NSKIP = 10
+    # c=0
+    # # fig,axis=plt.subplots(1,1,figsize=(5,6))
+    # # prepare output 
+    # x=np.zeros((NSTEP+1,nparticles))
+    # y=np.zeros((NSTEP+1,nparticles))
+    # z=np.zeros((NSTEP+1,nparticles))
+    # vx=np.zeros((NSTEP+1,nparticles))
+    # vy=np.zeros((NSTEP+1,nparticles))
+    # vz=np.zeros((NSTEP+1,nparticles))
+    # phis = np.zeros((NSTEP+1,nparticles))
+    # x[0],y[0],z[0]=xp,yp,zp
+    # vx[0],vy[0],vz[0]=vxp,vyp,vzp
+    # phis[0]=phi
+    # for i in range(NSTEP):
+    #     x[i+1],y[i+1],z[i+1],vx[i+1],vy[i+1],vz[i+1]=leapfrogstep(x[i],y[i],z[i],vx[i],vy[i],vz[i],dt)
+    #     ax,ay,az,phi=temp.king_unscaled([W0],x[i+1],y[i+1],z[i+1])
+    #     phis[i+1]=phi
+    
+
+    # kinetic = 0.5*(vx**2 + vy**2 + vz**2)
+    # E_totals = kinetic + phis
+    # norm = mpl.colors.Normalize(vmin=E_totals[0].min(),vmax=E_totals[0].max())
+    # cmap = plt.cm.plasma
+    # colors = cmap(norm(E_totals[0]))
+    # Error = np.sqrt((E_totals - E_totals[0])**2)/E_totals[0]
+    # fig,axis=plt.subplots(1,1,figsize=(5,6))
+    # for i in range(nparticles):
+    #     axis.plot(np.arange(NSTEP+1)*dt,Error[:,i],color=colors[i],zorder=np.abs(E_totals[0,i]),alpha=0.5)
+    # axis.set_yscale("log")
+    # axis.set_xlabel("Time [Gyr]")
+    # axis.set_ylabel("Relative Energy Error")
+    # cbar = plt.colorbar(mpl.cm.ScalarMappable(norm=norm,cmap=cmap),ax=axis)
+    # cbar.set_label("Initial Energy [km^2/s^2]")
+    # fig.tight_layout()
+
+    # fig.savefig("energy_error.png")
+
+
+    #     # mag = np.sqrt(ax**2 + ay**2 + az**2)
+    #     # speed = np.sqrt(vxp**2 + vyp**2 + vzp**2)
+
+    #     # if i%NSKIP == 0:
+    #     #     axis.cla()
+    #     #     axis.set_aspect("equal")
+    #     #     axis.set_xlim(-r_tidal/2,r_tidal/2)
+    #     #     axis.set_ylim(-r_tidal/2,r_tidal/2)
+    #     #     axis.set_xlabel("x [kpc]")
+    #     #     axis.set_ylabel("y [kpc]")
+    #     #     axis.set_title("King Model with W0={}".format(W0))
+    #     #     axis.quiver(xp,yp,ax/mag,ay/mag,color=colors)
+    #     #     axis.quiver(xp,yp,vxp/speed,vyp/speed,color="k",alpha=0.5)
+    #     #     fig.tight_layout()
+    #     #     plt.show()
+    #     #     fig.savefig("frame-{:d}.png".format(c))
+    #     #     c+=1

@@ -3,7 +3,7 @@
 MODULE temp 
     IMPLICIT NONE 
 
-    REAL*8 :: W0_
+    REAL*8 :: W0_,core_concentration_,scalefree_mass_
     INTEGER :: npoints_
     REAL*8, DIMENSION(:), ALLOCATABLE :: r_, W_, dwdr_
     LOGICAL :: initialized_king = .FALSE.
@@ -33,10 +33,18 @@ MODULE temp
     !     end if
     ! END subroutine king
     
+    SUBROUTINE deallocate_all()
+        if (initialized_king.eqv..TRUE.) then
+            DEALLOCATE(r_, W_, dwdr_)
+        end if
+    END SUBROUTINE deallocate_all
+
     SUBROUTINE initialize_king_potential_profile(W0, npoints)
+        ! this profile is dedimenzionalized such that G=1
         REAL*8, INTENT(IN) :: W0
         INTEGER, INTENT(IN) :: npoints
         REAL*8, ALLOCATABLE :: r(:), W(:), dwdr(:)
+        REAL*8 :: r0
 
         ! Allocate local arrays
         ALLOCATE(r(npoints), W(npoints), dwdr(npoints))
@@ -52,6 +60,10 @@ MODULE temp
         W_ = W
         dwdr_ = dwdr
 
+        r0 = KingScaleRadius(W0)
+        core_concentration_ = log10(r(npoints)/r0)
+
+        scalefree_mass_ = -dwdr_(npoints)*r_(npoints)**2
         ! Deallocate local arrays
         DEALLOCATE(r, W, dwdr)
         initialized_king = .TRUE.
@@ -162,6 +174,11 @@ MODULE temp
     end FUNCTION
 
     SUBROUTINE king_ode_in_r(t,y,dydt,params)
+        ! this equation dimensionalized by setting 
+        ! r' = r/rx
+        ! where rx = sqrt(sigma^2/(G*rho0))
+        ! it is found from poisson's equation in spherical coordinates 
+        ! after imparting the king distribution function. see bovy 
         REAL*8, INTENT(IN) :: t
         REAL*8, INTENT(IN),dimension(2) :: y
         REAL*8, INTENT(OUT),dimension(2) :: dydt

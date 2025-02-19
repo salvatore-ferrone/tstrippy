@@ -95,6 +95,7 @@ MODULE temp
         if (initialized_king.eqv..TRUE.) then
             DEALLOCATE(r_, W_, dwdr_)
         end if
+        initialized_king = .FALSE.
     END SUBROUTINE deallocate_all
 
     SUBROUTINE initialize_king_potential_profile(W0, npoints)
@@ -191,13 +192,6 @@ MODULE temp
         ! store the rest of the output for r
         r(midpoint+1:npoints) = yout(1, :)
         dWdr(midpoint+1:npoints) = yout(2, :)
-        ! print about the mid point to see if we doubled
-        print*, r(midpoint-1), W(midpoint-1), dWdr(midpoint-1)
-        print*, r(midpoint), W(midpoint), dWdr(midpoint)
-        print*, r(midpoint+1), W(midpoint+1), dWdr(midpoint+1)
-        ! print the last elements of yout to see if were copying wrong 
-        print*, r(npoints-1), W(npoints-1), dWdr(npoints-1)
-        print*, r(npoints), W(npoints), dWdr(npoints)
         
     END SUBROUTINE solve_king_potential_profile
 

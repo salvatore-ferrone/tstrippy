@@ -6,10 +6,33 @@ MODULE temp
     REAL*8 :: W0_
     INTEGER :: npoints_
     REAL*8, DIMENSION(:), ALLOCATABLE :: r_, W_, dwdr_
+    LOGICAL :: initialized_king = .FALSE.
     PROCEDURE(), pointer, public :: my_system
     REAL*8, PARAMETER :: PI = 2.0d0 * acos(0.0d0)
     contains 
 
+    ! subroutine king(params,N,x,y,z,ax,ay,az,phi)
+    !     ! king potential. Assumes system is already 
+    !     INTEGER, INTENT(IN) :: N
+    !     REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
+    !     REAL*8,INTENT(IN),dimension(4) :: params
+    !     REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
+    !     REAL*8,DIMENSION(N) :: r,amod
+    !     REAL*8 :: G,M,rc,rt ! G, Mass, core radius, tidal radius
+
+    !     G = params(1)
+    !     M = params(2)
+    !     rc = params(3)
+    !     rt = params(4)
+
+    !     ! compute W0 
+    !     W0 = G*M/(rc*rc)
+    !     ! check if the king potential has been initialized
+    !     if (initialized_king.eqv..FALSE.) then
+    !         call initialize_king_potential_profile(W0, 1000)
+    !     end if
+    ! END subroutine king
+    
     SUBROUTINE initialize_king_potential_profile(W0, npoints)
         REAL*8, INTENT(IN) :: W0
         INTEGER, INTENT(IN) :: npoints
@@ -31,7 +54,9 @@ MODULE temp
 
         ! Deallocate local arrays
         DEALLOCATE(r, W, dwdr)
+        initialized_king = .TRUE.
     END SUBROUTINE initialize_king_potential_profile
+
 
     SUBROUTINE solve_king_potential_profile(W0,npoints,r,W,dwdr)
         REAL*8, INTENT(IN) :: W0
@@ -95,7 +120,6 @@ MODULE temp
         dWdr(1+midpoint:npoints+1) = yout(2,:)
 
     END SUBROUTINE solve_king_potential_profile
-
 
 
     FUNCTION KingDensityW(W) RESULT(rho)

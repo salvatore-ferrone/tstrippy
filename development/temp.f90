@@ -84,8 +84,9 @@ MODULE temp
                 ax(i) = amod*x(i)/r(i)
                 ay(i) = amod*y(i)/r(i)
                 az(i) = amod*z(i)/r(i)
-                phi(i) = -linear_interpolation_from_arrays(r(i), npoints_, r_, W_) - scalefree_mass_/r(i)
+                phi(i) = -linear_interpolation_from_arrays(r(i), npoints_, r_, W_) - scalefree_mass_/tidal_radius_
             END if 
+            
         END DO
     END subroutine king_unscaled
 
@@ -128,6 +129,30 @@ MODULE temp
         initialized_king = .TRUE.
     END SUBROUTINE initialize_king_potential_profile
 
+
+    SUBROUTINE load_unscaled_king(npoints,r,W,dwdr)
+        ! load the unscaled king potential from galpy because I am messing it up here
+        INTEGER, INTENT(IN) :: npoints
+        REAL*8, INTENT(IN), DIMENSION(npoints) :: r,w,dwdr
+        REAL*8 :: r0, rbreak
+        INTEGER :: i
+        ALLOCATE(r_(npoints), W_(npoints), dwdr_(npoints))
+        W0_ = W(0)
+        r0 = KingScaleRadius(W0_)
+        rbreak = king_break_radius(W0_)
+        ! First half: solve for W given r
+        npoints_=npoints
+        r_ = r
+        W_ = W
+        dwdr_ = dwdr
+        ! load the other useful values 
+        r0 = KingScaleRadius(W(0))
+        core_concentration_ = log10(r(npoints)/r0)
+        scalefree_mass_ = -dwdr_(npoints)*r_(npoints)**2
+        tidal_radius_ = r(npoints)
+
+        initialized_king = .TRUE.
+    END SUBROUTINE load_unscaled_king
 
     SUBROUTINE solve_king_potential_profile(W0,npoints,r,W,dwdr)
         REAL*8, INTENT(IN) :: W0

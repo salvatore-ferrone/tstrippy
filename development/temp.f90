@@ -11,6 +11,47 @@ MODULE temp
     REAL*8, PARAMETER :: PI = 2.0d0 * acos(0.0d0)
     contains 
 
+
+    SUBROUTINE leapfrog(dt,nstep,np,x0,y0,z0,vx0,vy0,vz0,xt,yt,zt,vxt,vyt,vzt)
+        ! leapfrog integrator
+        INTEGER, INTENT(IN) :: nstep,np
+        REAL*8, INTENT(IN) :: dt
+        REAL*8, INTENT(IN),dimension(np) :: x0,y0,z0,vx0,vy0,vz0
+        REAL*8, INTENT(OUT),dimension(np,nstep+1) :: xt,yt,zt,vxt,vyt,vzt
+        REAL*8, dimension(np) :: ax0,ay0,az0,phi,axf,ayf,azf
+
+        INTEGER :: i
+        ! initialize 
+        xt(:, 1) = x0
+        yt(:, 1) = y0
+        zt(:, 1) = z0
+        vxt(:, 1) = vx0
+        vyt(:, 1) = vy0
+        vzt(:, 1) = vz0
+        CALL king_unscaled([W0_], np, x0, y0, z0, ax0, ay0, az0, phi)
+    
+        DO i = 2, nstep+1
+            ! drift 
+            xt(:, i) = xt(:, i-1) + dt*vxt(:, i-1) + 0.5d0*ax0*dt**2
+            yt(:, i) = yt(:, i-1) + dt*vyt(:, i-1) + 0.5d0*ay0*dt**2
+            zt(:, i) = zt(:, i-1) + dt*vzt(:, i-1) + 0.5d0*az0*dt**2
+            ! kick
+            CALL king_unscaled([W0_], np, xt(:, i), yt(:, i), zt(:, i), axf, ayf, azf, phi)
+            vxt(:, i) = vxt(:, i-1) + 0.5d0*dt*(ax0 + axf)
+            vyt(:, i) = vyt(:, i-1) + 0.5d0*dt*(ay0 + ayf)
+            vzt(:, i) = vzt(:, i-1) + 0.5d0*dt*(az0 + azf)
+            ! update acceleration
+            ax0 = axf
+            ay0 = ayf
+            az0 = azf
+        END DO
+
+
+
+    
+    END SUBROUTINE leapfrog
+
+
     subroutine king_unscaled(params,N,x,y,z,ax,ay,az,phi)
         ! king potential. make sure the x,y,z is unscaled as well
         INTEGER, INTENT(IN) :: N
@@ -43,7 +84,7 @@ MODULE temp
                 ax(i) = amod*x(i)/r(i)
                 ay(i) = amod*y(i)/r(i)
                 az(i) = amod*z(i)/r(i)
-                phi(i) = linear_interpolation_from_arrays(r(i), npoints_, r_, W_)
+                phi(i) = -linear_interpolation_from_arrays(r(i), npoints_, r_, W_) - scalefree_mass_/r(i)
             END if 
         END DO
     END subroutine king_unscaled
@@ -98,6 +139,9 @@ MODULE temp
         REAL*8, DIMENSION(1) :: params
         INTEGER :: i, midpoint, nparams, nvars
         character(len=100) :: system_name
+
+        INTEGER :: arraylength
+
         params(1) = 0.0d0 ! unused
         ! Initialize arrays
         r = 0.0d0
@@ -122,8 +166,8 @@ MODULE temp
         CALL rk4(system_name, t_span, y0, nparams, params, midpoint, nvars, t_eval, yout)
             ! rk4(system_name,t_span,y0,nparams,params,npoints,nvars,tout,yout)
         r(1:midpoint) = t_eval
-        W(1:midpoint) = yout(1,:)
-        dWdr(1:midpoint) = yout(2,:)
+        W(1:midpoint) = yout(1, :)
+        dWdr(1:midpoint) = yout(2, :)
 
         ! Second half: solve for r given W
         ! allocate the size of the output arrays
@@ -135,7 +179,7 @@ MODULE temp
         CALL linspace(W(midpoint),0.0d0, npoints - midpoint , t_eval) ! independent variable is now W
 
         ! store the rest of the output for W 
-        W(midpoint:) = t_eval
+        W(midpoint+1:npoints) = t_eval
         ! set the initial condition, which is the central potential and zero force at the center
         y0(1) = r(midpoint)
         y0(2) = dWdr(midpoint)
@@ -145,9 +189,16 @@ MODULE temp
 
         CALL rk4(system_name, t_span, y0, nparams, params, npoints - midpoint , nvars, t_eval, yout)
         ! store the rest of the output for r
-        r(1+midpoint:npoints+1) = yout(1,:)
-        dWdr(1+midpoint:npoints+1) = yout(2,:)
-
+        r(midpoint+1:npoints) = yout(1, :)
+        dWdr(midpoint+1:npoints) = yout(2, :)
+        ! print about the mid point to see if we doubled
+        print*, r(midpoint-1), W(midpoint-1), dWdr(midpoint-1)
+        print*, r(midpoint), W(midpoint), dWdr(midpoint)
+        print*, r(midpoint+1), W(midpoint+1), dWdr(midpoint+1)
+        ! print the last elements of yout to see if were copying wrong 
+        print*, r(npoints-1), W(npoints-1), dWdr(npoints-1)
+        print*, r(npoints), W(npoints), dWdr(npoints)
+        
     END SUBROUTINE solve_king_potential_profile
 
 
@@ -164,6 +215,10 @@ MODULE temp
         term2 = (2.0/SQRT(PI))*sqW
         term3 = 1.0 + 2.0*W/3.0
         rho = term1 - term2 * term3
+        ! add numerical gaurd 
+        if (W.lt.0.0) then
+            rho = 0.0
+        end if
 
     end FUNCTION
 

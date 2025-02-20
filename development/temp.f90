@@ -19,31 +19,54 @@ MODULE temp
         REAL*8, INTENT(IN),dimension(np) :: x0,y0,z0,vx0,vy0,vz0
         REAL*8, INTENT(OUT),dimension(np,nstep+1) :: xt,yt,zt,vxt,vyt,vzt
         REAL*8, dimension(np) :: ax0,ay0,az0,phi,axf,ayf,azf
+        REAL*8, dimension(np) :: x00,y00,z00,vx00,vy00,vz00
+        REAL*8, dimension(np) :: xf,yf,zf,vxf,vyf,vzf
+
 
         INTEGER :: i
         ! initialize 
+        x00=x0
+        y00=y0
+        z00=z0
+        vx00=vx0
+        vy00=vy0
+        vz00=vz0
         xt(:, 1) = x0
         yt(:, 1) = y0
         zt(:, 1) = z0
         vxt(:, 1) = vx0
         vyt(:, 1) = vy0
         vzt(:, 1) = vz0
-        CALL king_unscaled([W0_], np, x0, y0, z0, ax0, ay0, az0, phi)
+        CALL king_unscaled([W0_], np, x00, y00, z00, ax0, ay0, az0, phi)
     
         DO i = 2, nstep+1
             ! drift 
-            xt(:, i) = xt(:, i-1) + dt*vxt(:, i-1) + 0.5d0*ax0*dt**2
-            yt(:, i) = yt(:, i-1) + dt*vyt(:, i-1) + 0.5d0*ay0*dt**2
-            zt(:, i) = zt(:, i-1) + dt*vzt(:, i-1) + 0.5d0*az0*dt**2
+            xf = x00 + dt*vx00 + 0.5d0*ax0*dt**2
+            yf = y00 + dt*vy00 + 0.5d0*ay0*dt**2
+            zf = z00 + dt*vz00 + 0.5d0*az0*dt**2
             ! kick
-            CALL king_unscaled([W0_], np, xt(:, i), yt(:, i), zt(:, i), axf, ayf, azf, phi)
-            vxt(:, i) = vxt(:, i-1) + 0.5d0*dt*(ax0 + axf)
-            vyt(:, i) = vyt(:, i-1) + 0.5d0*dt*(ay0 + ayf)
-            vzt(:, i) = vzt(:, i-1) + 0.5d0*dt*(az0 + azf)
+            CALL king_unscaled([W0_], np, xf, yf, zf, axf, ayf, azf, phi)
+            vxf = vx00 + 0.5d0*dt*(ax0 + axf)
+            vyf = vy00 + 0.5d0*dt*(ay0 + ayf)
+            vzf = vz00 + 0.5d0*dt*(az0 + azf)
             ! update acceleration
             ax0 = axf
             ay0 = ayf
             az0 = azf
+            ! update the positions and velocities 
+            x00 = xf
+            y00 = yf
+            z00 = zf
+            vx00 = vxf
+            vy00 = vyf
+            vz00 = vzf
+            ! store the positions and velocities
+            xt(:, i) = xf
+            yt(:, i) = yf
+            zt(:, i) = zf
+            vxt(:, i) = vxf
+            vyt(:, i) = vyf
+            vzt(:, i) = vzf
         END DO
 
     END SUBROUTINE leapfrog

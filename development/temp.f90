@@ -12,29 +12,30 @@ MODULE temp
 
     ! make output allocatable 
     REAL*8, DIMENSION(:,:), ALLOCATABLE :: xt,yt,zt,vxt,vyt,vzt
-
+    LOGICAL :: initialized_orbit_outputs = .FALSE.
     contains 
 
 
-    SUBROUTINE leapfrog(dt,nstep,np,x0,y0,z0,vx0,vy0,vz0)
+    SUBROUTINE leapfrog(dt,nstep,np,x0,y0,z0,vx0,vy0,vz0,nskip)
         ! leapfrog integrator
         INTEGER, INTENT(IN) :: nstep,np
         REAL*8, INTENT(IN) :: dt
         REAL*8, INTENT(IN),dimension(np) :: x0,y0,z0,vx0,vy0,vz0
+        INTEGER,intent(in) :: nskip
         REAL*8, dimension(np) :: ax0,ay0,az0,phi,axf,ayf,azf
         REAL*8, dimension(np) :: x00,y00,z00,vx00,vy00,vz00
         REAL*8, dimension(np) :: xf,yf,zf,vxf,vyf,vzf
-        INTEGER :: i
-        ! INTEGER, optional :: nskip
-        ! integer :: skip
+        INTEGER :: i, counter
 
-        ! skip = 1 
-        ! if (present(nskip)) then
-        !     skip = nskip
-        ! end if
-        ! allocate the output arrays
-        ALLOCATE(xt(np, nstep+1), yt(np, nstep+1), zt(np, nstep+1))
-        ALLOCATE(vxt(np, nstep+1), vyt(np, nstep+1), vzt(np, nstep+1))
+
+        print*, "initialized_orbit_outputs", initialized_orbit_outputs
+        if (nskip.gt.1) then
+            ALLOCATE(xt(np, nstep/nskip+1), yt(np, nstep/nskip+1), zt(np, nstep/nskip+1))
+            ALLOCATE(vxt(np, nstep/nskip+1), vyt(np, nstep/nskip+1), vzt(np, nstep/nskip+1))
+            initialized_orbit_outputs = .TRUE.
+        end if
+
+        print*, "initialized_orbit_outputs", initialized_orbit_outputs
 
 
 
@@ -54,7 +55,8 @@ MODULE temp
         vyt(:, 1) = vy0
         vzt(:, 1) = vz0
         CALL king_unscaled([W0_], np, x00, y00, z00, ax0, ay0, az0, phi)
-    
+        
+        counter = 1
         DO i = 2, nstep+1
             ! drift 
             xf = x00 + dt*vx00 + 0.5d0*ax0*dt**2
@@ -77,12 +79,19 @@ MODULE temp
             vy00 = vyf
             vz00 = vzf
             ! store the positions and velocities
-            xt(:, i) = xf
-            yt(:, i) = yf
-            zt(:, i) = zf
-            vxt(:, i) = vxf
-            vyt(:, i) = vyf
-            vzt(:, i) = vzf
+            if (initialized_orbit_outputs.eqv..TRUE.) then
+                if (mod(i, nskip).eq.0) then
+                    counter = counter + 1
+                    xt(:, counter) = xf
+                    yt(:, counter) = yf
+                    zt(:, counter) = zf
+                    vxt(:, counter) = vxf
+                    vyt(:, counter) = vyf
+                    vzt(:, counter) = vzf
+                end if
+
+            end if
+
         END DO
 
     END SUBROUTINE leapfrog

@@ -1,4 +1,4 @@
-name: tstrippy
+name: gp_tstrippy
 channels:
   - conda-forge
   - defaults
@@ -16,6 +16,7 @@ dependencies:
   - nbsphinx
   - ipykernel
   - scipy
+  - galpy
   # - pip:
     # - -e . 
 

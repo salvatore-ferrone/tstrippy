@@ -1,6 +1,6 @@
 MODULE potentials
     contains
-
+    REAL*8, PARAMETER :: pi = 2.0d0 * acos(0.0d0)
     SUBROUTINE hernquist(params,N,x,y,z,ax,ay,az,phi)
         ! Hernquist potential
         ! params = [G, M, a]

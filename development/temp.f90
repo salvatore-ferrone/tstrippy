@@ -9,21 +9,37 @@ MODULE temp
     LOGICAL :: initialized_king = .FALSE.
     PROCEDURE(), pointer, public :: my_system
     REAL*8, PARAMETER :: PI = 2.0d0 * acos(0.0d0)
+
+    ! make output allocatable 
+    REAL*8, DIMENSION(:,:), ALLOCATABLE :: xt,yt,zt,vxt,vyt,vzt
+
     contains 
 
 
-    SUBROUTINE leapfrog(dt,nstep,np,x0,y0,z0,vx0,vy0,vz0,xt,yt,zt,vxt,vyt,vzt)
+    SUBROUTINE leapfrog(dt,nstep,np,x0,y0,z0,vx0,vy0,vz0)
         ! leapfrog integrator
         INTEGER, INTENT(IN) :: nstep,np
         REAL*8, INTENT(IN) :: dt
         REAL*8, INTENT(IN),dimension(np) :: x0,y0,z0,vx0,vy0,vz0
-        REAL*8, INTENT(OUT),dimension(np,nstep+1) :: xt,yt,zt,vxt,vyt,vzt
         REAL*8, dimension(np) :: ax0,ay0,az0,phi,axf,ayf,azf
         REAL*8, dimension(np) :: x00,y00,z00,vx00,vy00,vz00
         REAL*8, dimension(np) :: xf,yf,zf,vxf,vyf,vzf
-
-
         INTEGER :: i
+        ! INTEGER, optional :: nskip
+        ! integer :: skip
+
+        ! skip = 1 
+        ! if (present(nskip)) then
+        !     skip = nskip
+        ! end if
+        ! allocate the output arrays
+        ALLOCATE(xt(np, nstep+1), yt(np, nstep+1), zt(np, nstep+1))
+        ALLOCATE(vxt(np, nstep+1), vyt(np, nstep+1), vzt(np, nstep+1))
+
+
+
+
+        
         ! initialize 
         x00=x0
         y00=y0

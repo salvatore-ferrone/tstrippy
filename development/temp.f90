@@ -46,9 +46,6 @@ MODULE temp
             az0 = azf
         END DO
 
-
-
-    
     END SUBROUTINE leapfrog
 
 
@@ -105,6 +102,9 @@ MODULE temp
         INTEGER, INTENT(IN) :: npoints
         REAL*8, ALLOCATABLE :: r(:), W(:), dwdr(:)
         REAL*8 :: r0
+
+        ! deallocate if already initialized
+        CALL deallocate_all()
 
         ! Allocate local arrays
         ALLOCATE(r(npoints), W(npoints), dwdr(npoints))

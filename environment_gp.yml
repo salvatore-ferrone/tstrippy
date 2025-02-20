@@ -7,7 +7,6 @@ dependencies:
   - numpy==1.22
   - gcc==11.2.0
   - gfortran  
-  - setuptools=68.2
   - astropy==5.0
   - matplotlib==3.5
   - jupyterlab==4.2
@@ -15,8 +14,8 @@ dependencies:
   - pip==24.2
   - nbsphinx
   - ipykernel
-  - scipy
-  - galpy
+  - scipy==1.11.2
+  - galpy==1.10.1
   # - pip:
     # - -e . 
 

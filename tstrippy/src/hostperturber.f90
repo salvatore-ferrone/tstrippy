@@ -3,7 +3,7 @@ MODULE hostperturber
     ! this is because I don't think F90 does inheritence 
     ! also I do not think F90 can do two instances of the same class in the same program
     use potentials, only : plummer
-    use constants, only : G
+
     IMPLICIT NONE
 
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: xhost,yhost,zhost,vxhost,vyhost,vzhost,timehost
@@ -12,6 +12,7 @@ MODULE hostperturber
     INTEGER, PUBLIC :: hosttimeindex = 1
     PUBLIC :: hostinitialization,findhosttimeindex,advancehosttimeindex
     PUBLIC :: hostallocation,hostdeallocation,computeforcebyhosts
+    REAL*8,parameter :: G=4.300917270036279e-06 !! in solar masses and km/s
     CONTAINS
     
     ! initialize the hosts

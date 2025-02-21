@@ -8,7 +8,7 @@ MODULE galacticbar
     ! the orientation is found with a polynomial fit
     ! theta = theta0 + b*t + c*t^2 + d*t^3 + ...
     ! THUS  barorientationpolynomailcoeffs(1) = theta0
-    use constants
+    ! use constants
     use potentials
     IMPLICIT NONE
     PRIVATE 
@@ -20,6 +20,7 @@ MODULE galacticbar
     REAL*8, dimension(:), PUBLIC, ALLOCATABLE :: barorientationpolynomailcoeffs
     REAL*8, PUBLIC :: theta0,theta
     procedure(),pointer,public :: barpotential
+    REAL*8, PARAMETER :: pi = 2.0d0 * acos(0.0d0)
     CONTAINS 
     SUBROUTINE galacticbarinitialization(barpotentialname,barpotenparams,barpolycoeff)
         ! this subroutine initializes the galactic bar

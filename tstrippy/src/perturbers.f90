@@ -6,7 +6,6 @@ MODULE perturbers
     ! then we have a one dimensional array of the time
     ! everything should be in galactic coordinates
     use potentials, only : plummer
-    use constants, only : G
     IMPLICIT NONE
     PRIVATE
     REAL*8, DIMENSION(:,:), PUBLIC, ALLOCATABLE :: xperturbers,yperturbers,zperturbers 
@@ -15,6 +14,7 @@ MODULE perturbers
     INTEGER, PUBLIC :: perturbertimeindex 
     PUBLIC :: perturberinitialization,findperturbertimeindex,advanceperturbertimeindex
     PUBLIC :: perturberallocation,perturberdeallocation,computeforcebyperturbers
+    REAL*8,parameter :: G=4.300917270036279e-06 !! in solar masses and km/s
     CONTAINS
     
     ! initialize the perturbers

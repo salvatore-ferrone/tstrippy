@@ -15,9 +15,8 @@ dependencies:
   - pip==24.2
   - nbsphinx
   - ipykernel
-
-  # - pip:
-    # - -e . 
+  - pip:
+    - -e . 
 
 ### NOTE!  `pip -e .` installs tstrippy in the environment.
 ###### NOTE that I am dropping `pip -e .` because I can't get the forgran to compile. Issues with C headers expecting long ints instead of ints. 

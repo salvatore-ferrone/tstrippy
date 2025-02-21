@@ -197,10 +197,11 @@ def velocitySampling(DistFunc,Mt,Rc,rAll,G,storeCDF=True):
             speed[i]=np.interp(rannum[0],CDFnorm,vels)
         
     # get the angles for the velocity
-    vel=np.random.random((NP,3))-0.5
-    vel=vel/np.sqrt(np.sum(vel**2,axis=1))[:,None]
-    vel=vel*speed[:,None]
-    vx,vy,vz=vel[:,0],vel[:,1],vel[:,2]
+    # THIS WAY WAS INCORRECT ! 
+    # vel=np.random.random((NP,3))-0.5
+    # vel=vel/np.sqrt(np.sum(vel**2,axis=1))[:,None]
+    # vel=vel*speed[:,None]
+    # vx,vy,vz=vel[:,0],vel[:,1],vel[:,2]
 
     # add the correct way to sample the angles
     theta,phi,_=UniformSphere(NP)

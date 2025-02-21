@@ -16,6 +16,7 @@ MODULE hostperturber
     
     ! initialize the hosts
     subroutine hostinitialization(NTIMESTEPS,t,x,y,z,vx,vy,vz,mass,radius)
+        ! the radius is the plummer radius
         integer, intent(in) ::  NTIMESTEPS
         real*8, intent(in) :: mass,radius
         real*8, intent(in), dimension(NTIMESTEPS) :: x,y,z,vx,vy,vz

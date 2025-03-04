@@ -204,7 +204,7 @@ def velocitySampling(DistFunc,Mt,Rc,rAll,G,storeCDF=True):
     # vx,vy,vz=vel[:,0],vel[:,1],vel[:,2]
 
     # add the correct way to sample the angles
-    theta,phi,_=UniformSphere(NP)
+    phi,theta,_=UniformSphere(NP)
     vx=speed*np.sin(theta)*np.cos(phi)
     vy=speed*np.sin(theta)*np.sin(phi)
     vz=speed*np.cos(theta)

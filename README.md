@@ -11,6 +11,14 @@ Not quite ready yet, but its getting there. Huge thanks to @JoBovy's [python pac
 - Compatible with Python 3.12 using meson build system
 - Cross-platform build via meson
 
+## Requirements
+
+* Python 3.9+
+* gfortran 11+ (or compatible Fortran compiler)
+* The following Python packages (installed automatically):
+  * NumPy 1.20+
+  * Astropy 4.0+
+  * PyYAML 5.1+
 
 ## Installation
 ```bash

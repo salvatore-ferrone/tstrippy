@@ -30,19 +30,12 @@ message('Python extension suffix: ' + ext_suffix)
 
 
 
-# Add this check to see if we're being run by meson-python
-is_pip_build = get_option('is_pip_build')
-if is_pip_build == 'true'
-    message('Running under pip/meson-python')
-    # Paths for pip/meson-python (relative paths)
-    module_install_dir = join_paths(pkg_name, 'lib')
-    python_install_subdir = pkg_name
-else
-    message('Running direct meson build')
-    # Paths for direct meson install (absolute paths)
-    module_install_dir = install_dir / pkg_name / 'lib'
-    python_install_subdir = install_dir / pkg_name
-endif
+
+message('Running direct meson build')
+# Paths for direct meson install (absolute paths)
+module_install_dir = install_dir / pkg_name / 'lib'
+python_install_subdir = install_dir / pkg_name
+
 
 # Setup environment for f2py
 fc_env = environment()

@@ -11,8 +11,23 @@ authors = [
     {name = "Salvatore Ferrone", email = "salvatore.ferrone.1996@gmail.com"}
 ]
 requires-python = ">=3.9"
+
 dependencies = [
     "numpy>=1.20.0",
     "astropy>=4.0",
     "pyyaml>=5.1",
 ]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Fortran",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Intended Audience :: Science/Research",
+]
+
+[project.urls]
+"Repository" = "https://github.com/salvatore-ferrone/tstrippy"
+"Documentation" = "https://tstrippy.readthedocs.io"
+"Issues" = "https://github.com/salvatore-ferrone/tstrippy/issues"

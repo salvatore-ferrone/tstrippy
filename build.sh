@@ -14,4 +14,5 @@ meson setup builddir
 meson compile -C builddir
 
 # install 
-meson install  -C builddir/
+# meson install  -C builddir/
+pip install -e . 

@@ -1,5 +1,9 @@
 [build-system]
-requires = ["meson-python>=0.13.0", "numpy>=1.20.0"]
+requires = [
+    "meson-python>=0.15.0",  # Updated to version that works with Python 3.13
+    "numpy>=1.20.0",
+    "meson>=1.2.3"  # Explicitly require Meson 1.2.3+ for Python 3.12+
+]
 build-backend = "mesonpy"
 
 [project]
@@ -11,6 +15,7 @@ authors = [
     {name = "Salvatore Ferrone", email = "salvatore.ferrone.1996@gmail.com"}
 ]
 requires-python = ">=3.9"
+
 
 dependencies = [
     "numpy>=1.20.0",

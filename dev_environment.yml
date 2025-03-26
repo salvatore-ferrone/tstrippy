@@ -12,3 +12,7 @@ dependencies:
   - numpy 
   - astropy
   - pytest
+  - make
+  - sphinx 
+  - nbsphinx
+  - pandoc

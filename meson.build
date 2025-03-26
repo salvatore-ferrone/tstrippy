@@ -13,9 +13,9 @@ fc_args = ['-fPIC']
 
 # Get the Python site-packages directory
 python_code = '''
-import sys
-from distutils.sysconfig import get_python_lib
-print(get_python_lib())
+import sysconfig
+print(sysconfig.get_path('purelib'))
+
 '''
 
 # Get Python extension suffix for module naming

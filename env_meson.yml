@@ -8,3 +8,5 @@ dependencies:
   - meson
   - ninja
   - pkg-config
+  - meson-python
+  - numpy 

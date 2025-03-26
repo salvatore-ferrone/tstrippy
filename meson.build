@@ -28,9 +28,7 @@ ext_suffix = run_command(py, '-c', ext_suffix_code, check: true).stdout().strip(
 message('Python install dir: ' + install_dir)
 message('Python extension suffix: ' + ext_suffix)
 
-# # Build extension modules with f2py using custom targets
-# f2py_compiler = '--fcompiler=gnu95'
-# f2py_f90flags = '--f90flags=-Wno-unused-variable -fPIC'
+
 
 # Setup environment for f2py
 fc_env = environment()
@@ -55,7 +53,7 @@ potentials_sources = [
 ]
 potentials_out = 'potentials' + ext_suffix
 potentials_build = custom_target('potentials',
-    output: potentials_out,
+    output: potentials_out,x
     input: potentials_sources,
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'potentials'],
     env: fc_env,

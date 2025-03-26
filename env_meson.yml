@@ -10,3 +10,4 @@ dependencies:
   - pkg-config
   - meson-python
   - numpy 
+  - astropy

@@ -3,40 +3,46 @@ project('tstrippy', 'fortran',
     license: 'MIT'
 )
 
+# Define package name variable to avoid repetition
+pkg_name = 'tstrippy'
+
+
 py = import('python').find_installation()
 fc_args = ['-fPIC']
 
-
-#### NOTE 
-# To ensure that the package is installed to the conda environment, I need to run this python code to get the install directory
-# the default the comes with meson, `install_dir = py.get_install_dir()` will install the package to the system python environment
-# which is not what I want and will not work because I don't have sudo access to the system python environment
+# Get the Python site-packages directory
 python_code = '''
 import sys
 from distutils.sysconfig import get_python_lib
 print(get_python_lib())
 '''
-install_dir = run_command('python', '-c', python_code, check: true).stdout().strip()
 
+# Keep your existing install_dir setup for site-packages directory
+install_dir = run_command('python', '-c', python_code, check: true).stdout().strip()
 message('Python install dir: ' + install_dir)
 
+# Define package name variable to avoid repetition
+pkg_name = 'tstrippy'
 
-# ---- Build Fortran Shared Libraries ----
-constants_mod = shared_library('constants',
+# For extension modules, install them to the 'lib' subdirectory of your package
+constants_ext = py.extension_module('constants',
     sources: 'tstrippy/src/constants.f90',
     install: true,
-    install_dir: install_dir / 'tstrippy/lib',
+    install_dir: install_dir / pkg_name / 'lib',
     fortran_args: fc_args
 )
 
-potentials_mod = shared_library('potentials',
-    sources: 'tstrippy/src/potentials.f90',
+potentials_ext = py.extension_module('potentials',
+    sources: [
+        'tstrippy/src/constants.f90', 
+        'tstrippy/src/potentials.f90'
+    ],
     install: true,
-    install_dir: install_dir / 'tstrippy/lib',
+    install_dir: install_dir / pkg_name / 'lib',
     fortran_args: fc_args
 )
 
-integrator_mod = shared_library('integrator',
+integrator_ext = py.extension_module('integrator',
     sources: [
         'tstrippy/src/constants.f90',
         'tstrippy/src/potentials.f90',
@@ -46,33 +52,47 @@ integrator_mod = shared_library('integrator',
         'tstrippy/src/integrator.f90'
     ],
     install: true,
-    install_dir: install_dir / 'tstrippy/lib',
+    install_dir: install_dir / pkg_name / 'lib',
     fortran_args: fc_args
 )
 
-# ---- Install Python Package ----
-# py.install_sources(meson.source_root() / 'tstrippy', subdir: 'tstrippy')
+# Then install Python files to their proper directories
 py.install_sources(
     files(
+        'tstrippy/__init__.py',
+    ),
+    subdir: install_dir / pkg_name
+)
+
+py.install_sources(
+    files(
+        'tstrippy/lib/__init__.py',
+    ),
+    subdir: install_dir / pkg_name / 'lib'
+)
+
+py.install_sources(
+    files(
+        'tstrippy/Parsers/__init__.py',
         'tstrippy/Parsers/baumgardtMWGCs.py',    
         'tstrippy/Parsers/potential_parameters.py',
-        'tstrippy/Parsers/__init__.py',
-        'tstrippy/lib/__init__.py',
-        'tstrippy/__init__.py',
+    ),
+    subdir: install_dir / pkg_name / 'Parsers'
+)
+
+py.install_sources(
+    files(
+        'tstrippy/code/__init__.py',
         'tstrippy/code/ergodic.py',
-        'tstrippy/code/__init__.py'), 
-    subdir: install_dir / 'tstrippy',
+    ),
+    subdir: install_dir/ pkg_name / 'code'
 )
 
-# ---- Install Data Files ----
+# And data files
 install_data(
-  files('tstrippy/data/2023-03-28-merged.fits',
-        'tstrippy/data/MWrefframe001.yaml',
-        'tstrippy/data/pouliasis2017pii.yaml',
-        'tstrippy/data/unit_basis.yaml'),
-    install_dir:install_dir / 'tstrippy/data'
+    files('tstrippy/data/2023-03-28-merged.fits',
+          'tstrippy/data/MWrefframe001.yaml',
+          'tstrippy/data/pouliasis2017pii.yaml',
+          'tstrippy/data/unit_basis.yaml'),
+    install_dir: install_dir / pkg_name / 'data'
 )
-# install_data(meson.source_root() / 'tstrippy/data/', install_dir: py.get_install_dir() / 'tstrippy/data')
-
-# ---- Install Using pip (Optional) ----
-# meson.add_install_script(py, '-m', 'pip', 'install', '--prefix', get_option('prefix'), '.')

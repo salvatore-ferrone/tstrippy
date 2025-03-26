@@ -8,7 +8,7 @@ pkg_name = 'tstrippy'
 
 # Find Python and f2py
 py = import('python').find_installation()
-f2py = find_program('f2py3', 'f2py')
+f2py = find_program('f2py') # could be system wide and incorrect
 fc_args = ['-fPIC']
 
 # Get the Python site-packages directory
@@ -16,7 +16,6 @@ python_code = '''
 import sysconfig
 print(sysconfig.get_path('purelib'))
 '''
-
 # Get Python extension suffix for module naming
 ext_suffix_code = '''
 import sysconfig
@@ -28,8 +27,27 @@ ext_suffix = run_command(py, '-c', ext_suffix_code, check: true).stdout().strip(
 message('Python install dir: ' + install_dir)
 message('Python extension suffix: ' + ext_suffix)
 
+# Use Python to locate the correct f2py from NumPy
+f2py_code = '''
+import sys, os, numpy
+f2py_path = os.path.join(os.path.dirname(numpy.__file__), 'f2py', 'f2py.py')
+if os.path.exists(f2py_path):
+    print('python:' + f2py_path)
+else:
+    import shutil
+    f2py_bin = shutil.which('f2py')
+    print(f2py_bin if f2py_bin else 'f2py')
+'''
 
-
+f2py_result = run_command(py, '-c', f2py_code, check: true).stdout().strip()
+if f2py_result.startswith('python:')
+    # Use Python to run f2py.py script
+    f2py_script = f2py_result.split(':', 1)[1]
+    f2py = [py, f2py_script]
+else
+    # Use binary f2py from PATH
+    f2py = find_program(f2py_result)
+endif
 
 message('Running direct meson build')
 # Paths for direct meson install (absolute paths)

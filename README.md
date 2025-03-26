@@ -15,6 +15,10 @@ Not quite ready yet, but its getting there. Huge thanks to @JoBovy's [python pac
 ## Installation
 ```bash
     conda env create -f environment.yml
+    conda activate tstrippy
+```
+Now build the package
+``` bash
     meson setup builddir
     meson compile -C builddir/
     meson install  -C builddir/

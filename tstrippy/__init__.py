@@ -33,3 +33,6 @@ def _check_fortran_compiler():
         )
 
 _check_fortran_compiler()
+
+# delete subprocess and warnings
+del subprocess, warnings 

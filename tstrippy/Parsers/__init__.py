@@ -1,4 +1,4 @@
-# tstrippy/Parsers/__init__.py
+"""tstrippy/Parsers/__init__.py"""
 from .baumgardtMWGCs import *
 from .potential_parameters import *
 

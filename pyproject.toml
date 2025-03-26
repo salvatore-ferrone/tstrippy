@@ -14,7 +14,7 @@ readme = "README.md"
 authors = [
     {name = "Salvatore Ferrone", email = "salvatore.ferrone.1996@gmail.com"}
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.9,<3.12"
 
 
 dependencies = [

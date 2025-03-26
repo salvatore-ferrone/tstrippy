@@ -2,12 +2,13 @@ name: tstrippy
 channels:
   - conda-forge
 dependencies:
-  - python>=3.9
+  - python>=3.9,<3.12
   - numpy>=1.20
   - astropy>=4.0
   - pyyaml>=5.1
   - gfortran>=11  # Critical for running the compiled code
   - pip
   - meson # will get rid of this once the meson package is available on conda-forge
+  - pytest
   # - pip:
     # - git+https://github.com/salvatore-ferrone/tstrippy.git

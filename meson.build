@@ -15,7 +15,6 @@ fc_args = ['-fPIC']
 python_code = '''
 import sysconfig
 print(sysconfig.get_path('purelib'))
-
 '''
 
 # Get Python extension suffix for module naming
@@ -44,7 +43,7 @@ constants_out = 'constants' + ext_suffix
 constants_build = custom_target('constants',
     output: constants_out,
     input: constants_sources,
-    command: [f2py, '-c', '@INPUT@', '--quiet', '-m', 'constants'],
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'constants'],
     env: fc_env,
     install: true,
     install_dir: install_dir / pkg_name / 'lib'
@@ -58,7 +57,7 @@ potentials_out = 'potentials' + ext_suffix
 potentials_build = custom_target('potentials',
     output: potentials_out,
     input: potentials_sources,
-    command: [f2py, '-c', '@INPUT@', '--quiet', '-m', 'potentials'],
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'potentials'],
     env: fc_env,
     install: true,
     install_dir: install_dir / pkg_name / 'lib'
@@ -76,7 +75,7 @@ integrator_out = 'integrator' + ext_suffix
 integrator_build = custom_target('integrator',
     output: integrator_out,
     input: integrator_sources,
-    command: [f2py, '-c', '@INPUT@', '--quiet', '-m', 'integrator'],
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'integrator'],
     env: fc_env,
     install: true,
     install_dir: install_dir / pkg_name / 'lib'

@@ -15,6 +15,7 @@ dist/
 # Other
 .DS_Store
 *.log
+.vscode/
 
 # scrap
 *scrap*

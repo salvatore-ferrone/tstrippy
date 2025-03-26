@@ -1,32 +1,14 @@
 name: tstrippy
 channels:
   - conda-forge
-  - defaults
 dependencies:
-  - python=3.9.20
-  - numpy==1.22
-  - gcc==11.2.0
-  - gfortran  
-  - setuptools=68.2
-  - astropy==5.0
-  - matplotlib==3.5
-  - jupyterlab==4.2
-  - pyyaml==6.0
-  - pip==24.2
-  - nbsphinx
-  - ipykernel
-  - pip:
-    - -e . 
-
-### NOTE!  `pip -e .` installs tstrippy in the environment.
-###### NOTE that I am dropping `pip -e .` because I can't get the forgran to compile. Issues with C headers expecting long ints instead of ints. 
-
-## Note that I only need to add the simplest dependencies here. The rest will be installed automatically. 
-## It's better to avoid pip because it pip will always update a new dependencies. 
-## For example, before  I used pip install matplotlib which upgraded numpy to version 2 and also the most recent version of matplotlib
-## in the end, the main constraint is that I need to use numpy 1.22 and setuptools 68.2 for the fotran compiler.
-## The other package versions are specified only becuase they are the versions that are compatible with numpy 1.22. 
-## Also, versions of python newer than 3.9 do work. 
-
-
-### NOTE. readthedocs.io says adding more constraints to the dependencies makes the compilation faster because conda-forge has a smaller solution space to search in 
+  - python>=3.9,<3.12
+  - numpy>=1.20
+  - astropy>=4.0
+  - pyyaml>=5.1
+  - gfortran>=11  # Critical for running the compiled code
+  - pip
+  - meson # will get rid of this once the meson package is available on conda-forge
+  - pytest
+  # - pip:
+    # - git+https://github.com/salvatore-ferrone/tstrippy.git

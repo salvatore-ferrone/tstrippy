@@ -1,0 +1,1 @@
+    'tstrippy/Parsers/baumgardtMWGCs.py',    'tstrippy/Parsers/potential_parameters.py',    'tstrippy/Parsers/__init__.py',    'tstrippy/lib/__init__.py',    'tstrippy/__init__.py',    'tstrippy/code/ergodic.py',    'tstrippy/code/__init__.py'

@@ -19,3 +19,17 @@ __all__ = [
     'Parsers',
     'ergodic',
 ]
+
+# Check for Fortran compiler
+import subprocess
+import warnings
+def _check_fortran_compiler():
+    try:
+        subprocess.run(['gfortran', '--version'], capture_output=True)
+    except FileNotFoundError:
+        warnings.warn(
+            "No Fortran compiler found. Some features of tstrippy may not work. "
+            "Please install gfortran 11+ for full functionality."
+        )
+
+_check_fortran_compiler()

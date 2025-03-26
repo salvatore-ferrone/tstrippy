@@ -8,7 +8,7 @@ version = "0.0.1"
 description = "TIDAL-STRIPPING-PYTHON: Tidal stripping simulations"
 readme = "README.md"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Salvatore Ferrone", email = "salvatore.ferrone.1996@gmail.com"}
 ]
 requires-python = ">=3.9"
 dependencies = [

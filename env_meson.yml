@@ -1,0 +1,10 @@
+name: meson
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - gcc=12.2.0
+  - gfortran=12.2.0
+  - meson
+  - ninja
+  - pkg-config

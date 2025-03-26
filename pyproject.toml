@@ -6,6 +6,9 @@ requires = [
 ]
 build-backend = "mesonpy"
 
+[tool.meson-python.args]
+setup = ['-Dis_pip_build=true']
+
 [project]
 name = "tstrippy"
 version = "0.0.1"

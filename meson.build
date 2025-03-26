@@ -30,6 +30,20 @@ message('Python extension suffix: ' + ext_suffix)
 
 
 
+# Add this check to see if we're being run by meson-python
+is_pip_build = get_option('is_pip_build')
+if is_pip_build == 'true'
+    message('Running under pip/meson-python')
+    # Paths for pip/meson-python (relative paths)
+    module_install_dir = join_paths(pkg_name, 'lib')
+    python_install_subdir = pkg_name
+else
+    message('Running direct meson build')
+    # Paths for direct meson install (absolute paths)
+    module_install_dir = install_dir / pkg_name / 'lib'
+    python_install_subdir = install_dir / pkg_name
+endif
+
 # Setup environment for f2py
 fc_env = environment()
 fc_env.set('FC', 'gfortran')
@@ -44,7 +58,7 @@ constants_build = custom_target('constants',
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'constants'],
     env: fc_env,
     install: true,
-    install_dir: install_dir / pkg_name / 'lib'
+    install_dir: module_install_dir
 )
 
 potentials_sources = [
@@ -52,13 +66,14 @@ potentials_sources = [
     'tstrippy/src/potentials.f90'
 ]
 potentials_out = 'potentials' + ext_suffix
+
 potentials_build = custom_target('potentials',
-    output: potentials_out,x
+    output: potentials_out,
     input: potentials_sources,
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'potentials'],
     env: fc_env,
     install: true,
-    install_dir: install_dir / pkg_name / 'lib'
+    install_dir: module_install_dir
 )
 
 integrator_sources = [
@@ -76,7 +91,7 @@ integrator_build = custom_target('integrator',
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'integrator'],
     env: fc_env,
     install: true,
-    install_dir: install_dir / pkg_name / 'lib'
+    install_dir: module_install_dir
 )
 
 # Then install Python files to their proper directories
@@ -84,14 +99,14 @@ py.install_sources(
     files(
         'tstrippy/__init__.py',
     ),
-    subdir: install_dir / pkg_name
+    subdir: python_install_subdir
 )
 
 py.install_sources(
     files(
         'tstrippy/lib/__init__.py',
     ),
-    subdir: install_dir / pkg_name / 'lib'
+    subdir: python_install_subdir / 'lib'
 )
 
 py.install_sources(
@@ -100,7 +115,7 @@ py.install_sources(
         'tstrippy/Parsers/baumgardtMWGCs.py',    
         'tstrippy/Parsers/potential_parameters.py',
     ),
-    subdir: install_dir / pkg_name / 'Parsers'
+    subdir: python_install_subdir / 'Parsers'
 )
 
 py.install_sources(
@@ -108,7 +123,7 @@ py.install_sources(
         'tstrippy/code/__init__.py',
         'tstrippy/code/ergodic.py',
     ),
-    subdir: install_dir/ pkg_name / 'code'
+    subdir: python_install_subdir / 'code'
 )
 
 # And data files
@@ -117,5 +132,5 @@ install_data(
           'tstrippy/data/MWrefframe001.yaml',
           'tstrippy/data/pouliasis2017pii.yaml',
           'tstrippy/data/unit_basis.yaml'),
-    install_dir: install_dir / pkg_name / 'data'
+    install_dir: python_install_subdir / 'data'
 )

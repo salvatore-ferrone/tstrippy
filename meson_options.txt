@@ -1,0 +1,1 @@
+option('is_pip_build', type: 'string', value: 'false', description: 'Whether building via pip/meson-python')

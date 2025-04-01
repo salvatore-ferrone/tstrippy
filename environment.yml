@@ -8,7 +8,7 @@ dependencies:
   - pyyaml>=5.1
   - gfortran>=11  # Critical for running the compiled code
   - pip
-  - meson # will get rid of this once the meson package is available on conda-forge
+  - meson 
   - pytest
   # - pip:
     # - git+https://github.com/salvatore-ferrone/tstrippy.git

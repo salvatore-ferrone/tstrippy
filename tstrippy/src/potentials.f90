@@ -98,9 +98,10 @@ MODULE potentials
         REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
         REAL*8,INTENT(IN),dimension(5) :: params
         REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
-        REAL*8, DIMENSION(N) :: term1,term2
+        REAL*8, DIMENSION(N) :: term1
         REAL*8:: G,M,a,exp,cutoffradius
-        REAL*8, DIMENSION(N) :: r,massMod,amod
+        REAL*8, DIMENSION(N) :: r,massMod,amod,d
+        REAL*8:: term2,dcut
         G = params(1) ! gravitational constant
         M = params(2) ! total halo mass
         a = params(3) ! size parameter
@@ -108,19 +109,31 @@ MODULE potentials
         cutoffradius = params(5) ! cutoff radius (intended to be: 100 kpc)
 
         r = sqrt(x*x + y*y + z*z)
+
         massMod = M*(r/a)**(exp) ! the mass interior to r
         massMod = massMod/(1 + (r/a)**(exp-1))
+        ! Apply cutoff radius condition
+        WHERE (r > cutoffradius)
+            massMod = M*(cutoffradius/a)**(exp)/(1 + (cutoffradius/a)**(exp-1))
+        END WHERE
+    
         amod = -G*massMod/r**3
         ax=amod*x
         ay=amod*y
         az=amod*z
 
-        term1=-(exp-1)/(1+(cutoffradius/a)**(exp-1)) + log(1+(cutoffradius/a)**(exp-1))
-        term2=-(exp-1)/(1+(r/a)**(exp-1)) + log(1+(r/a)**(exp-1))
+        ! make dimensionless distance
+        d = r/a
+        dcut = cutoffradius/a
+
+
+        term1=(1/(exp-1)) * (log(1+(dcut)**(exp-1)) / (1+(d)**(exp-1)))
+        
+        term2 = dcut**(exp-1) / (1+dcut**(exp-1))
         ! the equation derived from pouliasis et al 2017 and wrong allen santilian is weird
         ! deriving the potential from allen and martos 1986 makes more sense
         ! not clear to me from the articles why they have such a weird halo
-        phi = -(G*massMod/r) - (G*M/((exp-1)*a))*(term1-term2)
+        phi = -(G*M/a)*(term1+term2)
     end SUBROUTINE allensantillianhalo
 
 

@@ -100,7 +100,7 @@ MODULE potentials
         REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
         REAL*8, DIMENSION(N) :: term1
         REAL*8:: G,M,a,exp,cutoffradius
-        REAL*8, DIMENSION(N) :: r,massMod,amod,d
+        REAL*8, DIMENSION(N) :: r,amod,d
         REAL*8:: term2,dcut
         G = params(1) ! gravitational constant
         M = params(2) ! total halo mass
@@ -110,14 +110,17 @@ MODULE potentials
 
         r = sqrt(x*x + y*y + z*z)
 
-        massMod = M*(r/a)**(exp) ! the mass interior to r
-        massMod = massMod/(1 + (r/a)**(exp-1))
-        ! Apply cutoff radius condition
+        ! inside the cutoff radius
+        amod = -(G*M/a**3)* ((r/a)**(exp-3) / (1 + (r/a)**(exp-1)))
         WHERE (r > cutoffradius)
-            massMod = M*(cutoffradius/a)**(exp)/(1 + (cutoffradius/a)**(exp-1))
+            amod = -(G*M/r**3)*(cutoffradius/a)**(exp)/(1 + (cutoffradius/a)**(exp-1))
+        END WHERE
+
+        ! set to zero if at zero
+        where (r == 0)
+            amod = 0
         END WHERE
     
-        amod = -G*massMod/r**3
         ax=amod*x
         ay=amod*y
         az=amod*z
@@ -126,9 +129,7 @@ MODULE potentials
         d = r/a
         dcut = cutoffradius/a
 
-
         term1=(1/(exp-1)) * (log(1+(dcut)**(exp-1)) / (1+(d)**(exp-1)))
-        
         term2 = dcut**(exp-1) / (1+dcut**(exp-1))
         ! the equation derived from pouliasis et al 2017 and wrong allen santilian is weird
         ! deriving the potential from allen and martos 1986 makes more sense

@@ -1,4 +1,4 @@
-project('tstrippy', 'fortran',
+project('tstrippy', ['fortran', 'c'],
     version: '0.0.1',
     license: 'MIT'
 )
@@ -59,7 +59,13 @@ python_install_subdir = install_dir / pkg_name
 fc_env = environment()
 fc_env.set('FC', 'gfortran')
 fc_env.set('FFLAGS', '-Wno-unused-variable -fPIC')
+fc_env.set('CFLAGS', '-Wno-misleading-indentation')  # Suppress misleading indentation warning
 
+# Suppress compact unwind warnings from macOS linker
+if host_machine.system() == 'darwin'
+    # For macOS, add linker flags to suppress unwind warnings
+    fc_env.set('LDFLAGS', '-Wl,-no_compact_unwind')
+endif
 
 constants_sources = ['tstrippy/src/constants.f90']
 constants_out = 'constants' + ext_suffix

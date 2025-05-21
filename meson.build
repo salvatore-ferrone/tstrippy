@@ -1,4 +1,4 @@
-project('tstrippy', ['fortran', 'c'],
+project('tstrippy', ['c'],
     version: '0.0.1',
     license: 'MIT'
 )
@@ -8,7 +8,7 @@ pkg_name = 'tstrippy'
 
 # Find Python and f2py
 py = import('python').find_installation()
-f2py = find_program('f2py') # could be system wide and incorrect
+# f2py = find_program('f2py') # could be system wide and incorrect
 fc_args = ['-fPIC']
 
 # Get the Python site-packages directory

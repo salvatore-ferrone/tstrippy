@@ -1,19 +1,16 @@
 #!/bin/bash
+echo "PREBUILD SCRIPT"
+echo "Check to make sure that the meson compiler is using the conda environment."
+echo "a common error is the compiler falls back to an incompatible system compiler."
+echo "environment: python: $(which python)"
+echo "Environment: gfortran: $(which gfortran)"
+echo "Environment: f2py: $(which f2py)"
+echo "..."
+echo ""
 
-# filepath: /home-filer/sferrone/tstrippy/build.sh
-# Build and install the package
 
-rm -rf /obs/sferrone/miniconda3/envs/tstrippy/lib/python3.11/site-packages/tstrippy/
 
-# Clean previous builds
 rm -rf builddir
-
-# Configure
 meson setup builddir
-
-# Build
 meson compile -C builddir
-
-# install 
-meson install  -C builddir/
-# pip install -e . 
+meson install -C builddir/

@@ -8,7 +8,7 @@ pkg_name = 'tstrippy'
 
 # Find Python and f2py
 py = import('python').find_installation()
-f2py = find_program('f2py3', 'f2py')
+f2py = find_program('f2py')
 fc_args = ['-fPIC']
 
 # Get the Python site-packages directory

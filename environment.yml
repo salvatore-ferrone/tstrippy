@@ -7,12 +7,7 @@ dependencies:
   - astropy>=4.0
   - pyyaml>=5.1
   - gfortran>=11  # Critical for running the compiled code
-<<<<<<< HEAD
   - meson # will get rid of this once the meson package is available on conda-forge
-=======
-  - pip
-  - meson 
->>>>>>> 344af18651b6051e67264b4b8976d80864ca3663
   - pytest
   - pip
   # - pip:

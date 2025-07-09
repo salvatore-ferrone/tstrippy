@@ -317,7 +317,7 @@ MODULE integrator
     END SUBROUTINE writeparticleorbits
 
 
-    SUBROUTINE leapfrogintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
+    SUBROUTINE velocityverletintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
         ! integrate the positions and velocities forward in time
         ! return the positions and velocities at each timestep to the user
         INTEGER, intent(in) :: nstep,NP ! number of time steps
@@ -399,9 +399,9 @@ MODULE integrator
 
 
         END DO
-    END SUBROUTINE leapfrogintime
+    END SUBROUTINE velocityverletintime
 
-    SUBROUTINE leapfrogtofinalpositions()
+    SUBROUTINE velocityverlettofinalpositions()
         ! take the current positions and integrate until the end
         REAL*8, DIMENSION(nparticles) :: axf,ayf,azf,phi ! total
         REAL*8, DIMENSION(nparticles) :: ax0,ay0,az0
@@ -489,7 +489,7 @@ MODULE integrator
                 end if 
             end if        
         END DO
-    END SUBROUTINE leapfrogtofinalpositions
+    END SUBROUTINE velocityverlettofinalpositions
 
 
     SUBROUTINE ruthforestintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)

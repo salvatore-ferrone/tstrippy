@@ -99,24 +99,38 @@ MODULE potentials
         REAL*8,INTENT(IN),dimension(5) :: params
         REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
         REAL*8, DIMENSION(N) :: term1
-        REAL*8:: G,M,a,exp,cutoffradius
+        REAL*8:: G,M,a,exp,cutoffradius, Mtot
         REAL*8, DIMENSION(N) :: r,amod,d
         REAL*8:: term2,dcut
         G = params(1) ! gravitational constant
-        M = params(2) ! total halo mass
+        M = params(2) ! mass parameter NOT total mass 
         a = params(3) ! size parameter
         exp = params(4) ! exponential profile  (intended to be: 2.02)
         cutoffradius = params(5) ! cutoff radius (intended to be: 100 kpc)
 
         r = sqrt(x*x + y*y + z*z)
 
-        ! inside the cutoff radius
-        amod = -(G*M/a**3)* ((r/a)**(exp-3) / (1 + (r/a)**(exp-1)))
+        ! make dimensionless distance
+        d = r/a
+        dcut = cutoffradius/a
+        
+        Mtot = M * dcut**exp / (1 + dcut**(exp-1)) 
+
+        amod = -(G*M/a**3) * ((d)**(exp-3) / (1 + (d)**(exp-1)))
+        
+        term1 = 1 + d**(exp-1)
+        term2 = 1 + dcut**(exp-1)
+
+        phi = G*m/(a*(exp-1)) * &
+            log(term1/term2)  &
+            - G*Mtot/cutoffradius
+
+        
         WHERE (r > cutoffradius)
-            amod = -(G*M/r**3)*(cutoffradius/a)**(exp)/(1 + (cutoffradius/a)**(exp-1))
+            amod = -(G*Mtot/r**3)
+            phi = -G*Mtot/r
         END WHERE
 
-        ! set to zero if at zero
         where (r == 0)
             amod = 0
         END WHERE
@@ -125,16 +139,6 @@ MODULE potentials
         ay=amod*y
         az=amod*z
 
-        ! make dimensionless distance
-        d = r/a
-        dcut = cutoffradius/a
-
-        term1=(1/(exp-1)) * (log(1+(dcut)**(exp-1)) / (1+(d)**(exp-1)))
-        term2 = dcut**(exp-1) / (1+dcut**(exp-1))
-        ! the equation derived from pouliasis et al 2017 and wrong allen santilian is weird
-        ! deriving the potential from allen and martos 1986 makes more sense
-        ! not clear to me from the articles why they have such a weird halo
-        phi = -(G*M/a)*(term1+term2)
     end SUBROUTINE allensantillianhalo
 
 

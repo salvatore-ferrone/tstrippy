@@ -13,7 +13,8 @@ MODULE integrator
     PUBLIC :: setstaticgalaxy,setintegrationparameters,setinitialkinematics
     PUBLIC :: setdebugaccelerations, setdebugbarorientation,setbackwardorbit
     PUBLIC :: inithostperturber,initnbodysystem,initgalacticbar,initperturbers
-    PUBLIC :: leapfrogtofinalpositions,leapfrogintime
+    PUBLIC :: velocityverlettofinalpositions,velocityverletintime
+    PUBLIC :: leapfrogintime
     PUBLIC :: ruthforestintime
     PUBLIC :: HIT
     PUBLIC :: initwriteparticleorbits,writeparticleorbits
@@ -316,6 +317,91 @@ MODULE integrator
 
     END SUBROUTINE writeparticleorbits
 
+    SUBROUTINE leapfrogintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
+        INTEGER, intent(in) :: nstep,NP ! number of time steps
+        REAL*8, DIMENSION(NP,nstep+1), INTENT(OUT) :: xt,yt,zt,vxt,vyt,vzt
+
+        REAL*8, DIMENSION(NP) :: ax,ay,az
+        REAL*8, DIMENSION(NP) :: phi
+        ! get the intermediate positions and velocities
+        REAL*8, DIMENSION(NP) :: xtmp, ytmp, ztmp
+        
+        REAL*8 :: TESCTHRESHOLD = -999.0
+        INTEGER :: i 
+        INTEGER, DIMENSION(NP) :: indexes
+        LOGICAL, DIMENSION(NP) :: isescaper
+        ! for finding the energy with respect to the host and updating the escape time
+        REAL*8, DIMENSION(NP) :: vx2host,vy2host,vz2host,Energy
+
+        ! give each particle an index
+        do i = 1,NP
+            indexes(i) = i
+        end do
+        ! reset the index 
+        i=0
+        ! initalize the accelerations at zero
+        ax = 0.0
+        ay = 0.0
+        az = 0.0
+        ! initialize the positions and velocities
+        xt=0
+        yt=0
+        zt=0
+        vxt=0
+        vyt=0
+        vzt=0
+
+        xt(:,1) = xf
+        yt(:,1) = yf
+        zt(:,1) = zf
+        vxt(:,1) = vxf
+        vyt(:,1) = vyf
+        vzt(:,1) = vzf
+
+        ! check if anyone is unbound 
+        if (DOHOSTPERTURBER) then
+            ! measure the energy of the particles with respect to the host
+            vx2host = vxt(:,1)-vxhost(hosttimeindex)
+            vy2host = vyt(:,1)-vyhost(hosttimeindex)
+            vz2host = vzt(:,1)-vzhost(hosttimeindex)
+            Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
+            ! update the escape time
+            isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
+            tesc(PACK(indexes,isescaper)) = currenttime
+        end if
+
+        
+        DO i= 1,nstep 
+            ! drift a half step 
+            xtmp = xt(:,i) + 0.5*dt*vxt(:, i)
+            ytmp = yt(:,i) + 0.5*dt*vyt(:, i)
+            ztmp = zt(:,i) + 0.5*dt*vzt(:, i)
+            ! compute the accelerations at the initial time
+            call HIT(NP,xtmp,ytmp,ztmp,ax,ay,az,phi)
+            ! update the velocities a full step 
+            vxt(:,i+1) = vxt(:,i) + ax*dt
+            vyt(:,i+1) = vyt(:,i) + ay*dt
+            vzt(:,i+1) = vzt(:,i) + az*dt   
+            ! drift a half step 
+            xt(:,i+1) = xtmp + 0.5*dt*vxt(:,i+1)
+            yt(:,i+1) = ytmp + 0.5*dt*vyt(:,i+1)
+            zt(:,i+1) = ztmp + 0.5*dt*vzt(:,i+1)
+
+
+            if (DOHOSTPERTURBER) then
+                vx2host = vxt(:,i+1)-vxhost(hosttimeindex)
+                vy2host = vyt(:,i+1)-vyhost(hosttimeindex)
+                vz2host = vzt(:,i+1)-vzhost(hosttimeindex)
+                Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
+                ! update the escape time
+                isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
+                tesc(PACK(indexes,isescaper)) = currenttime    
+            end if
+            
+        END DO 
+
+
+    END SUBROUTINE  leapfrogintime
 
     SUBROUTINE velocityverletintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
         ! integrate the positions and velocities forward in time

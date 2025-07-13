@@ -14,7 +14,7 @@ MODULE integrator
     PUBLIC :: setdebugaccelerations, setdebugbarorientation,setbackwardorbit
     PUBLIC :: inithostperturber,initnbodysystem,initgalacticbar,initperturbers
     PUBLIC :: velocityverlettofinalpositions,velocityverletintime
-    PUBLIC :: leapfrogintime
+    PUBLIC :: leapfrogintime, leapfrogtofinalpositions
     PUBLIC :: ruthforestintime
     PUBLIC :: HIT
     PUBLIC :: initwriteparticleorbits,writeparticleorbits
@@ -399,9 +399,112 @@ MODULE integrator
             end if
             
         END DO 
+        ! store the final positions and velocities
+        xf = xt(:,nstep+1)
+        yf = yt(:,nstep+1)
+        zf = zt(:,nstep+1)
+        vxf = vxt(:,nstep+1)
+        vyf = vyt(:,nstep+1)
+        vzf = vzt(:,nstep+1)
 
 
     END SUBROUTINE  leapfrogintime
+
+    SUBROUTINE leapfrogtofinalpositions()
+        ! take the current positions and integrate until the end
+        REAL*8, DIMENSION(nparticles) :: ax,ay,az,phi
+        ! REAL*8, DIMENSION(nparticles) :: xtemp,ytemp,ztemp 
+        REAL*8 :: TESCTHRESHOLD = -999.0
+        INTEGER :: i
+        integer, dimension(nparticles) :: indexes
+        logical, dimension(nparticles) :: isescaper
+        ! for finding the energy with repsect to the host and updating the escape time
+        REAL*8, DIMENSION(nparticles) :: vx2host,vy2host,vz2host,Energy 
+        
+
+        ! give each particle an index
+        do i = 1,nparticles
+            indexes(i) = i
+        end do
+
+        ! evaluate the potential at the initial positions
+        if (DOHOSTPERTURBER) then
+            ! measure the energy of the particles with respect to the host
+            vx2host = vxf-vxhost(hosttimeindex)
+            vy2host = vyf-vyhost(hosttimeindex)
+            vz2host = vzf-vzhost(hosttimeindex)
+            Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
+            ! update the escape time
+            isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
+            tesc(PACK(indexes,isescaper)) = currenttime
+        end if
+
+        IF (DOWRITEORBITS) then
+            CALL writeparticleorbits(currenttime,nparticles,xf,yf,zf,vxf,vyf,vzf)
+        END IF
+        if (DOWRITESTREAM) then
+            CALL writestream(0,nparticles,xf,yf,zf,vxf,vyf,vzf)
+        end if
+        
+
+        DO i=1,ntimesteps 
+            ! first half drift 
+            xf = xf + 0.5 * dt * vxf
+            yf = yf + 0.5 * dt * vyf
+            zf = zf + 0.5 * dt * vzf
+            ! compute the accelerations at the initial time
+            call HIT(nparticles,xf,yf,zf,ax,ay,az,phi)
+            ! update the velocities a full step 
+            vxf = vxf + ax*dt
+            vyf = vyf + ay*dt
+            vzf = vzf + az*dt   
+            ! drift a half step 
+            xf = xf +  0.5 * dt * vxf
+            yf = yf +  0.5 * dt * vyf
+            zf = zf +  0.5 * dt * vzf
+
+
+            if (DOHOSTPERTURBER) then
+                vx2host = vxf-vxhost(hosttimeindex)
+                vy2host = vyf-vyhost(hosttimeindex)
+                vz2host = vzf-vzhost(hosttimeindex)
+                Energy = 0.5d0*(vx2host**2+vy2host**2+vz2host**2) + phiHP
+                ! update the escape time
+                isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
+                tesc(PACK(indexes,isescaper)) = currenttime
+            end if
+
+            IF (DOWRITEORBITS) then
+                ! take a half step back to write the positions
+                xf = xf - 0.5d0 * dt * vxf
+                yf = yf - 0.5d0 * dt * vyf
+                zf = zf - 0.5d0 * dt * vzf
+                if (MOD(i,nwriteskip).eq.0) then 
+                    CALL writeparticleorbits(currenttime,nparticles,xf,yf,zf,vxf,vyf,vzf)
+                end if 
+                ! undo the half drift
+                xf = xf + 0.5d0 * dt * vxf
+                yf = yf + 0.5d0 * dt * vyf
+                zf = zf + 0.5d0 * dt * vzf
+            END IF    
+            if (DOWRITESTREAM) then
+                ! take a half step back to write the positions
+                xf = xf - 0.5d0 * dt * vxf
+                yf = yf - 0.5d0 * dt * vyf
+                zf = zf - 0.5d0 * dt * vzf
+                if (MOD(i,nwriteskip).eq.0) then 
+                    CALL writestream(i/nwriteskip,nparticles,xf,yf,zf,vxf,vyf,vzf)
+                end if 
+                ! undo the half drift
+                xf = xf + 0.5d0 * dt * vxf
+                yf = yf + 0.5d0 * dt * vyf
+                zf = zf + 0.5d0 * dt * vzf
+            end if        
+        END DO
+
+
+    END SUBROUTINE leapfrogtofinalpositions
+
 
     SUBROUTINE velocityverletintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
         ! integrate the positions and velocities forward in time

@@ -475,30 +475,14 @@ MODULE integrator
             end if
 
             IF (DOWRITEORBITS) then
-                ! take a half step back to write the positions
-                xf = xf - 0.5d0 * dt * vxf
-                yf = yf - 0.5d0 * dt * vyf
-                zf = zf - 0.5d0 * dt * vzf
                 if (MOD(i,nwriteskip).eq.0) then 
                     CALL writeparticleorbits(currenttime,nparticles,xf,yf,zf,vxf,vyf,vzf)
                 end if 
-                ! undo the half drift
-                xf = xf + 0.5d0 * dt * vxf
-                yf = yf + 0.5d0 * dt * vyf
-                zf = zf + 0.5d0 * dt * vzf
             END IF    
             if (DOWRITESTREAM) then
-                ! take a half step back to write the positions
-                xf = xf - 0.5d0 * dt * vxf
-                yf = yf - 0.5d0 * dt * vyf
-                zf = zf - 0.5d0 * dt * vzf
                 if (MOD(i,nwriteskip).eq.0) then 
                     CALL writestream(i/nwriteskip,nparticles,xf,yf,zf,vxf,vyf,vzf)
                 end if 
-                ! undo the half drift
-                xf = xf + 0.5d0 * dt * vxf
-                yf = yf + 0.5d0 * dt * vyf
-                zf = zf + 0.5d0 * dt * vzf
             end if        
         END DO
 

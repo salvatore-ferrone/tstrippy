@@ -7,19 +7,20 @@ MODULE hostperturber
     IMPLICIT NONE
 
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: xhost,yhost,zhost,vxhost,vyhost,vzhost,timehost
-    REAL*8, PUBLIC :: masshost,radiushost
+    REAL*8, PUBLIC :: G, masshost, radiushost
     ! timehost: must be an ordered list from smallest to largest (negative to positive)
     INTEGER, PUBLIC :: hosttimeindex = 1
     PUBLIC :: hostinitialization,findhosttimeindex,advancehosttimeindex
     PUBLIC :: hostallocation,hostdeallocation,computeforcebyhosts
-    REAL*8,parameter :: G=4.300917270036279e-06 !! in solar masses and km/s
+    ! REAL*8,parameter :: G=4.300917270036279e-06 !! in solar masses and km/s
     CONTAINS
     
     ! initialize the hosts
-    subroutine hostinitialization(NTIMESTEPS,t,x,y,z,vx,vy,vz,mass,radius)
+    subroutine hostinitialization(NTIMESTEPS,t,x,y,z,vx,vy,vz,Gin,mass,radius)
         ! the radius is the plummer radius
         integer, intent(in) ::  NTIMESTEPS
         real*8, intent(in) :: mass,radius
+        real*8, intent(in) :: Gin
         real*8, intent(in), dimension(NTIMESTEPS) :: x,y,z,vx,vy,vz
         real*8, intent(in), dimension(NTIMESTEPS):: t
         call hostallocation(NTIMESTEPS)
@@ -30,6 +31,7 @@ MODULE hostperturber
         vyhost=vy
         vzhost=vz
         timehost = t
+        G = Gin
         masshost = mass
         radiushost =radius
         

@@ -175,34 +175,36 @@ MODULE integrator
         allocate(bartheta(ntimepoints))
     END SUBROUTINE setdebugbarorientation
     
-    subroutine initnbodysystem(N,massesnbody,scaleradiinbody)
+    subroutine initnbodysystem(N,Gin,massesnbody,scaleradiinbody)
         ! initialize the nbody system
         ! meaning that everytime the system is evaluated, we also compute the Nbody forces
         INTEGER, intent(in) :: N
         REAL*8, DIMENSION(N), intent(in) :: massesnbody,scaleradiinbody
+        REAL*8, intent(in) :: Gin
         DONBODY = .TRUE.
         allocate(nbodyparams(2*N+1))
-        nbodyparams(1)=G
+        nbodyparams(1)=Gin
         nbodyparams(1+1:N+1)=massesnbody
         nbodyparams(N+1+1:2*N+1)=scaleradiinbody
     end subroutine initnbodysystem
 
-    subroutine inithostperturber(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH,massh,radiush)
+    subroutine inithostperturber(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH,Gin,massh,radiush)
         ! initialize the host perturber
         INTEGER, intent(in) :: nhosttimepoints
-        real*8, intent(in) :: massh,radiush
+        real*8, intent(in) :: Gin, massh,radiush
         real*8, intent(in), dimension(nhosttimepoints) :: timeH,xH,yH,zH,vxH,vyH,vzH
         DOHOSTPERTURBER = .TRUE.
-        CALL hostinitialization(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH,massh,radiush)
+        CALL hostinitialization(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH,Gin,massh,radiush)
     end subroutine inithostperturber
 
-    SUBROUTINE initperturbers(nperturbers,nperturbertimesteps,tp,xp,yp,zp,masses,radii)
+    SUBROUTINE initperturbers(nperturbers,nperturbertimesteps,tp,xp,yp,zp,Gin, masses,radii)
         integer, intent(in) :: nperturbers,nperturbertimesteps
         real*8, intent(in) ,dimension(nperturbertimesteps) :: tp
         real*8, intent(in), dimension(nperturbers,nperturbertimesteps) :: xp,yp,zp
         real*8, intent(in), dimension(nperturbers) :: masses,radii
+        REAL*8 :: Gin
         DOPERTURBERS = .TRUE.
-        CALL perturberinitialization(nperturbers,nperturbertimesteps,tp,xp,yp,zp,masses,radii)
+        CALL perturberinitialization(nperturbers,nperturbertimesteps,tp,xp,yp,zp,Gin,masses,radii)
 
     END SUBROUTINE initperturbers
 

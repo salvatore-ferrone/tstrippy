@@ -14,15 +14,16 @@ MODULE perturbers
     INTEGER, PUBLIC :: perturbertimeindex 
     PUBLIC :: perturberinitialization,findperturbertimeindex,advanceperturbertimeindex
     PUBLIC :: perturberallocation,perturberdeallocation,computeforcebyperturbers
-    REAL*8,parameter :: G=4.300917270036279e-06 !! in solar masses and km/s
+    REAL*8, PUBLIC :: G
     CONTAINS
     
     ! initialize the perturbers
-    subroutine perturberinitialization(NPERTURBERS,NTIMESTEPS,t,x,y,z,mass,radius)
+    subroutine perturberinitialization(NPERTURBERS,NTIMESTEPS,t,x,y,z,Gin,mass,radius)
         integer, intent(in) :: NPERTURBERS, NTIMESTEPS
         real*8, intent(in), dimension(NPERTURBERS) :: mass,radius
         real*8, intent(in), dimension(NPERTURBERS,NTIMESTEPS) :: x,y,z
         real*8, intent(in), dimension(NTIMESTEPS):: t
+        real*8, intent(in) :: Gin
 
         call perturberallocation(NPERTURBERS,NTIMESTEPS)
         xperturbers = x
@@ -31,6 +32,7 @@ MODULE perturbers
         timeperturbers = t
         massperturber = mass
         radiusperturber =radius
+        G = Gin
 
         
     end subroutine perturberinitialization

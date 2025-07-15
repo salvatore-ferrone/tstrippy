@@ -53,12 +53,15 @@ MODULE hostperturber
     SUBROUTINE findhosttimeindex(mytime)
         ! find the index of the host that is just below mytime
         real*8, intent(in) :: mytime
-        hosttimeindex=MINLOC(abs(timehost-mytime),1)
-        ! DO i=1,size(timehost)
-            ! IF (dt <= globalmin) THEN
-                ! globalmin=dt
-            ! END IF
-        ! END DO
+        ! hosttimeindex=MINLOC(abs(timehost-mytime),1)
+        ! Start from current index and move forward if needed
+        do while (hosttimeindex < size(timehost) .and. timehost(hosttimeindex+1) <= mytime)
+            hosttimeindex = hosttimeindex + 1
+        end do
+        ! Go backward if needed
+        do while (hosttimeindex > 1 .and. timehost(hosttimeindex) > mytime)
+            hosttimeindex = hosttimeindex - 1
+        end do
     END SUBROUTINE findhosttimeindex
 
     SUBROUTINE advancehosttimeindex()

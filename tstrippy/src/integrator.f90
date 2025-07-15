@@ -374,6 +374,7 @@ MODULE integrator
 
         
         DO i= 1,nstep 
+            currenttime = timestamps(i+1)
             ! drift a half step 
             xtmp = xt(:,i) + 0.5*dt*vxt(:, i)
             ytmp = yt(:,i) + 0.5*dt*vyt(:, i)
@@ -450,6 +451,7 @@ MODULE integrator
         
 
         DO i=1,ntimesteps 
+            currenttime = timestamps(i+1)
             ! first half drift 
             xf = xf + 0.5 * dt * vxf
             yf = yf + 0.5 * dt * vyf

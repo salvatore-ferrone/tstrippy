@@ -360,6 +360,11 @@ MODULE integrator
         vyt(:,1) = vyf
         vzt(:,1) = vzf
 
+        ! hit everything once to initialize the accelerations
+        ! this is also necessary to initialize the host index
+        currenttime = timestamps(1)
+        call HIT(nparticles,xf,yf,zf,ax,ay,az,phi)        
+
         ! check if anyone is unbound 
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
@@ -430,6 +435,10 @@ MODULE integrator
             indexes(i) = i
         end do
 
+        ! hit everything once to initialize the accelerations
+        ! this is also necessary to initialize the host index
+        call HIT(nparticles,xf,yf,zf,ax,ay,az,phi)
+        
         ! evaluate the potential at the initial positions
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
@@ -538,6 +547,7 @@ MODULE integrator
         vyt(:,1) = vyf
         vzt(:,1) = vzf
         ! compute the accelerations at the initial time
+        currenttime = timestamps(1)
         call HIT(NP,xt(:,1),yt(:,1),zt(:,1),ax0,ay0,az0,phi)
         ! check for unbound particles
         if (DOHOSTPERTURBER) then
@@ -603,9 +613,9 @@ MODULE integrator
         vx0 = vxf
         vy0 = vyf
         vz0 = vzf
+        
         ! evaluate the potential at the initial positions
-
-
+        currenttime = timestamps(1)
         call HIT(nparticles,x0,y0,z0,ax0,ay0,az0,phi)
         
         if (DOHOSTPERTURBER) then
@@ -729,7 +739,12 @@ MODULE integrator
         vxt(:,1) = vxf
         vyt(:,1) = vyf
         vzt(:,1) = vzf
+
         currenttime=timestamps(1)
+        ! hit everything once to initialize the accelerations
+        ! this is also necessary to initialize the host index
+        call HIT(nparticles,xf,yf,zf,axf,ayf,azf,phi)        
+        
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
             vx2host = vxf-vxhost(hosttimeindex)
@@ -767,8 +782,9 @@ MODULE integrator
         IF (DEBUGBARORIENTATION) then
             bartheta(1) = theta
         end if
+
         do i=1,nstep
-            currenttime=timestamps(i)
+            currenttime=timestamps(i+1)
             ! drift
             xf = xf + c1*vxf*dt
             yf = yf + c1*vyf*dt

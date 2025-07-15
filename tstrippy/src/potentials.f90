@@ -102,6 +102,8 @@ MODULE potentials
         REAL*8:: G,M,a,exp,cutoffradius, Mtot
         REAL*8, DIMENSION(N) :: r,amod,d
         REAL*8:: term2,dcut
+        LOGICAL, DIMENSION(N) :: outside_cutoff, at_zero
+
         G = params(1) ! gravitational constant
         M = params(2) ! mass parameter NOT total mass 
         a = params(3) ! size parameter
@@ -125,15 +127,16 @@ MODULE potentials
             log(term1/term2)  &
             - G*Mtot/cutoffradius
 
-        
-        WHERE (r > cutoffradius)
-            amod = -(G*Mtot/r**3)
-            phi = -G*Mtot/r
-        END WHERE
+        ! Create masks for special cases
+        outside_cutoff = (r > cutoffradius)
+        at_zero = (r == 0)
+        ! Handle special cases using MERGE instead of WHERE
+        ! For points outside cutoff radius
+        amod = MERGE(-(G*Mtot/r**3), amod, outside_cutoff)
+        phi = MERGE(-G*Mtot/r, phi, outside_cutoff)
 
-        where (r == 0)
-            amod = 0
-        END WHERE
+        ! For points at r=0 (prevent division by zero)
+        amod = MERGE(0.0d0, amod, at_zero)
     
         ax=amod*x
         ay=amod*y

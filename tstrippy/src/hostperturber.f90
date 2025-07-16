@@ -58,6 +58,8 @@ MODULE hostperturber
         ! This is an O(1) operation in the best case and O(N) in the worst case
         ! but it is much faster than the previous implementation
         ! Then we perform a check to see if the next index is closer
+        ! this is important because if we are using leapfrog, we need to make sure
+        ! that we are using the middle index to ensure time-reversability
 
 
         REAL*8, INTENT(IN) :: mytime

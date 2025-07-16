@@ -469,7 +469,6 @@ MODULE integrator
             zf = zf + 0.5 * dt * vzf
             currenttime = (timestamps(i+1) + timestamps(i)) / 2.0
             ! compute the accelerations at the initial time
-            print*, "in leapfrogtofinalpositions", "i", i 
             call HIT(nparticles,xf,yf,zf,ax,ay,az,phi)
             ! update the velocities a full step 
             vxf = vxf + ax*dt
@@ -912,8 +911,6 @@ MODULE integrator
 
         if (DOHOSTPERTURBER) then
             CALL findhosttimeindex(currenttime)
-            print*, "IN HIT"
-            print*, "hosttimeindex", hosttimeindex, "currenttime", currenttime, "timehost", timehost(hosttimeindex)
             call computeforcebyhosts(nparticles,x,y,z,axHP,ayHP,azHP,phiHP)
         end if
 

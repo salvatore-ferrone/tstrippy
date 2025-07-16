@@ -51,7 +51,15 @@ MODULE hostperturber
     END SUBROUTINE hostdeallocation
 
     SUBROUTINE findhosttimeindex(mytime)
-        ! Find the index of the host timestamp closest to mytime
+        ! This searche is done to find the closest time index in the timehost array
+        ! It doesn't use MINLOC like it did before because that is an O(N) operation
+        ! now we take advantage of the current index and move forward or backward
+        ! until we find the closest time index to mytime
+        ! This is an O(1) operation in the best case and O(N) in the worst case
+        ! but it is much faster than the previous implementation
+        ! Then we perform a check to see if the next index is closer
+
+
         REAL*8, INTENT(IN) :: mytime
         INTEGER :: next_idx
         REAL*8 :: dist_current, dist_next

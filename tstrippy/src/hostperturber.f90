@@ -51,17 +51,33 @@ MODULE hostperturber
     END SUBROUTINE hostdeallocation
 
     SUBROUTINE findhosttimeindex(mytime)
-        ! find the index of the host that is just below mytime
-        real*8, intent(in) :: mytime
-        ! hosttimeindex=MINLOC(abs(timehost-mytime),1)
-        ! Start from current index and move forward if needed
-        do while (hosttimeindex < size(timehost) .and. timehost(hosttimeindex+1) <= mytime)
+        ! Find the index of the host timestamp closest to mytime
+        REAL*8, INTENT(IN) :: mytime
+        INTEGER :: next_idx
+        REAL*8 :: dist_current, dist_next
+        
+        ! Use the current hosttimeindex as starting point for search
+        ! Move forward if needed
+        DO WHILE (hosttimeindex < size(timehost) .AND. timehost(hosttimeindex) < mytime)
             hosttimeindex = hosttimeindex + 1
-        end do
-        ! Go backward if needed
-        do while (hosttimeindex > 1 .and. timehost(hosttimeindex) > mytime)
+        END DO
+        
+        ! Move backward if we went too far
+        DO WHILE (hosttimeindex > 1 .AND. timehost(hosttimeindex) > mytime)
             hosttimeindex = hosttimeindex - 1
-        end do
+        END DO
+        
+        ! Now find which is closer - current index or next index
+        IF (hosttimeindex < size(timehost)) THEN
+            next_idx = hosttimeindex + 1
+            dist_current = ABS(timehost(hosttimeindex) - mytime)
+            dist_next = ABS(timehost(next_idx) - mytime)
+            
+            ! Choose the closer timestamp
+            IF (dist_next < dist_current) THEN
+                hosttimeindex = next_idx
+            END IF
+        END IF
     END SUBROUTINE findhosttimeindex
 
     SUBROUTINE advancehosttimeindex()

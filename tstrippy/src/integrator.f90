@@ -123,6 +123,8 @@ MODULE integrator
             timestamps(i) = timestamps(i-1) + dt
         END DO
         INTEGRATIONPARAMETERSSET = .TRUE.
+
+        
     END SUBROUTINE setintegrationparameters
     
 
@@ -195,6 +197,24 @@ MODULE integrator
         real*8, intent(in), dimension(nhosttimepoints) :: timeH,xH,yH,zH,vxH,vyH,vzH
         DOHOSTPERTURBER = .TRUE.
         CALL hostinitialization(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH,Gin,massh,radiush)
+
+        ! check if the integrator has been initialized
+        ! if they have been set, see if nhosttimepoints is 2Nsteps
+        ! if not, print a warning telling the user that, to best exploit the symplectic properties of the 
+        ! leapfrog algorithm, the host perturber should have 2Nsteps
+
+        if (INTEGRATIONPARAMETERSSET.eqv..TRUE.) then
+            if (mod(nhosttimepoints,2*ntimesteps+1).ne.0) then
+                WRITE(*,*) "WARNING: For optimal symplectic properties of the leapfrog integrator,"
+                WRITE(*,*) "         the host perturber should have exactly 2*ntimesteps+1 time points."
+                WRITE(*,*) "         Current values: "
+                WRITE(*,*) "                nhosttimepoints =", nhosttimepoints
+                WRITE(*,*) "                2*ntimesteps+1  =", 2*ntimesteps+1
+                WRITE(*,*) "         This may reduce the accuracy of energy conservation."
+                WRITE(*,*) "         Time-reversability is lost"
+            end if
+        end if
+
     end subroutine inithostperturber
 
     SUBROUTINE initperturbers(nperturbers,nperturbertimesteps,tp,xp,yp,zp,Gin, masses,radii)

@@ -379,12 +379,13 @@ MODULE integrator
 
         
         DO i= 1,nstep 
-            currenttime = timestamps(i+1)
+            currenttime = timestamps(i)
             ! drift a half step 
             xtmp = xt(:,i) + 0.5*dt*vxt(:, i)
             ytmp = yt(:,i) + 0.5*dt*vyt(:, i)
             ztmp = zt(:,i) + 0.5*dt*vzt(:, i)
             ! compute the accelerations at the initial time
+            currenttime = (timestamps(i+1) + timestamps(i)) / 2.0
             call HIT(NP,xtmp,ytmp,ztmp,ax,ay,az,phi)
             ! update the velocities a full step 
             vxt(:,i+1) = vxt(:,i) + ax*dt
@@ -394,6 +395,7 @@ MODULE integrator
             xt(:,i+1) = xtmp + 0.5*dt*vxt(:,i+1)
             yt(:,i+1) = ytmp + 0.5*dt*vyt(:,i+1)
             zt(:,i+1) = ztmp + 0.5*dt*vzt(:,i+1)
+            currenttime = timestamps(i+1)
 
 
             if (DOHOSTPERTURBER) then
@@ -460,11 +462,12 @@ MODULE integrator
         
 
         DO i=1,ntimesteps 
-            currenttime = timestamps(i+1)
+            currenttime = timestamps(i)
             ! first half drift 
             xf = xf + 0.5 * dt * vxf
             yf = yf + 0.5 * dt * vyf
             zf = zf + 0.5 * dt * vzf
+            currenttime = (timestamps(i+1) + timestamps(i)) / 2.0
             ! compute the accelerations at the initial time
             call HIT(nparticles,xf,yf,zf,ax,ay,az,phi)
             ! update the velocities a full step 
@@ -475,6 +478,7 @@ MODULE integrator
             xf = xf +  0.5 * dt * vxf
             yf = yf +  0.5 * dt * vyf
             zf = zf +  0.5 * dt * vzf
+            currenttime = timestamps(i+1)
 
 
             if (DOHOSTPERTURBER) then

@@ -217,14 +217,13 @@ MODULE integrator
 
     end subroutine inithostperturber
 
-    SUBROUTINE initperturbers(nperturbers,nperturbertimesteps,tp,xp,yp,zp,Gin, masses,radii)
-        integer, intent(in) :: nperturbers,nperturbertimesteps
-        real*8, intent(in) ,dimension(nperturbertimesteps) :: tp
-        real*8, intent(in), dimension(nperturbers,nperturbertimesteps) :: xp,yp,zp
-        real*8, intent(in), dimension(nperturbers) :: masses,radii
+    SUBROUTINE initperturbers(tp,xp,yp,zp,Gin, masses,radii)
+        real*8, intent(in) ,dimension(:) :: tp
+        real*8, intent(in), dimension(:,:) :: xp,yp,zp
+        real*8, intent(in), dimension(:,:) :: masses,radii
         REAL*8 :: Gin
         DOPERTURBERS = .TRUE.
-        CALL perturberinitialization(nperturbers,nperturbertimesteps,tp,xp,yp,zp,Gin,masses,radii)
+        CALL perturberinitialization(tp,xp,yp,zp,Gin,masses,radii)
 
     END SUBROUTINE initperturbers
 

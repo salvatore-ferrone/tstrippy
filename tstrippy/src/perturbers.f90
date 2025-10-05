@@ -9,43 +9,74 @@ MODULE perturbers
     IMPLICIT NONE
     PRIVATE
     REAL*8, DIMENSION(:,:), PUBLIC, ALLOCATABLE :: xperturbers,yperturbers,zperturbers 
-    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: timeperturbers,massperturber,radiusperturber
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: timeperturbers
+    REAL*8, DIMENSION(:,:),PUBLIC, ALLOCATABLE:: massperturber, radiusperturber
     ! timeperturbers: must be an ordered list from smallest to largest (negative to positive)
     INTEGER, PUBLIC :: perturbertimeindex 
     PUBLIC :: perturberinitialization,findperturbertimeindex,advanceperturbertimeindex
-    PUBLIC :: perturberallocation,perturberdeallocation,computeforcebyperturbers
+    PUBLIC :: perturberdeallocation,computeforcebyperturbers
     REAL*8, PUBLIC :: G
     CONTAINS
     
     ! initialize the perturbers
-    subroutine perturberinitialization(NPERTURBERS,NTIMESTEPS,t,x,y,z,Gin,mass,radius)
-        integer, intent(in) :: NPERTURBERS, NTIMESTEPS
-        real*8, intent(in), dimension(NPERTURBERS) :: mass,radius
-        real*8, intent(in), dimension(NPERTURBERS,NTIMESTEPS) :: x,y,z
-        real*8, intent(in), dimension(NTIMESTEPS):: t
+    subroutine perturberinitialization(t,x,y,z,Gin,mass,radius)
+        real*8, intent(in), dimension(:,:) :: mass,radius
+        real*8, intent(in), dimension(:,:) :: x,y,z
+        real*8, intent(in), dimension(:):: t
         real*8, intent(in) :: Gin
+        INTEGER :: NPERTURBERS, NTIMESTEPS, NMASSCOEFF, NRADIUSCOEFF
+        
+        ! check that we are the same size
+        if (size(x,1) /= size(y,1) .or. size(x,1) /= size(z,1)) then
+            print *, "Error: x, y, z must have the same first dimension size!"
+            stop
+        end if
+        ! same with the mass and radius
+        if (size(x,1) /= size(mass,1)) then
+            print *, "Error: mass must have the same first dimension size as x, y, z!"
+            stop
+        end if
+        ! if the radius is not the same size as the mass, stop
+        if (size(x,1) /= size(radius,1)) then
+            print *, "Error: radius must have the same first dimension size as x, y, z!"
+            stop
+        end if
+        ! Make sure the number of timesteps are good too 
+        if (size(x,2) /= size(y,2) .or. size(x,2) /= size(z,2)) then
+            print *, "Error: x, y, z must have the same second dimension size!"
+            stop
+        end if
+        
+        if (size(t) /= size(x,2)) then
+            print *, "Error: t must have the same size as the second dimension of x, y, z!"
+            stop
+        end if         
+        
+        ! store the mass and radius coefficents
+        NPERTURBERS = size(x,1)
+        NTIMESTEPS = size(x,2)
+        NMASSCOEFF = size(mass,2)
+        NRADIUSCOEFF = size(radius,2)
+        
 
-        call perturberallocation(NPERTURBERS,NTIMESTEPS)
+        ! allocate them 
+        allocate(xperturbers(NPERTURBERS,NTIMESTEPS))
+        allocate(yperturbers(NPERTURBERS,NTIMESTEPS))
+        allocate(zperturbers(NPERTURBERS,NTIMESTEPS))
+        allocate(timeperturbers(NTIMESTEPS))
+        ALLOCATE(massperturber(NPERTURBERS,NMASSCOEFF))
+        ALLOCATE(radiusperturber(NPERTURBERS,NRADIUSCOEFF))
+
         xperturbers = x
         yperturbers = y
         zperturbers = z
         timeperturbers = t
         massperturber = mass
-        radiusperturber =radius
+        radiusperturber = radius
         G = Gin
-
-        
     end subroutine perturberinitialization
 
-    subroutine perturberallocation(NPERTURBERS,NTIMESTEPS)
-        integer, intent(in) :: NPERTURBERS, NTIMESTEPS
-        allocate(xperturbers(NPERTURBERS,NTIMESTEPS))
-        allocate(yperturbers(NPERTURBERS,NTIMESTEPS))
-        allocate(zperturbers(NPERTURBERS,NTIMESTEPS))
-        allocate(timeperturbers(NTIMESTEPS))
-        allocate(massperturber(NPERTURBERS))
-        allocate(radiusperturber(NPERTURBERS))
-    END SUBROUTINE perturberallocation
+
 
 
     SUBROUTINE findperturbertimeindex(mytime)
@@ -98,8 +129,8 @@ MODULE perturbers
             dx = x - xperturbers(i,perturbertimeindex)
             dy = y - yperturbers(i,perturbertimeindex)
             dz = z - zperturbers(i,perturbertimeindex)
-            params(2) = massperturber(i)
-            params(3) = radiusperturber(i)
+            params(2) = massperturber(i, 1)
+            params(3) = radiusperturber(i, 1) ! update to get the mass at a certain moment 
             call plummer(params,Nparticles,dx,dy,dz,axperturber,ayperturber,azperturber,phiperturber)
             ax = ax + axperturber
             ay = ay + ayperturber

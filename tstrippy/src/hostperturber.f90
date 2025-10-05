@@ -10,7 +10,7 @@ MODULE hostperturber
     REAL*8, PUBLIC :: G, masshost, radiushost
     ! timehost: must be an ordered list from smallest to largest (negative to positive)
     INTEGER, PUBLIC :: hosttimeindex = 1
-    PUBLIC :: hostinitialization,findhosttimeindex,advancehosttimeindex
+    PUBLIC :: hostinitialization,findhosttimeindex
     PUBLIC :: hostallocation,hostdeallocation,computeforcebyhosts
     ! REAL*8,parameter :: G=4.300917270036279e-06 !! in solar masses and km/s
     CONTAINS
@@ -90,19 +90,6 @@ MODULE hostperturber
         END IF
     END SUBROUTINE findhosttimeindex
 
-    SUBROUTINE advancehosttimeindex()
-        ! make sure the time index of the system is just above mytime. 
-        ! if it is not, advance it until it is
-        ! also, set an upper limit such that the time index is never larger than the number of timesteps
-        hosttimeindex=hosttimeindex+1
-        ! DO while ((mytime > timehost(hosttimeindex)))
-        !     hosttimeindex = hosttimeindex + 1
-        !     if (hosttimeindex > size(timehost)) then
-        !         hosttimeindex = size(timehost)
-        !         exit
-        !     end if
-        ! END DO 
-    END SUBROUTINE advancehosttimeindex
 
 
     SUBROUTINE computeforcebyhosts(Nparticles,x,y,z,ax,ay,az,phi)

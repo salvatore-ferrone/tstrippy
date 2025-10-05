@@ -13,7 +13,7 @@ MODULE perturbers
     REAL*8, DIMENSION(:,:),PUBLIC, ALLOCATABLE:: massperturber, radiusperturber
     ! timeperturbers: must be an ordered list from smallest to largest (negative to positive)
     INTEGER, PUBLIC :: perturbertimeindex 
-    PUBLIC :: perturberinitialization,findperturbertimeindex,advanceperturbertimeindex
+    PUBLIC :: perturberinitialization,findperturbertimeindex
     PUBLIC :: perturberdeallocation,computeforcebyperturbers
     PRIVATE :: taylor_eval
     REAL*8, PUBLIC :: G
@@ -80,32 +80,44 @@ MODULE perturbers
 
 
     SUBROUTINE findperturbertimeindex(mytime)
-        ! find the index of the perturber that is just below mytime
-        real*8, intent(in) :: mytime
-        real*8:: dt,globalmin
-        INTEGER :: i
-        globalmin=abs(mytime-timeperturbers(1))
-        DO i=1,size(timeperturbers)
-            dt=abs(mytime-timeperturbers(i))
-            IF (dt <= globalmin) THEN
-                perturbertimeindex = i
-            END IF
+        ! This searche is done to find the closest time index in the timeperturbers array
+        ! It doesn't use MINLOC like it did before because that is an O(N) operation
+        ! now we take advantage of the current index and move forward or backward
+        ! until we find the closest time index to mytime
+        ! This is an O(1) operation in the best case and O(N) in the worst case
+        ! but it is much faster than the previous implementation
+        ! Then we perform a check to see if the next index is closer
+        ! this is important because if we are using leapfrog, we need to make sure
+        ! that we are using the middle index to ensure time-reversability
+
+        REAL*8, INTENT(IN) :: mytime
+        INTEGER :: next_idx
+        REAL*8 :: dist_current, dist_next
+        
+        ! Use the current perturbertimeindex as starting point for search
+        ! Move forward if needed
+        DO WHILE (perturbertimeindex < size(timeperturbers) .AND. timeperturbers(perturbertimeindex) < mytime)
+            perturbertimeindex = perturbertimeindex + 1
         END DO
+        
+        ! Move backward if we went too far
+        DO WHILE (perturbertimeindex > 1 .AND. timeperturbers(perturbertimeindex) > mytime)
+            perturbertimeindex = perturbertimeindex - 1
+        END DO
+        
+        ! Now find which is closer - current index or next index
+        IF (perturbertimeindex < size(timeperturbers)) THEN
+            next_idx = perturbertimeindex + 1
+            dist_current = ABS(timeperturbers(perturbertimeindex) - mytime)
+            dist_next = ABS(timeperturbers(next_idx) - mytime)
+            
+            ! Choose the closer timestamp
+            IF (dist_next < dist_current) THEN
+                perturbertimeindex = next_idx
+            END IF
+        END IF
     END SUBROUTINE findperturbertimeindex
 
-    SUBROUTINE advanceperturbertimeindex(mytime)
-        ! make sure the time index of the system is just above mytime. 
-        ! if it is not, advance it until it is
-        ! also, set an upper limit such that the time index is never larger than the number of timesteps
-        real*8, intent(in) :: mytime
-        DO while ((mytime > timeperturbers(perturbertimeindex)))
-            perturbertimeindex = perturbertimeindex + 1
-            if (perturbertimeindex > size(timeperturbers)) then
-                perturbertimeindex = size(timeperturbers)
-                exit
-            end if
-        END DO 
-    END SUBROUTINE advanceperturbertimeindex
 
     FUNCTION taylor_eval(coefficients, t) RESULT(myvalue)
         REAL*8, INTENT(IN), DIMENSION(:) :: coefficients

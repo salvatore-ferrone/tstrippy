@@ -59,7 +59,6 @@ MODULE perturbers
         NMASSCOEFF = size(mass,2)
         NRADIUSCOEFF = size(radius,2)
         
-
         ! allocate them 
         allocate(xperturbers(NPERTURBERS,NTIMESTEPS))
         allocate(yperturbers(NPERTURBERS,NTIMESTEPS))
@@ -131,7 +130,7 @@ MODULE perturbers
         real*8,dimension(Nparticles) :: dx,dy,dz,axperturber,ayperturber,azperturber,phiperturber
         REAL*8 ::  current_time
         integer :: i,nperturbers
-        nperturbers=size(massperturber)
+        nperturbers=size(massperturber,1)
         params(1) = G
         ax = 0
         ay = 0

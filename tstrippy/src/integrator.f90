@@ -947,6 +947,27 @@ MODULE integrator
             call barforce(nparticles,x,y,z,axBAR,ayBAR,azBAR,phiBAR)
         end if
 
+        if (DEBUGACCELERATIONS.eqv..TRUE.) then 
+            print*, "SG: "
+            print*, axSG(1),aySG(1),azSG(1)
+            if (DOHOSTPERTURBER) then
+                print*, "HP: "
+                print*, axHP(1),ayHP(1),azHP(1)
+            end if
+            if (DOPERTURBERS) then
+                print*, "P: "
+                print*, axP(1),ayP(1),azP(1)        
+            end if 
+            if (DONBODY) then
+                print*, "NBODY: "
+                print*, axNBODY(1),ayNBODY(1),azNBODY(1)
+            end if
+            if (DOGALACTICBAR) then
+                print*, "BAR: "
+                print*, axBAR(1),ayBAR(1),azBAR(1)
+            end if 
+        end if
+
         ax=axSG+axHP+axP+axNBODY+axBAR
         ay=aySG+ayHP+ayP+ayNBODY+ayBAR
         az=azSG+azHP+azP+azNBODY+azBAR

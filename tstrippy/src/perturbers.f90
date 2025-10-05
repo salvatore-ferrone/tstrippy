@@ -15,6 +15,7 @@ MODULE perturbers
     INTEGER, PUBLIC :: perturbertimeindex 
     PUBLIC :: perturberinitialization,findperturbertimeindex,advanceperturbertimeindex
     PUBLIC :: perturberdeallocation,computeforcebyperturbers
+    PRIVATE :: taylor_eval
     REAL*8, PUBLIC :: G
     CONTAINS
     
@@ -107,7 +108,17 @@ MODULE perturbers
         END DO 
     END SUBROUTINE advanceperturbertimeindex
 
-
+    FUNCTION taylor_eval(coefficients, t) RESULT(myvalue)
+        REAL*8, INTENT(IN), DIMENSION(:) :: coefficients
+        REAL*8, INTENT(IN) :: t
+        REAL*8 :: myvalue
+        integer :: ncoefficients, i
+        ncoefficients = SIZE(coefficients)
+        myvalue = 0.0D0
+        DO i = 1, ncoefficients
+            myvalue = myvalue + coefficients(i) * t**(i-1)
+        END DO
+    END FUNCTION taylor_eval
 
     SUBROUTINE computeforcebyperturbers(Nparticles,x,y,z,ax,ay,az,phi)
         ! compute the force on the particles due to the perturbers
@@ -118,6 +129,7 @@ MODULE perturbers
         real*8, intent(out), dimension(Nparticles) :: ax,ay,az,phi
         REAL*8, dimension(3) :: params
         real*8,dimension(Nparticles) :: dx,dy,dz,axperturber,ayperturber,azperturber,phiperturber
+        REAL*8 ::  current_time
         integer :: i,nperturbers
         nperturbers=size(massperturber)
         params(1) = G
@@ -129,8 +141,9 @@ MODULE perturbers
             dx = x - xperturbers(i,perturbertimeindex)
             dy = y - yperturbers(i,perturbertimeindex)
             dz = z - zperturbers(i,perturbertimeindex)
-            params(2) = massperturber(i, 1)
-            params(3) = radiusperturber(i, 1) ! update to get the mass at a certain moment 
+            current_time = timeperturbers(perturbertimeindex)
+            params(2) = taylor_eval(massperturber(i,:), current_time)
+            params(3) = taylor_eval(radiusperturber(i,:), current_time)
             call plummer(params,Nparticles,dx,dy,dz,axperturber,ayperturber,azperturber,phiperturber)
             ax = ax + axperturber
             ay = ay + ayperturber
@@ -138,6 +151,10 @@ MODULE perturbers
             phi = phi + phiperturber
         END DO 
     END SUBROUTINE computeforcebyperturbers
+    
+    
+    
+    
     ! deallocate the perturbers
     SUBROUTINE perturberdeallocation
         deallocate(xperturbers,yperturbers,zperturbers,timeperturbers,massperturber,radiusperturber)

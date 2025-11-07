@@ -10,15 +10,16 @@ MODULE integrator
     IMPLICIT NONE
     PRIVATE 
     ! DECLARE SUBROUTINES
-    PUBLIC :: setstaticgalaxy,setintegrationparameters,setinitialkinematics
-    PUBLIC :: setdebugaccelerations, setdebugbarorientation,setbackwardorbit
-    PUBLIC :: inithostperturber,initnbodysystem,initgalacticbar,initperturbers
-    PUBLIC :: velocityverlettofinalpositions,velocityverletintime
+    PUBLIC :: setstaticgalaxy, setintegrationparameters, setinitialkinematics
+    PUBLIC :: setdebugaccelerations, setdebugbarorientation, setbackwardorbit
+    PUBLIC :: inithostkinematics, inithostmass, inithostradius
+    PUBLIC :: initnbodysystem,initgalacticbar,initperturbers
+    PUBLIC :: velocityverlettofinalpositions, velocityverletintime
     PUBLIC :: leapfrogintime, leapfrogtofinalpositions
     PUBLIC :: ruthforestintime
     PUBLIC :: HIT
-    PUBLIC :: initwriteparticleorbits,writeparticleorbits
-    PUBLIC :: initwritestream,writestream
+    PUBLIC :: initwriteparticleorbits, writeparticleorbits
+    PUBLIC :: initwritestream, writestream
     PUBLIC :: deallocate
     ! DECIDE WHICH PHYSICS TO INCLUDE
     LOGICAL, PUBLIC :: DONBODY = .FALSE.
@@ -60,6 +61,7 @@ MODULE integrator
     SUBROUTINE setstaticgalaxy(milkywaypotentialname,mwparams)
         !! decide which potential we are going to integrate in
         !! more error checking will be done at the python level
+        !! For all of these, G is assumed to be the first parameter
         character*100, intent(in) :: milkywaypotentialname
         REAL*8, DIMENSION(:), intent(in) :: mwparams
         INTEGER :: nparams
@@ -82,8 +84,16 @@ MODULE integrator
         allocate(milkwayparams(nparams))
         milkwayparams = mwparams
         GALAXYISSET=.TRUE.
+        call setgravconstant(mwparams(1))
+    
     END SUBROUTINE setstaticgalaxy
 
+
+    SUBROUTINE setgravconstant(Gin)
+        ! set the gravitational constant
+        REAL*8, intent(in) :: Gin
+        G = Gin
+    END SUBROUTINE setgravconstant
 
     SUBROUTINE setinitialkinematics(N,x,y,z,vx,vy,vz)
         ! set the initial kinematics of the particles
@@ -190,13 +200,38 @@ MODULE integrator
         nbodyparams(N+1+1:2*N+1)=scaleradiinbody
     end subroutine initnbodysystem
 
-    subroutine inithostperturber(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH,Gin,massh,radiush)
+    subroutine inithostmass(mass_model_name, params)
+        ! sets the host mass evolution model. 
+        character*100, intent(in) :: mass_model_name
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
+        INTEGER :: mass_model
+
+        if (mass_model_name.eq."constant") then
+            mass_model = 0
+        else if (mass_model_name.eq."double_exponential") then
+            mass_model = 1
+        else
+            print*, "ERROR: mass model not recognized in sethostmass"
+            print*, "       available models are: constant, double_exponential"
+            stop
+        end if
+        CALL host_init_mass(mass_model, params)
+
+    END SUBROUTINE inithostmass
+
+    subroutine inithostradius(radius)
+        ! sets the host radius
+        REAL*8, intent(in) :: radius
+        CALL host_init_radius(radius)
+    END SUBROUTINE inithostradius
+
+    subroutine inithostkinematics(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH)
         ! initialize the host perturber
         INTEGER, intent(in) :: nhosttimepoints
-        real*8, intent(in) :: Gin, massh,radiush
         real*8, intent(in), dimension(nhosttimepoints) :: timeH,xH,yH,zH,vxH,vyH,vzH
         DOHOSTPERTURBER = .TRUE.
-        CALL hostinitialization(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH,Gin,massh,radiush)
+        CALL host_init_kinematics(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH)
+        CALL host_init_G(G)
 
         ! check if the integrator has been initialized
         ! if they have been set, see if nhosttimepoints is 2Nsteps
@@ -215,7 +250,7 @@ MODULE integrator
             end if
         end if
 
-    end subroutine inithostperturber
+    end subroutine inithostkinematics
 
     SUBROUTINE initperturbers(tp,xp,yp,zp,Gin, masses,radii)
         real*8, intent(in) ,dimension(:) :: tp
@@ -223,8 +258,7 @@ MODULE integrator
         real*8, intent(in), dimension(:,:) :: masses,radii
         REAL*8 :: Gin
         DOPERTURBERS = .TRUE.
-        CALL perturberinitialization(tp,xp,yp,zp,Gin,masses,radii)
-
+        CALL perturberinitialization(SIZE(masses,1),SIZE(tp),tp,xp,yp,zp,Gin,masses,radii)
     END SUBROUTINE initperturbers
 
     SUBROUTINE initgalacticbar(barpotenname,barparams,barpoly)

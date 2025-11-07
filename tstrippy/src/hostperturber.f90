@@ -1,7 +1,6 @@
 MODULE hostperturber
-    ! this is the exact same class as pertuerbers. 
-    ! this is because I don't think F90 does inheritence 
-    ! also I do not think F90 can do two instances of the same class in the same program
+    ! so FAR, we can either have constant mass, or a double exponential mass evolution
+    
     use potentials, only : plummer
 
     IMPLICIT NONE
@@ -10,32 +9,85 @@ MODULE hostperturber
     REAL*8, PUBLIC :: G, masshost, radiushost
     ! timehost: must be an ordered list from smallest to largest (negative to positive)
     INTEGER, PUBLIC :: hosttimeindex = 1
-    PUBLIC :: hostinitialization,findhosttimeindex
-    PUBLIC :: hostallocation,hostdeallocation,computeforcebyhosts
-    ! REAL*8,parameter :: G=4.300917270036279e-06 !! in solar masses and km/s
+    PUBLIC :: host_init_kinematics, host_init_mass, host_init_radius, host_init_G
+    PUBLIC :: findhosttimeindex
+    PUBLIC :: hostallocation, hostdeallocation, computeforcebyhosts
+
+    INTEGER, PUBLIC :: host_mass_model = 0 ! 0=constant, 1=double exponential, 2=polynomial, etc.
+    REAL*8, PUBLIC, ALLOCATABLE :: host_mass_params(:)
+
     CONTAINS
     
-    ! initialize the hosts
-    subroutine hostinitialization(NTIMESTEPS,t,x,y,z,vx,vy,vz,Gin,mass,radius)
-        ! the radius is the plummer radius
-        integer, intent(in) ::  NTIMESTEPS
-        real*8, intent(in) :: mass,radius
-        real*8, intent(in) :: Gin
-        real*8, intent(in), dimension(NTIMESTEPS) :: x,y,z,vx,vy,vz
-        real*8, intent(in), dimension(NTIMESTEPS):: t
-        call hostallocation(NTIMESTEPS)
+    ! Kinematics initialization
+    SUBROUTINE host_init_kinematics(NTIMESTEPS, t, x, y, z, vx, vy, vz)
+        INTEGER, INTENT(IN) :: NTIMESTEPS
+        REAL*8, INTENT(IN), DIMENSION(NTIMESTEPS) :: t, x, y, z, vx, vy, vz
+        CALL hostallocation(NTIMESTEPS)
         xhost = x
         yhost = y
         zhost = z
-        vxhost=vx
-        vyhost=vy
-        vzhost=vz
+        vxhost = vx
+        vyhost = vy
+        vzhost = vz
         timehost = t
+    END SUBROUTINE host_init_kinematics
+
+    ! Mass initialization (constant or model)
+    SUBROUTINE host_init_mass(mass_model, params)
+        INTEGER, INTENT(IN) :: mass_model
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
+        host_mass_model = mass_model
+        IF (host_mass_model == 0) THEN
+            masshost = params(1)
+            ALLOCATE(host_mass_params(1))
+            host_mass_params(1) = params(1)
+        ELSE
+            IF (ALLOCATED(host_mass_params)) DEALLOCATE(host_mass_params)
+            ALLOCATE(host_mass_params(SIZE(params)))
+            host_mass_params = params
+        END IF
+    END SUBROUTINE host_init_mass
+
+    ! Radius initialization
+    SUBROUTINE host_init_radius(radius)
+        REAL*8, INTENT(IN) :: radius
+        radiushost = radius
+    END SUBROUTINE host_init_radius
+
+    ! Gravitational constant initialization
+    SUBROUTINE host_init_G(Gin)
+        REAL*8, INTENT(IN) :: Gin
         G = Gin
-        masshost = mass
-        radiushost =radius
-        
-    end subroutine hostinitialization
+    END SUBROUTINE host_init_G
+
+
+    ! Generic mass evolution function
+    FUNCTION get_host_mass(t)
+        REAL*8 :: t, get_host_mass
+        SELECT CASE (host_mass_model)
+        CASE (0)
+            get_host_mass = host_mass_params(1) ! constant mass
+        CASE (1)
+            get_host_mass = mass_double_exponential(t, host_mass_params)
+        ! Add more CASEs for new models
+        CASE DEFAULT
+            get_host_mass = host_mass_params(1) ! fallback
+        END SELECT
+    END FUNCTION get_host_mass
+
+
+    FUNCTION mass_double_exponential(t, params)
+        REAL*8 :: t, params(:), mass_double_exponential
+        REAL*8 :: A1, tau1, A2, tau2, Mf, tf, C
+        A1 = params(1)
+        tau1 = params(2)
+        A2 = params(3)
+        tau2 = params(4)
+        Mf = params(5)
+        tf = params(6)
+        C = Mf - (A1 * EXP(-tf/tau1) + A2 * EXP(-tf/tau2))
+        mass_double_exponential = A1 * EXP(-t/tau1) + A2 * EXP(-t/tau2) + C
+    END FUNCTION mass_double_exponential    
 
     subroutine hostallocation(NTIMESTEPS)
         integer, intent(in) ::  NTIMESTEPS
@@ -88,6 +140,10 @@ MODULE hostperturber
                 hosttimeindex = next_idx
             END IF
         END IF
+        
+        ! update the host mass
+        masshost = get_host_mass(timehost(hosttimeindex))
+    
     END SUBROUTINE findhosttimeindex
 
 

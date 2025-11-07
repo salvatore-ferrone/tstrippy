@@ -9,72 +9,127 @@ MODULE perturbers
     IMPLICIT NONE
     PRIVATE
     REAL*8, DIMENSION(:,:), PUBLIC, ALLOCATABLE :: xperturbers,yperturbers,zperturbers 
-    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: timeperturbers,massperturber,radiusperturber
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: timeperturbers
+    REAL*8, DIMENSION(:,:),PUBLIC, ALLOCATABLE:: massperturber, radiusperturber
     ! timeperturbers: must be an ordered list from smallest to largest (negative to positive)
     INTEGER, PUBLIC :: perturbertimeindex 
-    PUBLIC :: perturberinitialization,findperturbertimeindex,advanceperturbertimeindex
-    PUBLIC :: perturberallocation,perturberdeallocation,computeforcebyperturbers
-    REAL*8,parameter :: G=4.300917270036279e-06 !! in solar masses and km/s
+    PUBLIC :: perturberinitialization,findperturbertimeindex
+    PUBLIC :: perturberdeallocation,computeforcebyperturbers
+    PRIVATE :: taylor_eval
+    REAL*8, PUBLIC :: G
     CONTAINS
     
     ! initialize the perturbers
-    subroutine perturberinitialization(NPERTURBERS,NTIMESTEPS,t,x,y,z,mass,radius)
-        integer, intent(in) :: NPERTURBERS, NTIMESTEPS
-        real*8, intent(in), dimension(NPERTURBERS) :: mass,radius
-        real*8, intent(in), dimension(NPERTURBERS,NTIMESTEPS) :: x,y,z
-        real*8, intent(in), dimension(NTIMESTEPS):: t
+    subroutine perturberinitialization(t,x,y,z,Gin,mass,radius)
+        real*8, intent(in), dimension(:,:) :: mass,radius
+        real*8, intent(in), dimension(:,:) :: x,y,z
+        real*8, intent(in), dimension(:):: t
+        real*8, intent(in) :: Gin
+        INTEGER :: NPERTURBERS, NTIMESTEPS, NMASSCOEFF, NRADIUSCOEFF
+        
+        ! check that we are the same size
+        if (size(x,1) /= size(y,1) .or. size(x,1) /= size(z,1)) then
+            print *, "Error: x, y, z must have the same first dimension size!"
+            stop
+        end if
+        ! same with the mass and radius
+        if (size(x,1) /= size(mass,1)) then
+            print *, "Error: mass must have the same first dimension size as x, y, z!"
+            stop
+        end if
+        ! if the radius is not the same size as the mass, stop
+        if (size(x,1) /= size(radius,1)) then
+            print *, "Error: radius must have the same first dimension size as x, y, z!"
+            stop
+        end if
+        ! Make sure the number of timesteps are good too 
+        if (size(x,2) /= size(y,2) .or. size(x,2) /= size(z,2)) then
+            print *, "Error: x, y, z must have the same second dimension size!"
+            stop
+        end if
+        
+        if (size(t) /= size(x,2)) then
+            print *, "Error: t must have the same size as the second dimension of x, y, z!"
+            stop
+        end if         
+        
+        ! store the mass and radius coefficents
+        NPERTURBERS = size(x,1)
+        NTIMESTEPS = size(x,2)
+        NMASSCOEFF = size(mass,2)
+        NRADIUSCOEFF = size(radius,2)
+        
+        ! allocate them 
+        allocate(xperturbers(NPERTURBERS,NTIMESTEPS))
+        allocate(yperturbers(NPERTURBERS,NTIMESTEPS))
+        allocate(zperturbers(NPERTURBERS,NTIMESTEPS))
+        allocate(timeperturbers(NTIMESTEPS))
+        ALLOCATE(massperturber(NPERTURBERS,NMASSCOEFF))
+        ALLOCATE(radiusperturber(NPERTURBERS,NRADIUSCOEFF))
 
-        call perturberallocation(NPERTURBERS,NTIMESTEPS)
         xperturbers = x
         yperturbers = y
         zperturbers = z
         timeperturbers = t
         massperturber = mass
-        radiusperturber =radius
-
-        
+        radiusperturber = radius
+        G = Gin
     end subroutine perturberinitialization
 
-    subroutine perturberallocation(NPERTURBERS,NTIMESTEPS)
-        integer, intent(in) :: NPERTURBERS, NTIMESTEPS
-        allocate(xperturbers(NPERTURBERS,NTIMESTEPS))
-        allocate(yperturbers(NPERTURBERS,NTIMESTEPS))
-        allocate(zperturbers(NPERTURBERS,NTIMESTEPS))
-        allocate(timeperturbers(NTIMESTEPS))
-        allocate(massperturber(NPERTURBERS))
-        allocate(radiusperturber(NPERTURBERS))
-    END SUBROUTINE perturberallocation
+
 
 
     SUBROUTINE findperturbertimeindex(mytime)
-        ! find the index of the perturber that is just below mytime
-        real*8, intent(in) :: mytime
-        real*8:: dt,globalmin
-        INTEGER :: i
-        globalmin=abs(mytime-timeperturbers(1))
-        DO i=1,size(timeperturbers)
-            dt=abs(mytime-timeperturbers(i))
-            IF (dt <= globalmin) THEN
-                perturbertimeindex = i
-            END IF
+        ! This searche is done to find the closest time index in the timeperturbers array
+        ! It doesn't use MINLOC like it did before because that is an O(N) operation
+        ! now we take advantage of the current index and move forward or backward
+        ! until we find the closest time index to mytime
+        ! This is an O(1) operation in the best case and O(N) in the worst case
+        ! but it is much faster than the previous implementation
+        ! Then we perform a check to see if the next index is closer
+        ! this is important because if we are using leapfrog, we need to make sure
+        ! that we are using the middle index to ensure time-reversability
+
+        REAL*8, INTENT(IN) :: mytime
+        INTEGER :: next_idx
+        REAL*8 :: dist_current, dist_next
+        
+        ! Use the current perturbertimeindex as starting point for search
+        ! Move forward if needed
+        DO WHILE (perturbertimeindex < size(timeperturbers) .AND. timeperturbers(perturbertimeindex) < mytime)
+            perturbertimeindex = perturbertimeindex + 1
         END DO
+        
+        ! Move backward if we went too far
+        DO WHILE (perturbertimeindex > 1 .AND. timeperturbers(perturbertimeindex) > mytime)
+            perturbertimeindex = perturbertimeindex - 1
+        END DO
+        
+        ! Now find which is closer - current index or next index
+        IF (perturbertimeindex < size(timeperturbers)) THEN
+            next_idx = perturbertimeindex + 1
+            dist_current = ABS(timeperturbers(perturbertimeindex) - mytime)
+            dist_next = ABS(timeperturbers(next_idx) - mytime)
+            
+            ! Choose the closer timestamp
+            IF (dist_next < dist_current) THEN
+                perturbertimeindex = next_idx
+            END IF
+        END IF
     END SUBROUTINE findperturbertimeindex
 
-    SUBROUTINE advanceperturbertimeindex(mytime)
-        ! make sure the time index of the system is just above mytime. 
-        ! if it is not, advance it until it is
-        ! also, set an upper limit such that the time index is never larger than the number of timesteps
-        real*8, intent(in) :: mytime
-        DO while ((mytime > timeperturbers(perturbertimeindex)))
-            perturbertimeindex = perturbertimeindex + 1
-            if (perturbertimeindex > size(timeperturbers)) then
-                perturbertimeindex = size(timeperturbers)
-                exit
-            end if
-        END DO 
-    END SUBROUTINE advanceperturbertimeindex
 
-
+    FUNCTION taylor_eval(coefficients, t) RESULT(myvalue)
+        REAL*8, INTENT(IN), DIMENSION(:) :: coefficients
+        REAL*8, INTENT(IN) :: t
+        REAL*8 :: myvalue
+        integer :: ncoefficients, i
+        ncoefficients = SIZE(coefficients)
+        myvalue = 0.0D0
+        DO i = 1, ncoefficients
+            myvalue = myvalue + coefficients(i) * t**(i-1)
+        END DO
+    END FUNCTION taylor_eval
 
     SUBROUTINE computeforcebyperturbers(Nparticles,x,y,z,ax,ay,az,phi)
         ! compute the force on the particles due to the perturbers
@@ -85,8 +140,9 @@ MODULE perturbers
         real*8, intent(out), dimension(Nparticles) :: ax,ay,az,phi
         REAL*8, dimension(3) :: params
         real*8,dimension(Nparticles) :: dx,dy,dz,axperturber,ayperturber,azperturber,phiperturber
+        REAL*8 ::  current_time
         integer :: i,nperturbers
-        nperturbers=size(massperturber)
+        nperturbers=size(massperturber,1)
         params(1) = G
         ax = 0
         ay = 0
@@ -96,8 +152,9 @@ MODULE perturbers
             dx = x - xperturbers(i,perturbertimeindex)
             dy = y - yperturbers(i,perturbertimeindex)
             dz = z - zperturbers(i,perturbertimeindex)
-            params(2) = massperturber(i)
-            params(3) = radiusperturber(i)
+            current_time = timeperturbers(perturbertimeindex)
+            params(2) = taylor_eval(massperturber(i,:), current_time)
+            params(3) = taylor_eval(radiusperturber(i,:), current_time)
             call plummer(params,Nparticles,dx,dy,dz,axperturber,ayperturber,azperturber,phiperturber)
             ax = ax + axperturber
             ay = ay + ayperturber
@@ -105,6 +162,10 @@ MODULE perturbers
             phi = phi + phiperturber
         END DO 
     END SUBROUTINE computeforcebyperturbers
+    
+    
+    
+    
     ! deallocate the perturbers
     SUBROUTINE perturberdeallocation
         deallocate(xperturbers,yperturbers,zperturbers,timeperturbers,massperturber,radiusperturber)

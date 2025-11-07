@@ -13,7 +13,8 @@ MODULE integrator
     PUBLIC :: setstaticgalaxy,setintegrationparameters,setinitialkinematics
     PUBLIC :: setdebugaccelerations, setdebugbarorientation,setbackwardorbit
     PUBLIC :: inithostperturber,initnbodysystem,initgalacticbar,initperturbers
-    PUBLIC :: leapfrogtofinalpositions,leapfrogintime
+    PUBLIC :: velocityverlettofinalpositions,velocityverletintime
+    PUBLIC :: leapfrogintime, leapfrogtofinalpositions
     PUBLIC :: ruthforestintime
     PUBLIC :: HIT
     PUBLIC :: initwriteparticleorbits,writeparticleorbits
@@ -122,6 +123,8 @@ MODULE integrator
             timestamps(i) = timestamps(i-1) + dt
         END DO
         INTEGRATIONPARAMETERSSET = .TRUE.
+
+        
     END SUBROUTINE setintegrationparameters
     
 
@@ -174,34 +177,53 @@ MODULE integrator
         allocate(bartheta(ntimepoints))
     END SUBROUTINE setdebugbarorientation
     
-    subroutine initnbodysystem(N,massesnbody,scaleradiinbody)
+    subroutine initnbodysystem(N,Gin,massesnbody,scaleradiinbody)
         ! initialize the nbody system
         ! meaning that everytime the system is evaluated, we also compute the Nbody forces
         INTEGER, intent(in) :: N
         REAL*8, DIMENSION(N), intent(in) :: massesnbody,scaleradiinbody
+        REAL*8, intent(in) :: Gin
         DONBODY = .TRUE.
         allocate(nbodyparams(2*N+1))
-        nbodyparams(1)=G
+        nbodyparams(1)=Gin
         nbodyparams(1+1:N+1)=massesnbody
         nbodyparams(N+1+1:2*N+1)=scaleradiinbody
     end subroutine initnbodysystem
 
-    subroutine inithostperturber(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH,massh,radiush)
+    subroutine inithostperturber(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH,Gin,massh,radiush)
         ! initialize the host perturber
         INTEGER, intent(in) :: nhosttimepoints
-        real*8, intent(in) :: massh,radiush
+        real*8, intent(in) :: Gin, massh,radiush
         real*8, intent(in), dimension(nhosttimepoints) :: timeH,xH,yH,zH,vxH,vyH,vzH
         DOHOSTPERTURBER = .TRUE.
-        CALL hostinitialization(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH,massh,radiush)
+        CALL hostinitialization(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH,Gin,massh,radiush)
+
+        ! check if the integrator has been initialized
+        ! if they have been set, see if nhosttimepoints is 2Nsteps
+        ! if not, print a warning telling the user that, to best exploit the symplectic properties of the 
+        ! leapfrog algorithm, the host perturber should have 2Nsteps
+
+        if (INTEGRATIONPARAMETERSSET.eqv..TRUE.) then
+            if (mod(nhosttimepoints,2*ntimesteps+1).ne.0) then
+                WRITE(*,*) "WARNING: For optimal symplectic properties of the leapfrog integrator,"
+                WRITE(*,*) "         the host perturber should have exactly 2*ntimesteps+1 time points."
+                WRITE(*,*) "         Current values: "
+                WRITE(*,*) "                nhosttimepoints =", nhosttimepoints
+                WRITE(*,*) "                2*ntimesteps+1  =", 2*ntimesteps+1
+                WRITE(*,*) "         This may reduce the accuracy of energy conservation."
+                WRITE(*,*) "         Time-reversability is lost"
+            end if
+        end if
+
     end subroutine inithostperturber
 
-    SUBROUTINE initperturbers(nperturbers,nperturbertimesteps,tp,xp,yp,zp,masses,radii)
-        integer, intent(in) :: nperturbers,nperturbertimesteps
-        real*8, intent(in) ,dimension(nperturbertimesteps) :: tp
-        real*8, intent(in), dimension(nperturbers,nperturbertimesteps) :: xp,yp,zp
-        real*8, intent(in), dimension(nperturbers) :: masses,radii
+    SUBROUTINE initperturbers(tp,xp,yp,zp,Gin, masses,radii)
+        real*8, intent(in) ,dimension(:) :: tp
+        real*8, intent(in), dimension(:,:) :: xp,yp,zp
+        real*8, intent(in), dimension(:,:) :: masses,radii
+        REAL*8 :: Gin
         DOPERTURBERS = .TRUE.
-        CALL perturberinitialization(nperturbers,nperturbertimesteps,tp,xp,yp,zp,masses,radii)
+        CALL perturberinitialization(tp,xp,yp,zp,Gin,masses,radii)
 
     END SUBROUTINE initperturbers
 
@@ -316,8 +338,195 @@ MODULE integrator
 
     END SUBROUTINE writeparticleorbits
 
-
     SUBROUTINE leapfrogintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
+        INTEGER, intent(in) :: nstep,NP ! number of time steps
+        REAL*8, DIMENSION(NP,nstep+1), INTENT(OUT) :: xt,yt,zt,vxt,vyt,vzt
+
+        REAL*8, DIMENSION(NP) :: ax,ay,az
+        REAL*8, DIMENSION(NP) :: phi
+        ! get the intermediate positions and velocities
+        REAL*8, DIMENSION(NP) :: xtmp, ytmp, ztmp
+        
+        REAL*8 :: TESCTHRESHOLD = -999.0
+        INTEGER :: i 
+        INTEGER, DIMENSION(NP) :: indexes
+        LOGICAL, DIMENSION(NP) :: isescaper
+        ! for finding the energy with respect to the host and updating the escape time
+        REAL*8, DIMENSION(NP) :: vx2host,vy2host,vz2host,Energy
+
+        ! give each particle an index
+        do i = 1,NP
+            indexes(i) = i
+        end do
+        ! reset the index 
+        i=0
+        ! initalize the accelerations at zero
+        ax = 0.0
+        ay = 0.0
+        az = 0.0
+        ! initialize the positions and velocities
+        xt=0
+        yt=0
+        zt=0
+        vxt=0
+        vyt=0
+        vzt=0
+
+        xt(:,1) = xf
+        yt(:,1) = yf
+        zt(:,1) = zf
+        vxt(:,1) = vxf
+        vyt(:,1) = vyf
+        vzt(:,1) = vzf
+
+        ! hit everything once to initialize the accelerations
+        ! this is also necessary to initialize the host index
+        currenttime = timestamps(1)
+        call HIT(nparticles,xf,yf,zf,ax,ay,az,phi)        
+
+        ! check if anyone is unbound 
+        if (DOHOSTPERTURBER) then
+            ! measure the energy of the particles with respect to the host
+            vx2host = vxt(:,1)-vxhost(hosttimeindex)
+            vy2host = vyt(:,1)-vyhost(hosttimeindex)
+            vz2host = vzt(:,1)-vzhost(hosttimeindex)
+            Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
+            ! update the escape time
+            isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
+            tesc(PACK(indexes,isescaper)) = currenttime
+        end if
+
+        
+        DO i= 1,nstep 
+            currenttime = timestamps(i)
+            ! drift a half step 
+            xtmp = xt(:,i) + 0.5*dt*vxt(:, i)
+            ytmp = yt(:,i) + 0.5*dt*vyt(:, i)
+            ztmp = zt(:,i) + 0.5*dt*vzt(:, i)
+            ! compute the accelerations at the initial time
+            currenttime = (timestamps(i+1) + timestamps(i)) / 2.0
+            call HIT(NP,xtmp,ytmp,ztmp,ax,ay,az,phi)
+            ! update the velocities a full step 
+            vxt(:,i+1) = vxt(:,i) + ax*dt
+            vyt(:,i+1) = vyt(:,i) + ay*dt
+            vzt(:,i+1) = vzt(:,i) + az*dt   
+            ! drift a half step 
+            xt(:,i+1) = xtmp + 0.5*dt*vxt(:,i+1)
+            yt(:,i+1) = ytmp + 0.5*dt*vyt(:,i+1)
+            zt(:,i+1) = ztmp + 0.5*dt*vzt(:,i+1)
+            currenttime = timestamps(i+1)
+
+
+            if (DOHOSTPERTURBER) then
+                vx2host = vxt(:,i+1)-vxhost(hosttimeindex)
+                vy2host = vyt(:,i+1)-vyhost(hosttimeindex)
+                vz2host = vzt(:,i+1)-vzhost(hosttimeindex)
+                Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
+                ! update the escape time
+                isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
+                tesc(PACK(indexes,isescaper)) = currenttime    
+            end if
+            
+        END DO 
+        ! store the final positions and velocities
+        xf = xt(:,nstep+1)
+        yf = yt(:,nstep+1)
+        zf = zt(:,nstep+1)
+        vxf = vxt(:,nstep+1)
+        vyf = vyt(:,nstep+1)
+        vzf = vzt(:,nstep+1)
+
+
+    END SUBROUTINE  leapfrogintime
+
+    SUBROUTINE leapfrogtofinalpositions()
+        ! take the current positions and integrate until the end
+        REAL*8, DIMENSION(nparticles) :: ax,ay,az,phi
+        ! REAL*8, DIMENSION(nparticles) :: xtemp,ytemp,ztemp 
+        REAL*8 :: TESCTHRESHOLD = -999.0
+        INTEGER :: i
+        integer, dimension(nparticles) :: indexes
+        logical, dimension(nparticles) :: isescaper
+        ! for finding the energy with repsect to the host and updating the escape time
+        REAL*8, DIMENSION(nparticles) :: vx2host,vy2host,vz2host,Energy 
+        
+
+        ! give each particle an index
+        do i = 1,nparticles
+            indexes(i) = i
+        end do
+
+        ! hit everything once to initialize the accelerations
+        ! this is also necessary to initialize the host index
+        call HIT(nparticles,xf,yf,zf,ax,ay,az,phi)
+        
+        ! evaluate the potential at the initial positions
+        if (DOHOSTPERTURBER) then
+            ! measure the energy of the particles with respect to the host
+            vx2host = vxf-vxhost(hosttimeindex)
+            vy2host = vyf-vyhost(hosttimeindex)
+            vz2host = vzf-vzhost(hosttimeindex)
+            Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
+            ! update the escape time
+            isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
+            tesc(PACK(indexes,isescaper)) = currenttime
+        end if
+
+        IF (DOWRITEORBITS) then
+            CALL writeparticleorbits(currenttime,nparticles,xf,yf,zf,vxf,vyf,vzf)
+        END IF
+        if (DOWRITESTREAM) then
+            CALL writestream(0,nparticles,xf,yf,zf,vxf,vyf,vzf)
+        end if
+        
+
+        DO i=1,ntimesteps 
+            currenttime = timestamps(i)
+            ! first half drift 
+            xf = xf + 0.5 * dt * vxf
+            yf = yf + 0.5 * dt * vyf
+            zf = zf + 0.5 * dt * vzf
+            currenttime = (timestamps(i+1) + timestamps(i)) / 2.0
+            ! compute the accelerations at the initial time
+            call HIT(nparticles,xf,yf,zf,ax,ay,az,phi)
+            ! update the velocities a full step 
+            vxf = vxf + ax*dt
+            vyf = vyf + ay*dt
+            vzf = vzf + az*dt   
+            ! drift a half step 
+            xf = xf +  0.5 * dt * vxf
+            yf = yf +  0.5 * dt * vyf
+            zf = zf +  0.5 * dt * vzf
+            currenttime = timestamps(i+1)
+
+
+            if (DOHOSTPERTURBER) then
+                vx2host = vxf-vxhost(hosttimeindex)
+                vy2host = vyf-vyhost(hosttimeindex)
+                vz2host = vzf-vzhost(hosttimeindex)
+                Energy = 0.5d0*(vx2host**2+vy2host**2+vz2host**2) + phiHP
+                ! update the escape time
+                isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
+                tesc(PACK(indexes,isescaper)) = currenttime
+            end if
+
+            IF (DOWRITEORBITS) then
+                if (MOD(i,nwriteskip).eq.0) then 
+                    CALL writeparticleorbits(currenttime,nparticles,xf,yf,zf,vxf,vyf,vzf)
+                end if 
+            END IF    
+            if (DOWRITESTREAM) then
+                if (MOD(i,nwriteskip).eq.0) then 
+                    CALL writestream(i/nwriteskip,nparticles,xf,yf,zf,vxf,vyf,vzf)
+                end if 
+            end if        
+        END DO
+
+
+    END SUBROUTINE leapfrogtofinalpositions
+
+
+    SUBROUTINE velocityverletintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
         ! integrate the positions and velocities forward in time
         ! return the positions and velocities at each timestep to the user
         INTEGER, intent(in) :: nstep,NP ! number of time steps
@@ -361,6 +570,7 @@ MODULE integrator
         vyt(:,1) = vyf
         vzt(:,1) = vzf
         ! compute the accelerations at the initial time
+        currenttime = timestamps(1)
         call HIT(NP,xt(:,1),yt(:,1),zt(:,1),ax0,ay0,az0,phi)
         ! check for unbound particles
         if (DOHOSTPERTURBER) then
@@ -399,9 +609,9 @@ MODULE integrator
 
 
         END DO
-    END SUBROUTINE leapfrogintime
+    END SUBROUTINE velocityverletintime
 
-    SUBROUTINE leapfrogtofinalpositions()
+    SUBROUTINE velocityverlettofinalpositions()
         ! take the current positions and integrate until the end
         REAL*8, DIMENSION(nparticles) :: axf,ayf,azf,phi ! total
         REAL*8, DIMENSION(nparticles) :: ax0,ay0,az0
@@ -426,9 +636,9 @@ MODULE integrator
         vx0 = vxf
         vy0 = vyf
         vz0 = vzf
+        
         ! evaluate the potential at the initial positions
-
-
+        currenttime = timestamps(1)
         call HIT(nparticles,x0,y0,z0,ax0,ay0,az0,phi)
         
         if (DOHOSTPERTURBER) then
@@ -489,7 +699,7 @@ MODULE integrator
                 end if 
             end if        
         END DO
-    END SUBROUTINE leapfrogtofinalpositions
+    END SUBROUTINE velocityverlettofinalpositions
 
 
     SUBROUTINE ruthforestintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
@@ -552,7 +762,12 @@ MODULE integrator
         vxt(:,1) = vxf
         vyt(:,1) = vyf
         vzt(:,1) = vzf
+
         currenttime=timestamps(1)
+        ! hit everything once to initialize the accelerations
+        ! this is also necessary to initialize the host index
+        call HIT(nparticles,xf,yf,zf,axf,ayf,azf,phi)        
+        
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
             vx2host = vxf-vxhost(hosttimeindex)
@@ -590,8 +805,9 @@ MODULE integrator
         IF (DEBUGBARORIENTATION) then
             bartheta(1) = theta
         end if
+
         do i=1,nstep
-            currenttime=timestamps(i)
+            currenttime=timestamps(i+1)
             ! drift
             xf = xf + c1*vxf*dt
             yf = yf + c1*vyf*dt
@@ -729,6 +945,27 @@ MODULE integrator
         if (DOGALACTICBAR) then
             CALL updatebarorientation(currenttime)
             call barforce(nparticles,x,y,z,axBAR,ayBAR,azBAR,phiBAR)
+        end if
+
+        if (DEBUGACCELERATIONS.eqv..TRUE.) then 
+            print*, "SG: "
+            print*, axSG(1),aySG(1),azSG(1)
+            if (DOHOSTPERTURBER) then
+                print*, "HP: "
+                print*, axHP(1),ayHP(1),azHP(1)
+            end if
+            if (DOPERTURBERS) then
+                print*, "P: "
+                print*, axP(1),ayP(1),azP(1)        
+            end if 
+            if (DONBODY) then
+                print*, "NBODY: "
+                print*, axNBODY(1),ayNBODY(1),azNBODY(1)
+            end if
+            if (DOGALACTICBAR) then
+                print*, "BAR: "
+                print*, axBAR(1),ayBAR(1),azBAR(1)
+            end if 
         end if
 
         ax=axSG+axHP+axP+axNBODY+axBAR

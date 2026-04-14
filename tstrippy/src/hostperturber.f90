@@ -142,8 +142,6 @@ MODULE hostperturber
     
     END SUBROUTINE findhosttimeindex
 
-
-
     SUBROUTINE computeforcebyhosts(Nparticles,Gin,x,y,z,ax,ay,az,phi)
         ! compute the force on the particles due to the hosts
         ! the force is computed by summing over all hosts

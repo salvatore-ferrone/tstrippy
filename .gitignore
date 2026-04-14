@@ -19,3 +19,6 @@ dist/
 
 # scrap
 *scrap*
+
+# don't add the custom agent
+.github*

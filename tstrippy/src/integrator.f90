@@ -18,6 +18,7 @@ MODULE integrator
     PUBLIC :: leapfrogintime, leapfrogtofinalpositions
     PUBLIC :: ruthforestintime
     PUBLIC :: HIT
+    PUBLIC :: assert_gravitational_constant_initialized
     PUBLIC :: initwriteparticleorbits, writeparticleorbits
     PUBLIC :: initwritestream, writestream
     PUBLIC :: deallocate
@@ -43,6 +44,7 @@ MODULE integrator
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
     REAL*8,DIMENSION(:),ALLOCATABLE,PUBLIC :: xf,yf,zf,vxf,vyf,vzf,tesc,nbodyparams
     procedure(), pointer,public :: milkywaypotential
+    REAL*8, PRIVATE :: G = -1d0 ! set negative to catch bugs when not set
     REAL*8,DIMENSION(:),PUBLIC,allocatable :: milkwayparams
     REAL*8, PUBLIC :: currenttime,dt
     INTEGER, PUBLIC :: ntimesteps,ntimepoints,nparticles,nwriteskip
@@ -84,10 +86,16 @@ MODULE integrator
         allocate(milkwayparams(nparams))
         milkwayparams = mwparams
         GALAXYISSET=.TRUE.
+        G = mwparams(1) ! the gravitational constant is now set
     
     END SUBROUTINE setstaticgalaxy
 
-
+    SUBROUTINE assert_gravitational_constant_initialized()
+        if (G <= 0 ) then
+            print*, "the gravitational constant was not set"
+            stop
+        END IF 
+    END SUBROUTINE assert_gravitational_constant_initialized
 
     SUBROUTINE setinitialkinematics(N,x,y,z,vx,vy,vz)
         ! set the initial kinematics of the particles
@@ -131,7 +139,6 @@ MODULE integrator
         
     END SUBROUTINE setintegrationparameters
     
-
     SUBROUTINE setbackwardorbit()
         ! Changes the sign of the velocities and the timestamps
         ! the timestamps take the current time and subtract dt from it over NSTEPS
@@ -151,7 +158,6 @@ MODULE integrator
         END DO
         DOBACKWARDORBIT = .TRUE.
     END SUBROUTINE setbackwardorbit
-
 
     SUBROUTINE setdebugaccelerations()
         if (INITIALKINEMATICSSET .eqv. .FALSE.) then
@@ -245,13 +251,12 @@ MODULE integrator
 
     end subroutine inithostkinematics
 
-    SUBROUTINE initperturbers(tp,xp,yp,zp,Gin,masses,radii)
+    SUBROUTINE initperturbers(tp,xp,yp,zp,masses,radii)
         real*8, intent(in) ,dimension(:) :: tp
         real*8, intent(in), dimension(:,:) :: xp,yp,zp
         real*8, intent(in), dimension(:) :: masses,radii
-        REAL*8 :: Gin
         DOPERTURBERS = .TRUE.
-        CALL perturberinitialization(SIZE(masses,1),SIZE(tp),tp,xp,yp,zp,Gin,masses,radii)
+        CALL perturberinitialization(SIZE(masses,1),SIZE(tp),tp,xp,yp,zp,masses,radii)
     END SUBROUTINE initperturbers
 
     SUBROUTINE initgalacticbar(barpotenname,barparams,barpoly)
@@ -381,6 +386,7 @@ MODULE integrator
         ! for finding the energy with respect to the host and updating the escape time
         REAL*8, DIMENSION(NP) :: vx2host,vy2host,vz2host,Energy
 
+        call assert_gravitational_constant_initialized()
         ! give each particle an index
         do i = 1,NP
             indexes(i) = i
@@ -477,6 +483,7 @@ MODULE integrator
         ! for finding the energy with repsect to the host and updating the escape time
         REAL*8, DIMENSION(nparticles) :: vx2host,vy2host,vz2host,Energy 
         
+        call assert_gravitational_constant_initialized()
 
         ! give each particle an index
         do i = 1,nparticles
@@ -552,7 +559,6 @@ MODULE integrator
 
     END SUBROUTINE leapfrogtofinalpositions
 
-
     SUBROUTINE velocityverletintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
         ! integrate the positions and velocities forward in time
         ! return the positions and velocities at each timestep to the user
@@ -568,6 +574,9 @@ MODULE integrator
         logical, dimension(NP) :: isescaper
         ! for finding the energy with repsect to the host and updating the escape time
         REAL*8, DIMENSION(NP) :: vx2host,vy2host,vz2host,Energy 
+        
+        call assert_gravitational_constant_initialized()
+
         ! give each particle an index
         do i = 1,NP
             indexes(i) = i
@@ -651,6 +660,7 @@ MODULE integrator
         ! for finding the energy with repsect to the host and updating the escape time
         REAL*8, DIMENSION(nparticles) :: vx2host,vy2host,vz2host,Energy 
         
+        call assert_gravitational_constant_initialized()
 
         ! give each particle an index
         do i = 1,nparticles
@@ -728,7 +738,6 @@ MODULE integrator
         END DO
     END SUBROUTINE velocityverlettofinalpositions
 
-
     SUBROUTINE ruthforestintime(nstep,NP,xt,yt,zt,vxt,vyt,vzt)
         ! integrate the positions and velocities forward in time
         ! return the positions and velocities at each timestep to the user
@@ -747,6 +756,8 @@ MODULE integrator
         REAL*8  :: c1,c2,c3,c4,d1,d2,d3,d4 ! c for the positions, d for the velocities
         REAL*8  :: w ! for convience for coefficients
         INTEGER :: integration_sign
+
+        call assert_gravitational_constant_initialized()
 
         if (DOBACKWARDORBIT) then
             integration_sign = -1
@@ -957,12 +968,12 @@ MODULE integrator
 
         if (DOHOSTPERTURBER) then
             CALL findhosttimeindex(currenttime)
-            call computeforcebyhosts(nparticles,x,y,z,axHP,ayHP,azHP,phiHP)
+            call computeforcebyhosts(nparticles,G,x,y,z,axHP,ayHP,azHP,phiHP)
         end if
 
         if (DOPERTURBERS) then
             call findperturbertimeindex(currenttime)
-            call computeforcebyperturbers(nparticles,x,y,z,axP,ayP,azP,phiP)
+            call computeforcebyperturbers(nparticles,G,x,y,z,axP,ayP,azP,phiP)
         end if
 
         if (DONBODY) then
@@ -1068,7 +1079,6 @@ MODULE integrator
         IF (DOWRITESTREAM) THEN
             DOWRITESTREAM=.FALSE.
         END IF
-
 
         if (DEBUGACCELERATIONS) then
             DEALLOCATE(aSG,aHP,aP,aNBODY,aBAR,aTOTAL)

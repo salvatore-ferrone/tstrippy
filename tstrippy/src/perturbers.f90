@@ -14,16 +14,14 @@ MODULE perturbers
     INTEGER, PUBLIC :: perturbertimeindex 
     PUBLIC :: perturberinitialization,findperturbertimeindex,advanceperturbertimeindex
     PUBLIC :: perturberallocation,perturberdeallocation,computeforcebyperturbers
-    REAL*8, PRIVATE :: G 
     CONTAINS
     
     ! initialize the perturbers
-    subroutine perturberinitialization(NPERTURBERS,NTIMESTEPS,t,x,y,z,gravcnst,mass,radius)
+    subroutine perturberinitialization(NPERTURBERS,NTIMESTEPS,t,x,y,z,mass,radius)
         integer, intent(in) :: NPERTURBERS, NTIMESTEPS
         real*8, intent(in), dimension(NPERTURBERS) :: mass,radius
         real*8, intent(in), dimension(NPERTURBERS,NTIMESTEPS) :: x,y,z
         real*8, intent(in), dimension(NTIMESTEPS):: t
-        real*8, intent(in) :: gravcnst
 
         call perturberallocation(NPERTURBERS,NTIMESTEPS)
         xperturbers = x
@@ -32,7 +30,6 @@ MODULE perturbers
         timeperturbers = t
         massperturber = mass
         radiusperturber =radius
-        G = gravcnst
     end subroutine perturberinitialization
 
     subroutine perturberallocation(NPERTURBERS,NTIMESTEPS)
@@ -76,7 +73,7 @@ MODULE perturbers
 
 
 
-    SUBROUTINE computeforcebyperturbers(Nparticles,x,y,z,ax,ay,az,phi)
+    SUBROUTINE computeforcebyperturbers(Nparticles,Gin,x,y,z,ax,ay,az,phi)
         ! compute the force on the particles due to the perturbers
         ! the force is computed by summing over all perturbers
         ! the force is computed in galactic coordinates
@@ -84,10 +81,11 @@ MODULE perturbers
         real*8, intent(in), dimension(Nparticles) :: x,y,z
         real*8, intent(out), dimension(Nparticles) :: ax,ay,az,phi
         REAL*8, dimension(3) :: params
+        REAL*8, intent(in) :: Gin
         real*8,dimension(Nparticles) :: dx,dy,dz,axperturber,ayperturber,azperturber,phiperturber
         integer :: i,nperturbers
         nperturbers=size(massperturber)
-        params(1) = G
+        params(1) = Gin
         ax = 0
         ay = 0
         az = 0

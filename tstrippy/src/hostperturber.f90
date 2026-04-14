@@ -6,7 +6,7 @@ MODULE hostperturber
     IMPLICIT NONE
 
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: xhost,yhost,zhost,vxhost,vyhost,vzhost,timehost
-    REAL*8, PUBLIC :: G, masshost, radiushost
+    REAL*8, PUBLIC :: masshost, radiushost
     ! timehost: must be an ordered list from smallest to largest (negative to positive)
     INTEGER, PUBLIC :: hosttimeindex = 1
     PUBLIC :: host_init_kinematics, host_init_mass, host_init_radius
@@ -144,16 +144,17 @@ MODULE hostperturber
 
 
 
-    SUBROUTINE computeforcebyhosts(Nparticles,x,y,z,ax,ay,az,phi)
+    SUBROUTINE computeforcebyhosts(Nparticles,Gin,x,y,z,ax,ay,az,phi)
         ! compute the force on the particles due to the hosts
         ! the force is computed by summing over all hosts
         ! the force is computed in galactic coordinates
+        real*8, intent(in) :: Gin
         integer, intent(in) :: Nparticles
         real*8, intent(in), dimension(Nparticles) :: x,y,z
         real*8, intent(out), dimension(Nparticles) :: ax,ay,az,phi
         REAL*8, dimension(3) :: params
         real*8,dimension(Nparticles) :: dx,dy,dz,axhost,ayhost,azhost,phihost
-        params(1) = G
+        params(1) =  Gin
         ax = 0
         ay = 0
         az = 0

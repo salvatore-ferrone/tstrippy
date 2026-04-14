@@ -9,7 +9,7 @@ MODULE hostperturber
     REAL*8, PUBLIC :: G, masshost, radiushost
     ! timehost: must be an ordered list from smallest to largest (negative to positive)
     INTEGER, PUBLIC :: hosttimeindex = 1
-    PUBLIC :: host_init_kinematics, host_init_mass, host_init_radius, host_init_G
+    PUBLIC :: host_init_kinematics, host_init_mass, host_init_radius
     PUBLIC :: findhosttimeindex
     PUBLIC :: hostallocation, hostdeallocation, computeforcebyhosts
 
@@ -54,11 +54,7 @@ MODULE hostperturber
         radiushost = radius
     END SUBROUTINE host_init_radius
 
-    ! Gravitational constant initialization
-    SUBROUTINE host_init_G(Gin)
-        REAL*8, INTENT(IN) :: Gin
-        G = Gin
-    END SUBROUTINE host_init_G
+
 
 
     ! Generic mass evolution function

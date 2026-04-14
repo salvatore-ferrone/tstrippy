@@ -84,16 +84,10 @@ MODULE integrator
         allocate(milkwayparams(nparams))
         milkwayparams = mwparams
         GALAXYISSET=.TRUE.
-        call setgravconstant(mwparams(1))
     
     END SUBROUTINE setstaticgalaxy
 
 
-    SUBROUTINE setgravconstant(Gin)
-        ! set the gravitational constant
-        REAL*8, intent(in) :: Gin
-        G = Gin
-    END SUBROUTINE setgravconstant
 
     SUBROUTINE setinitialkinematics(N,x,y,z,vx,vy,vz)
         ! set the initial kinematics of the particles
@@ -231,7 +225,6 @@ MODULE integrator
         real*8, intent(in), dimension(nhosttimepoints) :: timeH,xH,yH,zH,vxH,vyH,vzH
         DOHOSTPERTURBER = .TRUE.
         CALL host_init_kinematics(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH)
-        CALL host_init_G(G)
 
         ! check if the integrator has been initialized
         ! if they have been set, see if nhosttimepoints is 2Nsteps
@@ -252,10 +245,10 @@ MODULE integrator
 
     end subroutine inithostkinematics
 
-    SUBROUTINE initperturbers(tp,xp,yp,zp,Gin, masses,radii)
+    SUBROUTINE initperturbers(tp,xp,yp,zp,Gin,masses,radii)
         real*8, intent(in) ,dimension(:) :: tp
         real*8, intent(in), dimension(:,:) :: xp,yp,zp
-        real*8, intent(in), dimension(:,:) :: masses,radii
+        real*8, intent(in), dimension(:) :: masses,radii
         REAL*8 :: Gin
         DOPERTURBERS = .TRUE.
         CALL perturberinitialization(SIZE(masses,1),SIZE(tp),tp,xp,yp,zp,Gin,masses,radii)

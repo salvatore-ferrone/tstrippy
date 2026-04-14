@@ -60,7 +60,6 @@ def test_direct_imports():
 
 def test_module_paths():
     """Test that modules are registered in sys.modules with the correct paths."""
-    import tstrippy
     
     # Check expected modules are in sys.modules
     assert 'tstrippy' in sys.modules

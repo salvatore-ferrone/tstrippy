@@ -2,7 +2,6 @@ MODULE integrator
     ! this integrator needs to contain the current positions
     ! it needs to be able to apply any force that I want at any time
     ! it needs to be able to integrate the positions and velocities
-    ! use constants, only : G ! no longer needed 
     use potentials
     use perturbers
     use hostperturber
@@ -44,7 +43,7 @@ MODULE integrator
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
     REAL*8,DIMENSION(:),ALLOCATABLE,PUBLIC :: xf,yf,zf,vxf,vyf,vzf,tesc,nbodyparams
     procedure(), pointer,public :: milkywaypotential
-    REAL*8, PRIVATE :: G = -1d0 ! set negative to catch bugs when not set
+    REAL*8, PRIVATE :: G_integrator = -1d0 ! set negative to catch bugs when not set
     REAL*8,DIMENSION(:),PUBLIC,allocatable :: milkwayparams
     REAL*8, PUBLIC :: currenttime,dt
     INTEGER, PUBLIC :: ntimesteps,ntimepoints,nparticles,nwriteskip

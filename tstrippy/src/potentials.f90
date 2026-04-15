@@ -99,40 +99,34 @@ MODULE potentials
         REAL*8,INTENT(IN),dimension(5) :: params
         REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
         REAL*8, DIMENSION(N) :: term1
-        REAL*8:: G,M,a,exp,cutoffradius, Mtot
+        REAL*8:: G,M,scale_length,exp,cutoffradius, Mtot
         REAL*8, DIMENSION(N) :: r,amod,d
         REAL*8:: term2,dcut
         LOGICAL, DIMENSION(N) :: outside_cutoff, at_zero
 
         REAL*8, DIMENSION(N) :: d_exp_minus_1, d_exp_minus_3
-        
-
-
 
         G = params(1) ! gravitational constant
         M = params(2) ! mass parameter NOT total mass 
-        a = params(3) ! size parameter
+        scale_length = params(3) ! size parameter
         exp = params(4) ! exponential profile  (intended to be: 2.02)
         cutoffradius = params(5) ! cutoff radius (intended to be: 100 kpc)
 
-        
-        
         ! make dimensionless distance
         r = sqrt(x*x + y*y + z*z)
-        d = r/a
-        dcut = cutoffradius/a
+        d = r/scale_length
+        dcut = cutoffradius/scale_length
         ! compute once for a speed up 
         d_exp_minus_1 = d**(exp-1)
         d_exp_minus_3 = d**(exp-3)
         
         Mtot = M * dcut**exp / (1 + dcut**(exp-1)) 
-
-        amod = -(G*M/a**3) * (d_exp_minus_3 / (1 + d_exp_minus_1))
+        amod = -(G*M/scale_length**3) * (d_exp_minus_3 / (1 + d_exp_minus_1))
         
         term1 = 1 + d_exp_minus_1
         term2 = 1 + dcut**(exp-1)
 
-        phi = G*m/(a*(exp-1)) * &
+        phi = G*m/(scale_length*(exp-1)) * &
             log(term1/term2)  &
             - G*Mtot/cutoffradius
 

@@ -67,16 +67,7 @@ if host_machine.system() == 'darwin'
     fc_env.set('LDFLAGS', '-Wl,-no_compact_unwind')
 endif
 
-# constants_sources = ['tstrippy/src/constants.f90']
-# constants_out = 'constants' + ext_suffix
-# constants_build = custom_target('constants',
-#     output: constants_out,
-#     input: constants_sources,
-#     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'constants'],
-#     env: fc_env,
-#     install: true,
-#     install_dir: module_install_dir
-# )
+
 
 potentials_sources = [
     'tstrippy/src/potentials.f90'

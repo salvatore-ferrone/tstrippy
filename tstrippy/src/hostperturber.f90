@@ -7,9 +7,9 @@ MODULE hostperturber
     IMPLICIT NONE
 
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: xhost,yhost,zhost,vxhost,vyhost,vzhost,timehost
+    REAL*8, PUBLIC :: masshost=0.0D0, radiushost=0.0D0
     REAL*8, PUBLIC :: xhostcurrent=0.0D0,yhostcurrent=0.0D0,zhostcurrent=0.0D0
     REAL*8, PUBLIC :: vxhostcurrent=0.0D0,vyhostcurrent=0.0D0,vzhostcurrent=0.0D0
-    REAL*8, PUBLIC :: masshost=0.0D0, radiushost=0.0D0
     REAL*8, PUBLIC :: masshostcurrent=0.0D0, radiushostcurrent=0.0D0
     ! timehost: must be an ordered list from smallest to largest (negative to positive)
     INTEGER, PUBLIC :: hosttimeindex = 1
@@ -22,7 +22,6 @@ MODULE hostperturber
 
     CONTAINS
     
-    ! Kinematics initialization
     SUBROUTINE host_init_kinematics(NTIMESTEPS, t, x, y, z, vx, vy, vz)
         INTEGER, INTENT(IN) :: NTIMESTEPS
         REAL*8, INTENT(IN), DIMENSION(NTIMESTEPS) :: t, x, y, z, vx, vy, vz
@@ -51,7 +50,6 @@ MODULE hostperturber
         hosttimeindex = 1
     END SUBROUTINE host_init_kinematics
 
-    ! Mass initialization (constant or model)
     SUBROUTINE host_init_mass(mass_model, params)
         INTEGER, INTENT(IN) :: mass_model
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -67,17 +65,12 @@ MODULE hostperturber
         END IF
     END SUBROUTINE host_init_mass
 
-    ! Radius initialization
     SUBROUTINE host_init_radius(radius)
         REAL*8, INTENT(IN) :: radius
         radiushost = radius
         radiushostcurrent = radius
     END SUBROUTINE host_init_radius
 
-
-
-
-    ! Generic mass evolution function
     FUNCTION get_host_mass(t)
         REAL*8 :: t, get_host_mass
         SELECT CASE (host_mass_model)
@@ -91,7 +84,6 @@ MODULE hostperturber
         END SELECT
     END FUNCTION get_host_mass
 
-
     FUNCTION mass_double_exponential(t, params)
         REAL*8 :: t, params(:), mass_double_exponential
         REAL*8 :: A1, tau1, A2, tau2, Mf, tf, C
@@ -104,29 +96,6 @@ MODULE hostperturber
         C = Mf - (A1 * EXP(-tf/tau1) + A2 * EXP(-tf/tau2))
         mass_double_exponential = A1 * EXP(-t/tau1) + A2 * EXP(-t/tau2) + C
     END FUNCTION mass_double_exponential    
-
-    subroutine hostallocation(NTIMESTEPS)
-        integer, intent(in) ::  NTIMESTEPS
-        allocate(xhost(NTIMESTEPS))
-        allocate(yhost(NTIMESTEPS))
-        allocate(zhost(NTIMESTEPS))
-        allocate(vxhost(NTIMESTEPS))
-        allocate(vyhost(NTIMESTEPS))
-        allocate(vzhost(NTIMESTEPS))
-        allocate(timehost(NTIMESTEPS))
-    END SUBROUTINE hostallocation
-
-    ! deallocate the hosts
-    SUBROUTINE hostdeallocation
-        if (allocated(xhost)) deallocate(xhost)
-        if (allocated(yhost)) deallocate(yhost)
-        if (allocated(zhost)) deallocate(zhost)
-        if (allocated(vxhost)) deallocate(vxhost)
-        if (allocated(vyhost)) deallocate(vyhost)
-        if (allocated(vzhost)) deallocate(vzhost)
-        if (allocated(timehost)) deallocate(timehost)
-        if (allocated(host_mass_params)) deallocate(host_mass_params)
-    END SUBROUTINE hostdeallocation
 
     SUBROUTINE updatehoststate(mytime)
         REAL*8, INTENT(IN) :: mytime
@@ -209,8 +178,29 @@ MODULE hostperturber
         ay = ay + ayhost
         az = az + azhost
         phi = phi + phihost
-
     END SUBROUTINE computeforcebyhosts
+
+    subroutine hostallocation(NTIMESTEPS)
+        integer, intent(in) ::  NTIMESTEPS
+        allocate(xhost(NTIMESTEPS))
+        allocate(yhost(NTIMESTEPS))
+        allocate(zhost(NTIMESTEPS))
+        allocate(vxhost(NTIMESTEPS))
+        allocate(vyhost(NTIMESTEPS))
+        allocate(vzhost(NTIMESTEPS))
+        allocate(timehost(NTIMESTEPS))
+    END SUBROUTINE hostallocation
+
+    SUBROUTINE hostdeallocation
+        if (allocated(xhost)) deallocate(xhost)
+        if (allocated(yhost)) deallocate(yhost)
+        if (allocated(zhost)) deallocate(zhost)
+        if (allocated(vxhost)) deallocate(vxhost)
+        if (allocated(vyhost)) deallocate(vyhost)
+        if (allocated(vzhost)) deallocate(vzhost)
+        if (allocated(timehost)) deallocate(timehost)
+        if (allocated(host_mass_params)) deallocate(host_mass_params)
+    END SUBROUTINE hostdeallocation    
 
 END MODULE hostperturber
 

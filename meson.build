@@ -67,19 +67,18 @@ if host_machine.system() == 'darwin'
     fc_env.set('LDFLAGS', '-Wl,-no_compact_unwind')
 endif
 
-constants_sources = ['tstrippy/src/constants.f90']
-constants_out = 'constants' + ext_suffix
-constants_build = custom_target('constants',
-    output: constants_out,
-    input: constants_sources,
-    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'constants'],
-    env: fc_env,
-    install: true,
-    install_dir: module_install_dir
-)
+# constants_sources = ['tstrippy/src/constants.f90']
+# constants_out = 'constants' + ext_suffix
+# constants_build = custom_target('constants',
+#     output: constants_out,
+#     input: constants_sources,
+#     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'constants'],
+#     env: fc_env,
+#     install: true,
+#     install_dir: module_install_dir
+# )
 
 potentials_sources = [
-    'tstrippy/src/constants.f90',
     'tstrippy/src/potentials.f90'
 ]
 potentials_out = 'potentials' + ext_suffix
@@ -94,9 +93,9 @@ potentials_build = custom_target('potentials',
 )
 
 integrator_sources = [
-    'tstrippy/src/constants.f90',
     'tstrippy/src/potentials.f90',
     'tstrippy/src/perturbers.f90',
+    'tstrippy/src/mathutils.f90',
     'tstrippy/src/hostperturber.f90',
     'tstrippy/src/galacticbar.f90',
     'tstrippy/src/integrator.f90'

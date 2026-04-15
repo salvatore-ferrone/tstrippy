@@ -2,15 +2,19 @@ MODULE hostperturber
     ! so FAR, we can either have constant mass, or a double exponential mass evolution
     
     use potentials, only : plummer
+    use mathutils, only : linear_interp_scalar
 
     IMPLICIT NONE
 
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: xhost,yhost,zhost,vxhost,vyhost,vzhost,timehost
-    REAL*8, PUBLIC :: masshost, radiushost
+    REAL*8, PUBLIC :: xhostcurrent=0.0D0,yhostcurrent=0.0D0,zhostcurrent=0.0D0
+    REAL*8, PUBLIC :: vxhostcurrent=0.0D0,vyhostcurrent=0.0D0,vzhostcurrent=0.0D0
+    REAL*8, PUBLIC :: masshost=0.0D0, radiushost=0.0D0
+    REAL*8, PUBLIC :: masshostcurrent=0.0D0, radiushostcurrent=0.0D0
     ! timehost: must be an ordered list from smallest to largest (negative to positive)
     INTEGER, PUBLIC :: hosttimeindex = 1
     PUBLIC :: host_init_kinematics, host_init_mass, host_init_radius
-    PUBLIC :: findhosttimeindex
+    PUBLIC :: findhosttimeindex, updatehoststate
     PUBLIC :: hostallocation, hostdeallocation, computeforcebyhosts
 
     INTEGER, PUBLIC :: host_mass_model = 0 ! 0=constant, 1=double exponential, 2=polynomial, etc.
@@ -22,6 +26,20 @@ MODULE hostperturber
     SUBROUTINE host_init_kinematics(NTIMESTEPS, t, x, y, z, vx, vy, vz)
         INTEGER, INTENT(IN) :: NTIMESTEPS
         REAL*8, INTENT(IN), DIMENSION(NTIMESTEPS) :: t, x, y, z, vx, vy, vz
+        INTEGER :: i
+
+        if (NTIMESTEPS < 2) then
+            print*, "ERROR: host kinematics need at least 2 time points for interpolation"
+            stop
+        end if
+
+        do i=2,NTIMESTEPS
+            if (t(i) <= t(i-1)) then
+                print*, "ERROR: host times must be strictly increasing"
+                stop
+            end if
+        end do
+
         CALL hostallocation(NTIMESTEPS)
         xhost = x
         yhost = y
@@ -30,6 +48,7 @@ MODULE hostperturber
         vyhost = vy
         vzhost = vz
         timehost = t
+        hosttimeindex = 1
     END SUBROUTINE host_init_kinematics
 
     ! Mass initialization (constant or model)
@@ -37,12 +56,12 @@ MODULE hostperturber
         INTEGER, INTENT(IN) :: mass_model
         REAL*8, INTENT(IN), DIMENSION(:) :: params
         host_mass_model = mass_model
+        IF (ALLOCATED(host_mass_params)) DEALLOCATE(host_mass_params)
         IF (host_mass_model == 0) THEN
             masshost = params(1)
             ALLOCATE(host_mass_params(1))
             host_mass_params(1) = params(1)
         ELSE
-            IF (ALLOCATED(host_mass_params)) DEALLOCATE(host_mass_params)
             ALLOCATE(host_mass_params(SIZE(params)))
             host_mass_params = params
         END IF
@@ -52,6 +71,7 @@ MODULE hostperturber
     SUBROUTINE host_init_radius(radius)
         REAL*8, INTENT(IN) :: radius
         radiushost = radius
+        radiushostcurrent = radius
     END SUBROUTINE host_init_radius
 
 
@@ -90,56 +110,77 @@ MODULE hostperturber
         allocate(xhost(NTIMESTEPS))
         allocate(yhost(NTIMESTEPS))
         allocate(zhost(NTIMESTEPS))
+        allocate(vxhost(NTIMESTEPS))
+        allocate(vyhost(NTIMESTEPS))
+        allocate(vzhost(NTIMESTEPS))
         allocate(timehost(NTIMESTEPS))
     END SUBROUTINE hostallocation
 
     ! deallocate the hosts
     SUBROUTINE hostdeallocation
-        deallocate(xhost,yhost,zhost,timehost)
+        if (allocated(xhost)) deallocate(xhost)
+        if (allocated(yhost)) deallocate(yhost)
+        if (allocated(zhost)) deallocate(zhost)
+        if (allocated(vxhost)) deallocate(vxhost)
+        if (allocated(vyhost)) deallocate(vyhost)
+        if (allocated(vzhost)) deallocate(vzhost)
+        if (allocated(timehost)) deallocate(timehost)
+        if (allocated(host_mass_params)) deallocate(host_mass_params)
     END SUBROUTINE hostdeallocation
 
-    SUBROUTINE findhosttimeindex(mytime)
-        ! This searche is done to find the closest time index in the timehost array
-        ! It doesn't use MINLOC like it did before because that is an O(N) operation
-        ! now we take advantage of the current index and move forward or backward
-        ! until we find the closest time index to mytime
-        ! This is an O(1) operation in the best case and O(N) in the worst case
-        ! but it is much faster than the previous implementation
-        ! Then we perform a check to see if the next index is closer
-        ! this is important because if we are using leapfrog, we need to make sure
-        ! that we are using the middle index to ensure time-reversability
-
-
+    SUBROUTINE updatehoststate(mytime)
         REAL*8, INTENT(IN) :: mytime
-        INTEGER :: next_idx
-        REAL*8 :: dist_current, dist_next
-        
-        ! Use the current hosttimeindex as starting point for search
-        ! Move forward if needed
-        DO WHILE (hosttimeindex < size(timehost) .AND. timehost(hosttimeindex) < mytime)
-            hosttimeindex = hosttimeindex + 1
-        END DO
-        
-        ! Move backward if we went too far
-        DO WHILE (hosttimeindex > 1 .AND. timehost(hosttimeindex) > mytime)
-            hosttimeindex = hosttimeindex - 1
-        END DO
-        
-        ! Now find which is closer - current index or next index
-        IF (hosttimeindex < size(timehost)) THEN
-            next_idx = hosttimeindex + 1
-            dist_current = ABS(timehost(hosttimeindex) - mytime)
-            dist_next = ABS(timehost(next_idx) - mytime)
-            
-            ! Choose the closer timestamp
-            IF (dist_next < dist_current) THEN
-                hosttimeindex = next_idx
-            END IF
-        END IF
-        
-        ! update the host mass
-        masshost = get_host_mass(timehost(hosttimeindex))
-    
+        REAL*8 :: t0, t1, alpha, denom
+        INTEGER :: ntime
+
+        ntime = SIZE(timehost)
+        if (ntime < 2) then
+            print*, "ERROR: host time array has fewer than 2 points"
+            stop
+        end if
+
+        if (mytime <= timehost(1)) then
+            hosttimeindex = 1
+            alpha = 0.0D0
+        else if (mytime >= timehost(ntime)) then
+            hosttimeindex = ntime - 1
+            alpha = 1.0D0
+        else
+            ! Track the lower bracketing index around mytime.
+            DO WHILE (hosttimeindex < ntime - 1 .AND. timehost(hosttimeindex + 1) < mytime)
+                hosttimeindex = hosttimeindex + 1
+            END DO
+
+            DO WHILE (hosttimeindex > 1 .AND. timehost(hosttimeindex) > mytime)
+                hosttimeindex = hosttimeindex - 1
+            END DO
+
+            t0 = timehost(hosttimeindex)
+            t1 = timehost(hosttimeindex + 1)
+            denom = t1 - t0
+            if (denom <= 0.0D0) then
+                print*, "ERROR: host times are not strictly increasing"
+                stop
+            end if
+            alpha = (mytime - t0) / denom
+        end if
+
+        xhostcurrent = linear_interp_scalar(xhost(hosttimeindex), xhost(hosttimeindex + 1), alpha)
+        yhostcurrent = linear_interp_scalar(yhost(hosttimeindex), yhost(hosttimeindex + 1), alpha)
+        zhostcurrent = linear_interp_scalar(zhost(hosttimeindex), zhost(hosttimeindex + 1), alpha)
+        vxhostcurrent = linear_interp_scalar(vxhost(hosttimeindex), vxhost(hosttimeindex + 1), alpha)
+        vyhostcurrent = linear_interp_scalar(vyhost(hosttimeindex), vyhost(hosttimeindex + 1), alpha)
+        vzhostcurrent = linear_interp_scalar(vzhost(hosttimeindex), vzhost(hosttimeindex + 1), alpha)
+
+        masshost = get_host_mass(mytime)
+        masshostcurrent = masshost
+        radiushostcurrent = radiushost
+    END SUBROUTINE updatehoststate
+
+    SUBROUTINE findhosttimeindex(mytime)
+        REAL*8, INTENT(IN) :: mytime
+        ! Backward-compatible entry point used by the integrator.
+        CALL updatehoststate(mytime)
     END SUBROUTINE findhosttimeindex
 
     SUBROUTINE computeforcebyhosts(Nparticles,Gin,x,y,z,ax,ay,az,phi)
@@ -158,11 +199,11 @@ MODULE hostperturber
         az = 0
         phi = 0
 
-        dx = x - xhost(hosttimeindex)
-        dy = y - yhost(hosttimeindex)
-        dz = z - zhost(hosttimeindex)
-        params(2) = masshost
-        params(3) = radiushost
+        dx = x - xhostcurrent
+        dy = y - yhostcurrent
+        dz = z - zhostcurrent
+        params(2) = masshostcurrent
+        params(3) = radiushostcurrent
         call plummer(params,Nparticles,dx,dy,dz,axhost,ayhost,azhost,phihost)
         ax = ax + axhost
         ay = ay + ayhost

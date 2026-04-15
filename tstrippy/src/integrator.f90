@@ -491,6 +491,7 @@ MODULE integrator
 
         ! hit everything once to initialize the accelerations
         ! this is also necessary to initialize the host index
+        currenttime = timestamps(1)
         call HIT(nparticles,xf,yf,zf,ax,ay,az,phi)
         
         ! evaluate the potential at the initial positions

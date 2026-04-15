@@ -13,6 +13,7 @@ MODULE hostperturber
     REAL*8, PUBLIC :: masshostcurrent=0.0D0, radiushostcurrent=0.0D0
     ! timehost: must be an ordered list from smallest to largest (negative to positive)
     INTEGER, PUBLIC :: hosttimeindex = 1
+    LOGICAL, PUBLIC :: host_times_decreasing = .FALSE.
     PUBLIC :: host_init_kinematics, host_init_mass, host_init_radius
     PUBLIC :: findhosttimeindex, updatehoststate
     PUBLIC :: hostallocation, hostdeallocation, computeforcebyhosts
@@ -32,12 +33,26 @@ MODULE hostperturber
             stop
         end if
 
-        do i=2,NTIMESTEPS
-            if (t(i) <= t(i-1)) then
-                print*, "ERROR: host times must be strictly increasing"
-                stop
-            end if
-        end do
+        if (t(2) > t(1)) then
+            host_times_decreasing = .FALSE.
+            do i=2,NTIMESTEPS
+                if (t(i) <= t(i-1)) then
+                    print*, "ERROR: host times must be strictly increasing"
+                    stop
+                end if
+            end do
+        else if (t(2) < t(1)) then
+            host_times_decreasing = .TRUE.
+            do i=2,NTIMESTEPS
+                if (t(i) >= t(i-1)) then
+                    print*, "ERROR: host times must be strictly decreasing"
+                    stop
+                end if
+            end do
+        else
+            print*, "ERROR: host times must be strictly monotonic (no repeated adjacent values)"
+            stop
+        end if
 
         CALL hostallocation(NTIMESTEPS)
         xhost = x
@@ -108,30 +123,58 @@ MODULE hostperturber
             stop
         end if
 
-        if (mytime <= timehost(1)) then
-            hosttimeindex = 1
-            alpha = 0.0D0
-        else if (mytime >= timehost(ntime)) then
-            hosttimeindex = ntime - 1
-            alpha = 1.0D0
-        else
-            ! Track the lower bracketing index around mytime.
-            DO WHILE (hosttimeindex < ntime - 1 .AND. timehost(hosttimeindex + 1) < mytime)
-                hosttimeindex = hosttimeindex + 1
-            END DO
+        if (.not. host_times_decreasing) then
+            if (mytime <= timehost(1)) then
+                hosttimeindex = 1
+                alpha = 0.0D0
+            else if (mytime >= timehost(ntime)) then
+                hosttimeindex = ntime - 1
+                alpha = 1.0D0
+            else
+                ! Track the lower bracketing index around mytime.
+                DO WHILE (hosttimeindex < ntime - 1 .AND. timehost(hosttimeindex + 1) < mytime)
+                    hosttimeindex = hosttimeindex + 1
+                END DO
 
-            DO WHILE (hosttimeindex > 1 .AND. timehost(hosttimeindex) > mytime)
-                hosttimeindex = hosttimeindex - 1
-            END DO
+                DO WHILE (hosttimeindex > 1 .AND. timehost(hosttimeindex) > mytime)
+                    hosttimeindex = hosttimeindex - 1
+                END DO
 
-            t0 = timehost(hosttimeindex)
-            t1 = timehost(hosttimeindex + 1)
-            denom = t1 - t0
-            if (denom <= 0.0D0) then
-                print*, "ERROR: host times are not strictly increasing"
-                stop
+                t0 = timehost(hosttimeindex)
+                t1 = timehost(hosttimeindex + 1)
+                denom = t1 - t0
+                if (denom <= 0.0D0) then
+                    print*, "ERROR: host times are not strictly increasing"
+                    stop
+                end if
+                alpha = (mytime - t0) / denom
             end if
-            alpha = (mytime - t0) / denom
+        else
+            if (mytime >= timehost(1)) then
+                hosttimeindex = 1
+                alpha = 0.0D0
+            else if (mytime <= timehost(ntime)) then
+                hosttimeindex = ntime - 1
+                alpha = 1.0D0
+            else
+                ! Track the upper bracketing index around mytime for decreasing host times.
+                DO WHILE (hosttimeindex < ntime - 1 .AND. timehost(hosttimeindex + 1) > mytime)
+                    hosttimeindex = hosttimeindex + 1
+                END DO
+
+                DO WHILE (hosttimeindex > 1 .AND. timehost(hosttimeindex) < mytime)
+                    hosttimeindex = hosttimeindex - 1
+                END DO
+
+                t0 = timehost(hosttimeindex)
+                t1 = timehost(hosttimeindex + 1)
+                denom = t1 - t0
+                if (denom >= 0.0D0) then
+                    print*, "ERROR: host times are not strictly decreasing"
+                    stop
+                end if
+                alpha = (mytime - t0) / denom
+            end if
         end if
 
         xhostcurrent = linear_interp_scalar(xhost(hosttimeindex), xhost(hosttimeindex + 1), alpha)

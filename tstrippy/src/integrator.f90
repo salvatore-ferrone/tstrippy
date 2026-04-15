@@ -43,7 +43,7 @@ MODULE integrator
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
     REAL*8,DIMENSION(:),ALLOCATABLE,PUBLIC :: xf,yf,zf,vxf,vyf,vzf,tesc,nbodyparams
     procedure(), pointer,public :: milkywaypotential
-    REAL*8, PRIVATE :: G_integrator = -1d0 ! set negative to catch bugs when not set
+    REAL*8, PRIVATE :: G = -1d0 ! set negative to catch bugs when not set
     REAL*8,DIMENSION(:),PUBLIC,allocatable :: milkwayparams
     REAL*8, PUBLIC :: currenttime,dt
     INTEGER, PUBLIC :: ntimesteps,ntimepoints,nparticles,nwriteskip
@@ -419,9 +419,9 @@ MODULE integrator
         ! check if anyone is unbound 
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
-            vx2host = vxt(:,1)-vxhost(hosttimeindex)
-            vy2host = vyt(:,1)-vyhost(hosttimeindex)
-            vz2host = vzt(:,1)-vzhost(hosttimeindex)
+            vx2host = vxt(:,1)-vxhostcurrent
+            vy2host = vyt(:,1)-vyhostcurrent
+            vz2host = vzt(:,1)-vzhostcurrent
             Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
             ! update the escape time
             isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -450,9 +450,9 @@ MODULE integrator
 
 
             if (DOHOSTPERTURBER) then
-                vx2host = vxt(:,i+1)-vxhost(hosttimeindex)
-                vy2host = vyt(:,i+1)-vyhost(hosttimeindex)
-                vz2host = vzt(:,i+1)-vzhost(hosttimeindex)
+                vx2host = vxt(:,i+1)-vxhostcurrent
+                vy2host = vyt(:,i+1)-vyhostcurrent
+                vz2host = vzt(:,i+1)-vzhostcurrent
                 Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
                 ! update the escape time
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -497,9 +497,9 @@ MODULE integrator
         ! evaluate the potential at the initial positions
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
-            vx2host = vxf-vxhost(hosttimeindex)
-            vy2host = vyf-vyhost(hosttimeindex)
-            vz2host = vzf-vzhost(hosttimeindex)
+            vx2host = vxf-vxhostcurrent
+            vy2host = vyf-vyhostcurrent
+            vz2host = vzf-vzhostcurrent
             Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
             ! update the escape time
             isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -535,9 +535,9 @@ MODULE integrator
 
 
             if (DOHOSTPERTURBER) then
-                vx2host = vxf-vxhost(hosttimeindex)
-                vy2host = vyf-vyhost(hosttimeindex)
-                vz2host = vzf-vzhost(hosttimeindex)
+                vx2host = vxf-vxhostcurrent
+                vy2host = vyf-vyhostcurrent
+                vz2host = vzf-vzhostcurrent
                 Energy = 0.5d0*(vx2host**2+vy2host**2+vz2host**2) + phiHP
                 ! update the escape time
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -611,9 +611,9 @@ MODULE integrator
         ! check for unbound particles
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
-            vx2host = vxt(:,1)-vxhost(hosttimeindex)
-            vy2host = vyt(:,1)-vyhost(hosttimeindex)
-            vz2host = vzt(:,1)-vzhost(hosttimeindex)
+            vx2host = vxt(:,1)-vxhostcurrent
+            vy2host = vyt(:,1)-vyhostcurrent
+            vz2host = vzt(:,1)-vzhostcurrent
             Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
             ! update the escape time
             isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -634,9 +634,9 @@ MODULE integrator
             ay0=ayf
             az0=azf
             if (DOHOSTPERTURBER) then
-                vx2host = vxt(:,i+1)-vxhost(hosttimeindex)
-                vy2host = vyt(:,i+1)-vyhost(hosttimeindex)
-                vz2host = vzt(:,i+1)-vzhost(hosttimeindex)
+                vx2host = vxt(:,i+1)-vxhostcurrent
+                vy2host = vyt(:,i+1)-vyhostcurrent
+                vz2host = vzt(:,i+1)-vzhostcurrent
                 Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
                 ! update the escape time
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -680,9 +680,9 @@ MODULE integrator
         
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
-            vx2host = vx0-vxhost(hosttimeindex)
-            vy2host = vy0-vyhost(hosttimeindex)
-            vz2host = vz0-vzhost(hosttimeindex)
+            vx2host = vx0-vxhostcurrent
+            vy2host = vy0-vyhostcurrent
+            vz2host = vz0-vzhostcurrent
             Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
             ! update the escape time
             isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -716,9 +716,9 @@ MODULE integrator
             ay0=ayf
             az0=azf
             if (DOHOSTPERTURBER) then
-                vx2host = vx0-vxhost(hosttimeindex)
-                vy2host = vy0-vyhost(hosttimeindex)
-                vz2host = vz0-vzhost(hosttimeindex)
+                vx2host = vx0-vxhostcurrent
+                vy2host = vy0-vyhostcurrent
+                vz2host = vz0-vzhostcurrent
                 Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
                 ! update the escape time
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -808,9 +808,9 @@ MODULE integrator
         
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
-            vx2host = vxf-vxhost(hosttimeindex)
-            vy2host = vyf-vyhost(hosttimeindex)
-            vz2host = vzf-vzhost(hosttimeindex)
+            vx2host = vxf-vxhostcurrent
+            vy2host = vyf-vyhostcurrent
+            vz2host = vzf-vzhostcurrent
             Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
             ! update the escape time
             isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -895,9 +895,9 @@ MODULE integrator
 
             if (DOHOSTPERTURBER) then
                 ! measure the energy of the particles with respect to the host
-                vx2host = vxf-vxhost(hosttimeindex)
-                vy2host = vyf-vyhost(hosttimeindex)
-                vz2host = vzf-vzhost(hosttimeindex)
+                vx2host = vxf-vxhostcurrent
+                vy2host = vyf-vyhostcurrent
+                vz2host = vzf-vzhostcurrent
                 Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
                 ! update the escape time
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)

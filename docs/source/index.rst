@@ -49,5 +49,5 @@ This documentation is organized into three sections:
    :maxdepth: 1
    :caption: Stream disruption examples
 
+   stream_generation.ipynb
    bar_stream_example.ipynb
-   reverse_integrability_stream.ipynb

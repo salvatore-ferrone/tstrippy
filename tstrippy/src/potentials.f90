@@ -1,6 +1,74 @@
 MODULE potentials
-    ! REAL*8, PARAMETER :: pi = 2.0d0 * acos(0.0d0)
-    contains
+    USE mathutils, ONLY: linear_interp_scalar, legendre_axisymmetric_basis, &
+                         legendre_p_all_axisymmetric, gauss_legendre_nodes_weights
+    IMPLICIT NONE
+
+    ! Axisymmetric basis-expansion tables (l-mode by radial grid index).
+    ! BASIS_GRID_SET: r_grid allocated, arrays ready for projection.
+    ! BASIS_EXPANSION_INITIALIZED: projection + potential tables computed, ready to evaluate.
+    LOGICAL, PUBLIC  :: BASIS_GRID_SET              = .FALSE.
+    LOGICAL, PUBLIC  :: BASIS_EXPANSION_INITIALIZED = .FALSE.
+    INTEGER, PUBLIC  :: BASIS_LMAX = -1
+    INTEGER, PUBLIC  :: BASIS_NR   = -1
+    REAL*8,  PUBLIC  :: BASIS_G    = -1.0D0
+
+    REAL*8, DIMENSION(:),   ALLOCATABLE, PUBLIC :: BASIS_R_GRID
+    REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: BASIS_RHO_L_GRID
+    REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: BASIS_PHI_L_GRID
+    REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: BASIS_DPHI_L_DR_GRID
+
+    ! Private internal routines (not exposed to Python/caller)
+    PRIVATE :: default_init_basis_expansion
+    PRIVATE :: project_exponential_oblate_halo
+    PRIVATE :: compute_phi_tables_from_rho
+    PRIVATE :: axisymmetricbasisexpansion_eval
+
+    CONTAINS
+    SUBROUTINE initaxisymmetricbasisexpansion(G, lmax, nr, r_grid)
+        ! Allocate basis-expansion storage and store the radial grid.
+        ! Does NOT project any density or compute potential tables.
+        ! Call a density subroutine (e.g. exponential_oblate_halo) afterwards
+        ! to trigger projection and table construction.
+        IMPLICIT NONE
+        REAL*8, INTENT(IN) :: G
+        INTEGER, INTENT(IN) :: lmax, nr
+        REAL*8, INTENT(IN), DIMENSION(nr) :: r_grid
+
+        CALL clearaxisymmetricbasisexpansion()
+
+        ALLOCATE(BASIS_R_GRID(nr))
+        ALLOCATE(BASIS_RHO_L_GRID(0:lmax, nr))
+        ALLOCATE(BASIS_PHI_L_GRID(0:lmax, nr))
+        ALLOCATE(BASIS_DPHI_L_DR_GRID(0:lmax, nr))
+
+        BASIS_RHO_L_GRID     = 0.0D0
+        BASIS_PHI_L_GRID     = 0.0D0
+        BASIS_DPHI_L_DR_GRID = 0.0D0
+
+        BASIS_G    = G
+        BASIS_LMAX = lmax
+        BASIS_NR   = nr
+        BASIS_R_GRID = r_grid
+
+        BASIS_GRID_SET              = .TRUE.
+        BASIS_EXPANSION_INITIALIZED = .FALSE.
+    END SUBROUTINE initaxisymmetricbasisexpansion
+
+    SUBROUTINE clearaxisymmetricbasisexpansion()
+        IMPLICIT NONE
+
+        IF (ALLOCATED(BASIS_R_GRID))          DEALLOCATE(BASIS_R_GRID)
+        IF (ALLOCATED(BASIS_RHO_L_GRID))      DEALLOCATE(BASIS_RHO_L_GRID)
+        IF (ALLOCATED(BASIS_PHI_L_GRID))      DEALLOCATE(BASIS_PHI_L_GRID)
+        IF (ALLOCATED(BASIS_DPHI_L_DR_GRID))  DEALLOCATE(BASIS_DPHI_L_DR_GRID)
+
+        BASIS_GRID_SET              = .FALSE.
+        BASIS_EXPANSION_INITIALIZED = .FALSE.
+        BASIS_LMAX = -1
+        BASIS_NR   = -1
+        BASIS_G    = -1.0D0
+    END SUBROUTINE clearaxisymmetricbasisexpansion
+
     SUBROUTINE hernquist(params,N,x,y,z,ax,ay,az,phi)
         ! Hernquist potential
         ! params = [G, M, a]
@@ -299,6 +367,210 @@ MODULE potentials
 
 
 
+
+    SUBROUTINE default_init_basis_expansion(G)
+        ! Auto-initialize with sensible defaults when the user has not called
+        ! initaxisymmetricbasisexpansion explicitly.
+        ! Grid: 100 log-spaced points from 1e-4 to 1e3; lmax = 20.
+        IMPLICIT NONE
+        REAL*8, INTENT(IN) :: G
+        INTEGER, PARAMETER :: default_lmax = 20
+        INTEGER, PARAMETER :: default_nr   = 100
+        REAL*8,  PARAMETER :: default_rmin = 1.0D-4
+        REAL*8,  PARAMETER :: default_rmax = 1.0D3
+        REAL*8 :: r_grid(default_nr)
+        REAL*8 :: log_rmin, log_rmax, dlog_r
+        INTEGER :: i
+
+        log_rmin = LOG(default_rmin)
+        log_rmax = LOG(default_rmax)
+        dlog_r   = (log_rmax - log_rmin) / DBLE(default_nr - 1)
+        DO i = 1, default_nr
+            r_grid(i) = EXP(log_rmin + (i-1) * dlog_r)
+        END DO
+        CALL initaxisymmetricbasisexpansion(G, default_lmax, default_nr, r_grid)
+    END SUBROUTINE default_init_basis_expansion
+
+    SUBROUTINE project_exponential_oblate_halo(rho0, s0, q)
+        ! Project rho(r,mu) = rho0*exp(-r/s0*sqrt(1-(1-1/q^2)*mu^2)) onto
+        ! Legendre modes using Gauss-Legendre quadrature in mu.
+        ! Fills BASIS_RHO_L_GRID for even l only.
+        IMPLICIT NONE
+        REAL*8, INTENT(IN) :: rho0, s0, q
+        INTEGER :: n_mu, i_r, l, k
+        REAL*8, ALLOCATABLE :: mu_q(:), w_q(:), p(:)
+        REAL*8 :: mu, rho_val, eta, factor
+        REAL*8, PARAMETER :: pi_proj = 3.14159265358979323846D0
+
+        n_mu = MAX(4 * (BASIS_LMAX + 1), 40)
+        ALLOCATE(mu_q(n_mu), w_q(n_mu), p(0:BASIS_LMAX))
+        CALL gauss_legendre_nodes_weights(n_mu, mu_q, w_q)
+
+        ! eta = 1 - 1/q^2  so the density reads exp(-r/s0 * sqrt(1 - eta*mu^2))
+        eta = 1.0D0 - 1.0D0 / (q * q)
+
+        BASIS_RHO_L_GRID = 0.0D0
+        DO i_r = 1, BASIS_NR
+            DO k = 1, n_mu
+                mu = mu_q(k)
+                rho_val = rho0 * EXP(-BASIS_R_GRID(i_r) / s0 * SQRT(MAX(1.0D0 - eta*mu*mu, 0.0D0)))
+                CALL legendre_p_all_axisymmetric(BASIS_LMAX, mu, p)
+                DO l = 0, BASIS_LMAX, 2
+                    factor = (2*l + 1) * 0.5D0 * w_q(k)
+                    BASIS_RHO_L_GRID(l, i_r) = BASIS_RHO_L_GRID(l, i_r) + factor * rho_val * p(l)
+                END DO
+            END DO
+        END DO
+
+        DEALLOCATE(mu_q, w_q, p)
+    END SUBROUTINE project_exponential_oblate_halo
+
+    SUBROUTINE compute_phi_tables_from_rho()
+        ! Build potential tables BASIS_PHI_L_GRID and BASIS_DPHI_L_DR_GRID from
+        ! the projected density coefficients BASIS_RHO_L_GRID via the Green's
+        ! function integrals for each l-mode:
+        !   Phi_l(r) = -4*pi*G/(2l+1) * [ r^{-(l+1)} I_l^<(r) + r^l I_l^>(r) ]
+        ! where I_l^<(r) = int_0^r  r'^{l+2}   rho_l(r') dr'
+        !       I_l^>(r) = int_r^inf r'^{1-l} rho_l(r') dr'
+        ! dPhi_l/dr = -4*pi*G/(2l+1) * [ -(l+1)*r^{-(l+2)} I_l^< + l*r^{l-1} I_l^> ]
+        IMPLICIT NONE
+        REAL*8, PARAMETER :: pi_phi = 3.14159265358979323846D0
+        INTEGER :: l, i
+        REAL*8  :: prefactor, r_lo, r_hi, f_lo, f_hi, dr
+        REAL*8, ALLOCATABLE :: I_less(:), I_greater(:)
+
+        ALLOCATE(I_less(BASIS_NR), I_greater(BASIS_NR))
+
+        DO l = 0, BASIS_LMAX, 2
+            prefactor = -4.0D0 * pi_phi * BASIS_G / DBLE(2*l + 1)
+
+            ! Forward cumulative trapezoid: I_less(i) = int_0^r r'^{l+2} rho_l dr'
+            I_less(1) = 0.0D0
+            DO i = 2, BASIS_NR
+                r_lo = BASIS_R_GRID(i-1);  r_hi = BASIS_R_GRID(i)
+                f_lo = r_lo**(l+2) * BASIS_RHO_L_GRID(l, i-1)
+                f_hi = r_hi**(l+2) * BASIS_RHO_L_GRID(l, i)
+                I_less(i) = I_less(i-1) + 0.5D0 * (r_hi - r_lo) * (f_lo + f_hi)
+            END DO
+
+            ! Backward cumulative trapezoid: I_greater(i) = int_r^inf r'^{1-l} rho_l dr'
+            I_greater(BASIS_NR) = 0.0D0
+            DO i = BASIS_NR-1, 1, -1
+                r_lo = BASIS_R_GRID(i);  r_hi = BASIS_R_GRID(i+1)
+                f_lo = r_lo**(1-l) * BASIS_RHO_L_GRID(l, i)
+                f_hi = r_hi**(1-l) * BASIS_RHO_L_GRID(l, i+1)
+                dr = r_hi - r_lo
+                I_greater(i) = I_greater(i+1) + 0.5D0 * dr * (f_lo + f_hi)
+            END DO
+
+            DO i = 1, BASIS_NR
+                BASIS_PHI_L_GRID(l, i) = prefactor * ( &
+                    BASIS_R_GRID(i)**(-(l+1)) * I_less(i) + &
+                    BASIS_R_GRID(i)**l        * I_greater(i) )
+                BASIS_DPHI_L_DR_GRID(l, i) = prefactor * ( &
+                    -(l+1) * BASIS_R_GRID(i)**(-(l+2)) * I_less(i) + &
+                    DBLE(l) * BASIS_R_GRID(i)**(l-1)   * I_greater(i) )
+            END DO
+        END DO
+
+        DEALLOCATE(I_less, I_greater)
+    END SUBROUTINE compute_phi_tables_from_rho
+
+    SUBROUTINE axisymmetricbasisexpansion_eval(N, x, y, z, ax, ay, az, phi_out)
+        ! Evaluate accelerations and potential for all N particles by
+        ! interpolating the pre-computed l-mode tables and summing over modes.
+        ! Cartesian force: a_i = -d_i phi, chain rule via (r, mu=z/r).
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi_out
+        INTEGER :: i, l, jlo, jhi, jmid
+        REAL*8  :: r, r_safe, mu, R_cyl_sq
+        REAL*8  :: alpha_r, phi_l_r, dphi_l_dr_r
+        REAL*8  :: phi_v, dphi_dr_v, dphi_dmu_v
+        REAL*8  :: p(0:BASIS_LMAX), dp_dmu(0:BASIS_LMAX)
+        REAL*8, PARAMETER :: eps_r = 1.0D-30
+
+        DO i = 1, N
+            r      = SQRT(x(i)**2 + y(i)**2 + z(i)**2)
+            r_safe = MAX(r, eps_r)
+            mu     = z(i) / r_safe
+            R_cyl_sq = x(i)**2 + y(i)**2
+
+            ! Binary search for bracketing index in r_grid
+            IF (r_safe <= BASIS_R_GRID(1)) THEN
+                jlo = 1;  alpha_r = 0.0D0
+            ELSE IF (r_safe >= BASIS_R_GRID(BASIS_NR)) THEN
+                jlo = BASIS_NR - 1;  alpha_r = 1.0D0
+            ELSE
+                jlo = 1;  jhi = BASIS_NR
+                DO WHILE (jhi - jlo > 1)
+                    jmid = (jlo + jhi) / 2
+                    IF (BASIS_R_GRID(jmid) <= r_safe) THEN
+                        jlo = jmid
+                    ELSE
+                        jhi = jmid
+                    END IF
+                END DO
+                ! Log-r interpolation weight (accurate on log-spaced grids)
+                alpha_r = LOG(r_safe / BASIS_R_GRID(jlo)) / &
+                          LOG(BASIS_R_GRID(jlo+1) / BASIS_R_GRID(jlo))
+            END IF
+
+            CALL legendre_axisymmetric_basis(BASIS_LMAX, mu, p, dp_dmu)
+
+            phi_v = 0.0D0;  dphi_dr_v = 0.0D0;  dphi_dmu_v = 0.0D0
+            DO l = 0, BASIS_LMAX, 2
+                phi_l_r     = linear_interp_scalar(BASIS_PHI_L_GRID(l,jlo),     BASIS_PHI_L_GRID(l,jlo+1),     alpha_r)
+                dphi_l_dr_r = linear_interp_scalar(BASIS_DPHI_L_DR_GRID(l,jlo), BASIS_DPHI_L_DR_GRID(l,jlo+1), alpha_r)
+                phi_v      = phi_v      + phi_l_r     * p(l)
+                dphi_dr_v  = dphi_dr_v  + dphi_l_dr_r * p(l)
+                dphi_dmu_v = dphi_dmu_v + phi_l_r     * dp_dmu(l)
+            END DO
+
+            phi_out(i) = phi_v
+            ! a = -grad(phi).  With phi(r,mu), mu=z/r:
+            !   d_phi/dx = phi_r*(x/r) - phi_mu*(z*x/r^3)
+            !   d_phi/dy = phi_r*(y/r) - phi_mu*(z*y/r^3)
+            !   d_phi/dz = phi_r*(z/r) + phi_mu*(R^2/r^3)
+            ax(i) = -dphi_dr_v * x(i)/r_safe + dphi_dmu_v * z(i)*x(i)/r_safe**3
+            ay(i) = -dphi_dr_v * y(i)/r_safe + dphi_dmu_v * z(i)*y(i)/r_safe**3
+            az(i) = -dphi_dr_v * z(i)/r_safe - dphi_dmu_v * R_cyl_sq/r_safe**3
+        END DO
+    END SUBROUTINE axisymmetricbasisexpansion_eval
+
+    SUBROUTINE exponential_oblate_halo(params, N, x, y, z, ax, ay, az, phi)
+        ! Axisymmetric exponential oblate halo:
+        !   rho(R,z) = rho0 * exp(-1/s0 * sqrt(R^2 + z^2/q^2))
+        ! params = [G, rho0, s0, q]
+        !
+        ! On first call (or after clear): if no grid has been set up, auto-
+        ! initializes with defaults (lmax=20, 100 log-spaced points 1e-4..1e3).
+        ! Then projects rho onto Legendre modes and computes potential tables.
+        ! Subsequent calls skip projection and go straight to evaluation.
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN),  DIMENSION(4) :: params
+        REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        REAL*8 :: G, rho0, s0, q
+
+        G    = params(1)
+        rho0 = params(2)
+        s0   = params(3)
+        q    = params(4)
+
+        IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+            IF (.NOT. BASIS_GRID_SET) THEN
+                CALL default_init_basis_expansion(G)
+            END IF
+            CALL project_exponential_oblate_halo(rho0, s0, q)
+            CALL compute_phi_tables_from_rho()
+            BASIS_EXPANSION_INITIALIZED = .TRUE.
+        END IF
+
+        CALL axisymmetricbasisexpansion_eval(N, x, y, z, ax, ay, az, phi)
+    END SUBROUTINE exponential_oblate_halo
 
 end module potentials
 

@@ -8,12 +8,12 @@ Not quite ready yet, but its getting there. Huge thanks to @JoBovy's [python pac
 
 - Tested on Linux systems
 - Started in Jan 2024. 
-- Compatible with Python 3.12 using meson build system
+- Compatible with Python 3.9 to 3.11 using meson build system
 - Cross-platform build via meson
 
 ## Requirements
 
-* Python 3.9+
+* Python 3.9 to 3.11
 * gfortran 11+ (or compatible Fortran compiler)
 * The following Python packages (installed automatically):
   * NumPy 1.20+

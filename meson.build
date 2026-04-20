@@ -70,6 +70,7 @@ endif
 
 
 potentials_sources = [
+    'tstrippy/src/mathutils.f90',
     'tstrippy/src/potentials.f90'
 ]
 potentials_out = 'potentials' + ext_suffix

@@ -76,6 +76,8 @@ MODULE integrator
             milkywaypotential => plummer
         else if (milkywaypotentialname.EQ."longmuralibar") then
             milkywaypotential => longmuralibar
+        else if (milkywaypotentialname.EQ."exponential_oblate_halo") then 
+            milkywaypotential => exponential_oblate_halo
         else
             print*, "ERROR. milkywaypotential not found"
             print*, "the string must be a valid potential name from potentials.f90"

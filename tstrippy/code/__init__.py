@@ -1,6 +1,3 @@
-"""tstrippy/code/__init__.py"""
+"""Helpers implemented in pure Python under ``tstrippy.code``."""
 
-# Import the ergodic module
-from . import ergodic
-
-__all__ = ['ergodic']
+__all__ = ["ergodic", "bfe"]

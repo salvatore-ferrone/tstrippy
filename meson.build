@@ -117,6 +117,7 @@ integrator_build = custom_target('integrator',
 py.install_sources(
     files(
         'tstrippy/__init__.py',
+        'tstrippy/bfe.py',
     ),
     subdir: python_install_subdir
 )
@@ -140,6 +141,7 @@ py.install_sources(
 py.install_sources(
     files(
         'tstrippy/code/__init__.py',
+        'tstrippy/code/bfe.py',
         'tstrippy/code/ergodic.py',
     ),
     subdir: python_install_subdir / 'code'

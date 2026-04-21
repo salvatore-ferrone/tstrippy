@@ -2,13 +2,12 @@
 TIDAL-STRIPPING-PYTHON
 ./tstrippy/__init__.py
 """
+from importlib import import_module
+
 # Import the Fortran modules and move them to the top level
 from .lib.integrator import integrator
 from .lib.potentials import potentials
 from .lib.mathutils import mathutils
-
-# Import the ergodic module and make it available at the top level
-from .code import ergodic
 
 # Import Parsers module
 from . import Parsers
@@ -19,7 +18,8 @@ __all__ = [
     'potentials',
     'Parsers',
     'ergodic',
-    'mathutils'
+    'mathutils',
+    'bfe',
 ]
 
 # Check for Fortran compiler
@@ -35,6 +35,14 @@ def _check_fortran_compiler():
         )
 
 _check_fortran_compiler()
+
+
+def __getattr__(name):
+    if name == 'ergodic':
+        return import_module('.code.ergodic', __name__)
+    if name == 'bfe':
+        return import_module('.bfe', __name__)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # delete subprocess and warnings
 del subprocess, warnings 

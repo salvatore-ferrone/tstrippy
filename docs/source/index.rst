@@ -51,3 +51,9 @@ This documentation is organized into three sections:
 
    stream_generation.ipynb
    bar_stream_example.ipynb
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Potential model verification
+
+   basis_expansion_verification.ipynb

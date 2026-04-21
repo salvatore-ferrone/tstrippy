@@ -5,6 +5,7 @@ TIDAL-STRIPPING-PYTHON
 # Import the Fortran modules and move them to the top level
 from .lib.integrator import integrator
 from .lib.potentials import potentials
+from .lib.mathutils import mathutils
 
 # Import the ergodic module and make it available at the top level
 from .code import ergodic
@@ -18,6 +19,7 @@ __all__ = [
     'potentials',
     'Parsers',
     'ergodic',
+    'mathutils'
 ]
 
 # Check for Fortran compiler

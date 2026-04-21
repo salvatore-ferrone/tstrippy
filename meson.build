@@ -67,7 +67,18 @@ if host_machine.system() == 'darwin'
     fc_env.set('LDFLAGS', '-Wl,-no_compact_unwind')
 endif
 
-
+mathutils_sources = [
+    'tstrippy/src/mathutils.f90',
+]
+mathutils_out = 'mathutils' + ext_suffix
+mathutils_build = custom_target('mathutils',
+    output:mathutils_out,
+    input: mathutils_sources,
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils'],
+    env: fc_env,
+    install: true,
+    install_dir: module_install_dir
+    )
 
 potentials_sources = [
     'tstrippy/src/mathutils.f90',

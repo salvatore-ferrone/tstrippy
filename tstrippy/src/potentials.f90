@@ -22,6 +22,7 @@ MODULE potentials
     PRIVATE :: project_exponential_oblate_halo
     PRIVATE :: compute_phi_tables_from_rho
     PRIVATE :: axisymmetricbasisexpansion_eval
+    PRIVATE :: project_ibata2024halo
 
     CONTAINS
     SUBROUTINE initaxisymmetricbasisexpansion(G, lmax, nr, r_grid)
@@ -571,6 +572,81 @@ MODULE potentials
 
         CALL axisymmetricbasisexpansion_eval(N, x, y, z, ax, ay, az, phi)
     END SUBROUTINE exponential_oblate_halo
+
+
+    SUBROUTINE project_ibata2024halo(rho0, r0, rt, q, gamma, beta)
+        ! Project
+        ! rho(s) = rho0 * (s/r0)^(-gamma) * (1 + s/r0)^(gamma-beta) * exp(-(s/rt)^2)
+        ! with s = r * sqrt(1 - eta*mu^2), eta = 1 - 1/q^2
+        ! onto even-l Legendre modes, filling BASIS_RHO_L_GRID.
+        IMPLICIT NONE
+        REAL*8, INTENT(IN) :: rho0, r0, rt, q, gamma, beta
+        INTEGER :: n_mu, i_r, l, k
+        REAL*8, ALLOCATABLE :: mu_q(:), w_q(:), p(:)
+        REAL*8 :: mu, rho_val, eta, factor, s, x
+        REAL*8, PARAMETER :: s_floor = 1.0D-12
+
+        n_mu = MAX(4 * (BASIS_LMAX + 1), 40)
+        ALLOCATE(mu_q(n_mu), w_q(n_mu), p(0:BASIS_LMAX))
+        CALL gauss_legendre_nodes_weights(n_mu, mu_q, w_q)
+
+        eta = 1.0D0 - 1.0D0 / (q * q)
+
+        BASIS_RHO_L_GRID = 0.0D0
+        DO i_r = 1, BASIS_NR
+            DO k = 1, n_mu
+                mu = mu_q(k)
+
+                s = BASIS_R_GRID(i_r) * SQRT(MAX(1.0D0 - eta*mu*mu, 0.0D0))
+                x = MAX(s / r0, s_floor)
+
+                rho_val = rho0 * x**(-gamma) * (1.0D0 + x)**(gamma - beta) * EXP(-(s/rt)**2)
+
+                CALL legendre_p_all_axisymmetric(BASIS_LMAX, mu, p)
+                DO l = 0, BASIS_LMAX, 2
+                    factor = (2*l + 1) * 0.5D0 * w_q(k)
+                    BASIS_RHO_L_GRID(l, i_r) = BASIS_RHO_L_GRID(l, i_r) + factor * rho_val * p(l)
+                END DO
+            END DO
+        END DO
+
+        DEALLOCATE(mu_q, w_q, p)
+    END SUBROUTINE project_ibata2024halo    
+
+    SUBROUTINE ibata2024halo(params, N, x, y, z, ax, ay, az, phi)
+        ! Axisymmetric Ibata-like halo:
+        ! rho(s) = rho0 * (s/r0)^(-gamma) * (1 + s/r0)^(gamma-beta) * exp(-(s/rt)^2)
+        ! s = sqrt(R^2 + z^2/q^2), R^2 = x^2 + y^2
+        !
+        ! params = [G, rho0, r0, rt, q, gamma, beta]
+        !
+        ! Same initialization logic as exponential_oblate_halo.
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN),  DIMENSION(7) :: params
+        REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        REAL*8 :: G, rho0, r0, rt, q, gamma, beta
+
+        G     = params(1)
+        rho0  = params(2)
+        r0    = params(3)
+        rt    = params(4)
+        q     = params(5)
+        gamma = params(6)
+        beta  = params(7)
+
+        IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+            IF (.NOT. BASIS_GRID_SET) THEN
+                CALL default_init_basis_expansion(G)
+            END IF
+            CALL project_ibata2024halo(rho0, r0, rt, q, gamma, beta)
+            CALL compute_phi_tables_from_rho()
+            BASIS_EXPANSION_INITIALIZED = .TRUE.
+        END IF
+
+        CALL axisymmetricbasisexpansion_eval(N, x, y, z, ax, ay, az, phi)
+    END SUBROUTINE ibata2024halo
 
 end module potentials
 

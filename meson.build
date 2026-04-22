@@ -131,8 +131,9 @@ py.install_sources(
 py.install_sources(
     files(
         'tstrippy/io/__init__.py',
-        'tstrippy/io/baumgardtMWGCs.py',    
+        'tstrippy/io/baumgardt_gcs.py',    
         'tstrippy/io/potential_parameters.py',
+        'tstrippy/io/reference_frames.py',
     ),
     subdir: python_install_subdir / 'io'
 )
@@ -150,7 +151,7 @@ py.install_sources(
 # And data files
 install_data(
     files('tstrippy/data/2023-03-28-merged.fits',
-          'tstrippy/data/MWrefframe001.yaml',
+          'tstrippy/data/MWrefframeFerrone2023.yaml',
           'tstrippy/data/pouliasis2017pii.yaml',
           'tstrippy/data/unit_basis.yaml'),
     install_dir: python_install_subdir / 'data'

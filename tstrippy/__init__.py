@@ -18,9 +18,10 @@ __all__ = [
     'potentials',
     'mathutils',
     'io',
-    'sampling',
+    'code',
     'bfe',
-    "orbits"
+    'sampling',
+    'orbits',
 ]
 
 # Check for Fortran compiler
@@ -39,6 +40,8 @@ _check_fortran_compiler()
 
 
 def __getattr__(name):
+    if name == 'code':
+        return import_module('.code', __name__)
     if name == 'bfe':
         return import_module('.code.bfe', __name__)
     if name == 'sampling':
@@ -46,6 +49,10 @@ def __getattr__(name):
     if name == 'orbits':
         return import_module('.code.orbits', __name__)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted(set(globals()) | set(__all__))
 
 # delete subprocess and warnings
 del subprocess, warnings 

@@ -17,7 +17,7 @@ absolute_path_to_cluster_data = path_to_cluster_data.resolve()
 
 
 
-class baumgardtMWGCs:
+class baumgardt_gcs:
     """
     A class to handle data from the Baumgardt Milky Way Globular Clusters (MWGCs).
 

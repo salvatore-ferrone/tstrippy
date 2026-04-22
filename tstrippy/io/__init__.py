@@ -1,6 +1,6 @@
 """tstrippy/io/__init__.py"""
-from .baumgardtMWGCs import *
-from .potential_parameters import *
+from . import baumgardt_gcs
+from . import potential_parameters
+from . import referenceFrames
 
-# Define what is available under tstrippy.Parsers
-__all__ = ["baumgardtMWGCs", "potential_parameters"]
+__all__ = ["baumgardt_gcs", "potential_parameters", "referenceFrames"]

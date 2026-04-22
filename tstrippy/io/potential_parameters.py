@@ -21,23 +21,7 @@ with open(absolute_path_to_unit_basis, 'r') as basis:
         print(exc)
 G=const.G.to(unitbasis['G']).value
 
-def MWreferenceframe():
-    from astropy import coordinates
-    from astropy import units as u
-    path_to_frame= path_to_data / "MWrefframe001.yaml"
-    absolute_path_to_frame = path_to_frame.resolve()
-    with open(absolute_path_to_frame, 'r') as frame:
-        try:
-            frame_data = yaml.safe_load(frame)
-        except yaml.YAMLError as exc:
-            print(exc)
-        galcen_distance=frame_data['value']['galcen_distance']*u.Unit(frame_data['unit']['galcen_distance'])
-        z_sun   =   frame_data['value']['z_sun']    *   u.Unit(frame_data['unit']['z_sun'])
-        vSun    =   frame_data['value']['vSun']     *   u.Unit(frame_data['unit']['vSun'])
-        vLSR    =   frame_data['value']['vLSR']     *   u.Unit(frame_data['unit']['vLSR'])
-    return coordinates.Galactocentric(galcen_distance = galcen_distance, galcen_v_sun=vLSR+vSun, z_sun=z_sun)
-        
-    
+            
 def pouliasis2017pii():
     path_to_potential = path_to_data / "pouliasis2017pii.yaml"
     absolute_path_to_potential = path_to_potential.resolve()

@@ -1,6 +1,5 @@
 """
-A broad module for generating initial conditions and basic post-processing
-
+A broad helper module for aiding with construcing orbits and the like
 """
 
 import numpy as np 

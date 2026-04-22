@@ -117,7 +117,6 @@ integrator_build = custom_target('integrator',
 py.install_sources(
     files(
         'tstrippy/__init__.py',
-        'tstrippy/bfe.py',
     ),
     subdir: python_install_subdir
 )
@@ -131,18 +130,19 @@ py.install_sources(
 
 py.install_sources(
     files(
-        'tstrippy/Parsers/__init__.py',
-        'tstrippy/Parsers/baumgardtMWGCs.py',    
-        'tstrippy/Parsers/potential_parameters.py',
+        'tstrippy/io/__init__.py',
+        'tstrippy/io/baumgardtMWGCs.py',    
+        'tstrippy/io/potential_parameters.py',
     ),
-    subdir: python_install_subdir / 'Parsers'
+    subdir: python_install_subdir / 'io'
 )
 
 py.install_sources(
     files(
         'tstrippy/code/__init__.py',
         'tstrippy/code/bfe.py',
-        'tstrippy/code/ergodic.py',
+        'tstrippy/code/sampling.py',
+        'tstrippy/code/orbits.py',
     ),
     subdir: python_install_subdir / 'code'
 )

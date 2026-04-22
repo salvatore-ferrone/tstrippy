@@ -10,17 +10,17 @@ from .lib.potentials import potentials
 from .lib.mathutils import mathutils
 
 # Import Parsers module
-from . import Parsers
+from . import io
 
 # Define what's available at the top level
 __all__ = [
     'integrator',
     'potentials',
-    'Parsers',
-    'ergodic',
     'mathutils',
+    'io',
+    'sampling',
     'bfe',
-    "stream_dynamics"
+    "orbits"
 ]
 
 # Check for Fortran compiler
@@ -39,12 +39,12 @@ _check_fortran_compiler()
 
 
 def __getattr__(name):
-    if name == 'ergodic':
-        return import_module('.code.ergodic', __name__)
     if name == 'bfe':
-        return import_module('.bfe', __name__)
-    if name == "stream_dynamics":
-        return import_module('.code.stream_dynamics', __name__)
+        return import_module('.code.bfe', __name__)
+    if name == 'sampling':
+        return import_module('.code.sampling', __name__)
+    if name == 'orbits':
+        return import_module('.code.orbits', __name__)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # delete subprocess and warnings

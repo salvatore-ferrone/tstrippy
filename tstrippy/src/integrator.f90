@@ -2,10 +2,33 @@ MODULE integrator
     ! this integrator needs to contain the current positions
     ! it needs to be able to apply any force that I want at any time
     ! it needs to be able to integrate the positions and velocities
-    use potentials
-    use perturbers
-    use hostperturber
-    use galacticbar
+    use potentials, ONLY: pot_clear_basis          => clearaxisymmetricbasisexpansion, &
+                          pot_init_basis           => initaxisymmetricbasisexpansion,  &
+                          pot_model_pouliasis2017  => pouliasis2017PII,                &
+                          pot_model_miyamoto_nagai => miyamotonagai,                   &
+                          pot_model_allen_santillan=> allensantillianhalo,             &
+                          pot_model_plummer        => plummer,                         &
+                          pot_model_long_murai_bar => longmuralibar,                   &
+                          pot_model_exp_oblate_halo=> exponential_oblate_halo,         &
+                          pot_nbody_plummers       => NBODYPLUMMERS
+    use perturbers, ONLY: pert_init          => perturberinitialization, &
+                          pert_deallocate    => perturberdeallocation,   &
+                          pert_find_time_idx => findperturbertimeindex,  &
+                          pert_compute_force => computeforcebyperturbers
+    use hostperturber, ONLY: host_init_kinematics_mod => host_init_kinematics, &
+                             host_init_mass_mod       => host_init_mass,       &
+                             host_init_radius_mod     => host_init_radius,     &
+                             host_deallocate_mod      => hostdeallocation,     &
+                             host_find_time_idx       => findhosttimeindex,    &
+                             host_compute_force       => computeforcebyhosts,  &
+                             host_vx_current          => vxhostcurrent,        &
+                             host_vy_current          => vyhostcurrent,        &
+                             host_vz_current          => vzhostcurrent
+    use galacticbar, ONLY: bar_init          => galacticbarinitialization, &
+                          bar_deallocate    => bardeallocation,          &
+                          bar_update        => updatebarorientation,     &
+                          bar_force_eval    => barforce,                 &
+                          bar_angle         => theta
     IMPLICIT NONE
     PRIVATE 
     ! DECLARE SUBROUTINES
@@ -13,7 +36,6 @@ MODULE integrator
     PUBLIC :: setdebugaccelerations, setdebugbarorientation, setbackwardorbit
     PUBLIC :: inithostkinematics, inithostmass, inithostradius
     PUBLIC :: initnbodysystem,initgalacticbar,initperturbers
-    PUBLIC :: velocityverlettofinalpositions, velocityverletintime
     PUBLIC :: leapfrogintime, leapfrogtofinalpositions
     PUBLIC :: ruthforestintime
     PUBLIC :: HIT
@@ -21,6 +43,7 @@ MODULE integrator
     PUBLIC :: initwriteparticleorbits, writeparticleorbits
     PUBLIC :: initwritestream, writestream
     PUBLIC :: deallocate
+    PUBLIC :: clearaxisymmetricbasisexpansion, initaxisymmetricbasisexpansion
     ! DECIDE WHICH PHYSICS TO INCLUDE
     LOGICAL, PUBLIC :: DONBODY = .FALSE.
     LOGICAL, PUBLIC :: DOPERTURBERS = .FALSE.
@@ -67,17 +90,17 @@ MODULE integrator
         REAL*8, DIMENSION(:), intent(in) :: mwparams
         INTEGER :: nparams
         if (milkywaypotentialname.EQ."pouliasis2017pii") then
-            milkywaypotential => pouliasis2017PII
+            milkywaypotential => pot_model_pouliasis2017
         else if (milkywaypotentialname.EQ."miyamotonagai") then
-            milkywaypotential => miyamotonagai
+            milkywaypotential => pot_model_miyamoto_nagai
         else if (milkywaypotentialname.EQ."allensantillianhalo") then
-            milkywaypotential => allensantillianhalo
+            milkywaypotential => pot_model_allen_santillan
         else if (milkywaypotentialname.EQ."plummer") then
-            milkywaypotential => plummer
+            milkywaypotential => pot_model_plummer
         else if (milkywaypotentialname.EQ."longmuralibar") then
-            milkywaypotential => longmuralibar
+            milkywaypotential => pot_model_long_murai_bar
         else if (milkywaypotentialname.EQ."exponential_oblate_halo") then 
-            milkywaypotential => exponential_oblate_halo
+            milkywaypotential => pot_model_exp_oblate_halo
         else
             print*, "ERROR. milkywaypotential not found"
             print*, "the string must be a valid potential name from potentials.f90"
@@ -90,6 +113,18 @@ MODULE integrator
         G = mwparams(1) ! the gravitational constant is now set
     
     END SUBROUTINE setstaticgalaxy
+
+    ! SUBROUTINES FOR MANUALLY SETTING THE BASIS EXPANSION PARAMS
+    SUBROUTINE clearaxisymmetricbasisexpansion()
+        CALL pot_clear_basis()
+    END SUBROUTINE clearaxisymmetricbasisexpansion
+
+    SUBROUTINE initaxisymmetricbasisexpansion(G_in, lmax, nr, r_grid)
+        REAL*8, INTENT(IN) :: G_in
+        INTEGER, INTENT(IN) :: lmax, nr
+        REAL*8, DIMENSION(nr), INTENT(IN) :: r_grid
+        CALL pot_init_basis(G_in, lmax, nr, r_grid)
+    END SUBROUTINE initaxisymmetricbasisexpansion    
 
     SUBROUTINE assert_gravitational_constant_initialized()
         if (G <= 0 ) then
@@ -216,14 +251,14 @@ MODULE integrator
             print*, "       available models are: constant, double_exponential"
             stop
         end if
-        CALL host_init_mass(mass_model, params)
+        CALL host_init_mass_mod(mass_model, params)
 
     END SUBROUTINE inithostmass
 
     subroutine inithostradius(radius)
         ! sets the host radius
         REAL*8, intent(in) :: radius
-        CALL host_init_radius(radius)
+        CALL host_init_radius_mod(radius)
     END SUBROUTINE inithostradius
 
     subroutine inithostkinematics(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH)
@@ -231,7 +266,7 @@ MODULE integrator
         INTEGER, intent(in) :: nhosttimepoints
         real*8, intent(in), dimension(nhosttimepoints) :: timeH,xH,yH,zH,vxH,vyH,vzH
         DOHOSTPERTURBER = .TRUE.
-        CALL host_init_kinematics(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH)
+        CALL host_init_kinematics_mod(nhosttimepoints,timeH,xH,yH,zH,vxH,vyH,vzH)
 
     end subroutine inithostkinematics
 
@@ -240,7 +275,7 @@ MODULE integrator
         real*8, intent(in), dimension(:,:) :: xp,yp,zp
         real*8, intent(in), dimension(:) :: masses,radii
         DOPERTURBERS = .TRUE.
-        CALL perturberinitialization(SIZE(masses,1),SIZE(tp),tp,xp,yp,zp,masses,radii)
+        CALL pert_init(SIZE(masses,1),SIZE(tp),tp,xp,yp,zp,masses,radii)
     END SUBROUTINE initperturbers
 
     SUBROUTINE initgalacticbar(barpotenname,barparams,barpoly)
@@ -248,7 +283,7 @@ MODULE integrator
         character*100, INTENT(IN) :: barpotenname
         REAL*8, DIMENSION(:), intent(in) :: barparams,barpoly
         DOGALACTICBAR = .TRUE.
-        CALL galacticbarinitialization(barpotenname,barparams,barpoly)
+        CALL bar_init(barpotenname,barparams,barpoly)
     END SUBROUTINE initgalacticbar
 
     SUBROUTINE initwritestream(nskip,myoutname,myoutdir,memorybaseint)
@@ -404,9 +439,9 @@ MODULE integrator
         ! check if anyone is unbound 
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
-            vx2host = vxt(:,1)-vxhostcurrent
-            vy2host = vyt(:,1)-vyhostcurrent
-            vz2host = vzt(:,1)-vzhostcurrent
+            vx2host = vxt(:,1)-host_vx_current
+            vy2host = vyt(:,1)-host_vy_current
+            vz2host = vzt(:,1)-host_vz_current
             Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
             ! update the escape time
             isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -435,9 +470,9 @@ MODULE integrator
 
 
             if (DOHOSTPERTURBER) then
-                vx2host = vxt(:,i+1)-vxhostcurrent
-                vy2host = vyt(:,i+1)-vyhostcurrent
-                vz2host = vzt(:,i+1)-vzhostcurrent
+                vx2host = vxt(:,i+1)-host_vx_current
+                vy2host = vyt(:,i+1)-host_vy_current
+                vz2host = vzt(:,i+1)-host_vz_current
                 Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
                 ! update the escape time
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -482,9 +517,9 @@ MODULE integrator
         ! evaluate the potential at the initial positions
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
-            vx2host = vxf-vxhostcurrent
-            vy2host = vyf-vyhostcurrent
-            vz2host = vzf-vzhostcurrent
+            vx2host = vxf-host_vx_current
+            vy2host = vyf-host_vy_current
+            vz2host = vzf-host_vz_current
             Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
             ! update the escape time
             isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -520,9 +555,9 @@ MODULE integrator
 
 
             if (DOHOSTPERTURBER) then
-                vx2host = vxf-vxhostcurrent
-                vy2host = vyf-vyhostcurrent
-                vz2host = vzf-vzhostcurrent
+                vx2host = vxf-host_vx_current
+                vy2host = vyf-host_vy_current
+                vz2host = vzf-host_vz_current
                 Energy = 0.5d0*(vx2host**2+vy2host**2+vz2host**2) + phiHP
                 ! update the escape time
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -615,9 +650,9 @@ MODULE integrator
         
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
-            vx2host = vxf-vxhostcurrent
-            vy2host = vyf-vyhostcurrent
-            vz2host = vzf-vzhostcurrent
+            vx2host = vxf-host_vx_current
+            vy2host = vyf-host_vy_current
+            vz2host = vzf-host_vz_current
             Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
             ! update the escape time
             isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -648,7 +683,7 @@ MODULE integrator
         end if 
 
         IF (DEBUGBARORIENTATION) then
-            bartheta(1) = theta
+            bartheta(1) = bar_angle
         end if
 
         do i=1,nstep
@@ -702,9 +737,9 @@ MODULE integrator
 
             if (DOHOSTPERTURBER) then
                 ! measure the energy of the particles with respect to the host
-                vx2host = vxf-vxhostcurrent
-                vy2host = vyf-vyhostcurrent
-                vz2host = vzf-vzhostcurrent
+                vx2host = vxf-host_vx_current
+                vy2host = vyf-host_vy_current
+                vz2host = vzf-host_vz_current
                 Energy = 0.5*(vx2host**2+vy2host**2+vz2host**2) + phiHP
                 ! update the escape time
                 isescaper=(tesc < TESCTHRESHOLD .and. Energy> 0.0)
@@ -733,7 +768,7 @@ MODULE integrator
             end if 
 
             IF (DEBUGBARORIENTATION) then
-                bartheta(i+1) = theta
+                bartheta(i+1) = bar_angle
             end if
         end do
 
@@ -774,22 +809,22 @@ MODULE integrator
         end if
 
         if (DOHOSTPERTURBER) then
-            CALL findhosttimeindex(currenttime)
-            call computeforcebyhosts(nparticles,G,x,y,z,axHP,ayHP,azHP,phiHP)
+            CALL host_find_time_idx(currenttime)
+            call host_compute_force(nparticles,G,x,y,z,axHP,ayHP,azHP,phiHP)
         end if
 
         if (DOPERTURBERS) then
-            call findperturbertimeindex(currenttime)
-            call computeforcebyperturbers(nparticles,G,x,y,z,axP,ayP,azP,phiP)
+            call pert_find_time_idx(currenttime)
+            call pert_compute_force(nparticles,G,x,y,z,axP,ayP,azP,phiP)
         end if
 
         if (DONBODY) then
-            call NBODYPLUMMERS(nbodyparams,nparticles,x,y,z,axNBODY,ayNBODY,azNBODY,phiTensor)
+            call pot_nbody_plummers(nbodyparams,nparticles,x,y,z,axNBODY,ayNBODY,azNBODY,phiTensor)
         end if
 
         if (DOGALACTICBAR) then
-            CALL updatebarorientation(currenttime)
-            call barforce(nparticles,x,y,z,axBAR,ayBAR,azBAR,phiBAR)
+            CALL bar_update(currenttime)
+            call bar_force_eval(nparticles,x,y,z,axBAR,ayBAR,azBAR,phiBAR)
         end if
 
         if (DEBUGACCELERATIONS.eqv..TRUE.) then 
@@ -853,17 +888,17 @@ MODULE integrator
         END IF 
         
         if (DOHOSTPERTURBER) then
-            CALL hostdeallocation
+            CALL host_deallocate_mod
             DOHOSTPERTURBER=.FALSE.
         end if
         
         IF (DOPERTURBERS) then
-            CALL perturberdeallocation
+            CALL pert_deallocate
             DOPERTURBERS=.FALSE.
         end if
 
         if (DOGALACTICBAR) THEN
-            CALL bardeallocation
+            CALL bar_deallocate
             DOGALACTICBAR=.FALSE.
         end if 
 

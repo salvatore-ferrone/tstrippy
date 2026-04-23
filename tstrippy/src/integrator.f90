@@ -10,6 +10,7 @@ MODULE integrator
                           pot_model_plummer        => plummer,                         &
                           pot_model_long_murai_bar => longmuralibar,                   &
                           pot_model_exp_oblate_halo=> exponential_oblate_halo,         &
+                          pot_model_ibata2024halo  => ibata2024halo,                   &
                           pot_nbody_plummers       => NBODYPLUMMERS
     use perturbers, ONLY: pert_init          => perturberinitialization, &
                           pert_deallocate    => perturberdeallocation,   &
@@ -101,6 +102,8 @@ MODULE integrator
             milkywaypotential => pot_model_long_murai_bar
         else if (milkywaypotentialname.EQ."exponential_oblate_halo") then 
             milkywaypotential => pot_model_exp_oblate_halo
+        else if (milkywaypotentialname.EQ."ibata2024halo") then 
+            milkywaypotential => pot_model_ibata2024halo
         else
             print*, "ERROR. milkywaypotential not found"
             print*, "the string must be a valid potential name from potentials.f90"

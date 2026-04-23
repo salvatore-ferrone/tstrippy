@@ -6,6 +6,8 @@ MODULE mathutils
     PUBLIC :: legendre_dp_dmu_all_axisymmetric
     PUBLIC :: legendre_axisymmetric_basis
     PUBLIC :: gauss_legendre_nodes_weights
+    PUBLIC :: bessel_j0_scalar
+    PUBLIC :: bessel_j1_scalar
 
     CONTAINS
 
@@ -118,5 +120,19 @@ MODULE mathutils
             weights(n+1-i) = weights(i)
         END DO
     END SUBROUTINE gauss_legendre_nodes_weights
+
+    FUNCTION bessel_j0_scalar(x) RESULT(y)
+        ! Wrapper around compiler intrinsic BESSEL_J0.
+        REAL*8, INTENT(IN) :: x
+        REAL*8 :: y
+        y = BESSEL_J0(x)
+    END FUNCTION bessel_j0_scalar
+
+    FUNCTION bessel_j1_scalar(x) RESULT(y)
+        ! Wrapper around compiler intrinsic BESSEL_J1.
+        REAL*8, INTENT(IN) :: x
+        REAL*8 :: y
+        y = BESSEL_J1(x)
+    END FUNCTION bessel_j1_scalar
 
 END MODULE mathutils

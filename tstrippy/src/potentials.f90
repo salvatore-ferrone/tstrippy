@@ -1,6 +1,7 @@
 MODULE potentials
     USE mathutils, ONLY: linear_interp_scalar, legendre_axisymmetric_basis, &
-                         legendre_p_all_axisymmetric, gauss_legendre_nodes_weights
+                         legendre_p_all_axisymmetric, gauss_legendre_nodes_weights, &
+                         bessel_j0_scalar, bessel_j1_scalar
     IMPLICIT NONE
 
     ! Axisymmetric basis-expansion tables (l-mode by radial grid index).
@@ -17,12 +18,39 @@ MODULE potentials
     REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: BASIS_PHI_L_GRID
     REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: BASIS_DPHI_L_DR_GRID
 
+    ! Composite BFE manager state.
+    INTEGER, PARAMETER, PUBLIC :: BFE_KIND_NONE = 0
+    INTEGER, PARAMETER, PUBLIC :: BFE_KIND_LEGENDRE = 1
+    INTEGER, PARAMETER, PUBLIC :: BFE_KIND_BESSEL_DISK = 2
+
+    LOGICAL, PUBLIC :: COMPOSITE_BASIS_GRID_SET = .FALSE.
+    LOGICAL, PUBLIC :: COMPOSITE_BASIS_FINALIZED = .FALSE.
+    INTEGER, PUBLIC :: COMPOSITE_NCOMP = 0
+    INTEGER, PUBLIC :: COMPOSITE_LMAX = -1
+    INTEGER, PUBLIC :: COMPOSITE_NR = -1
+    REAL*8, PUBLIC :: COMPOSITE_G = -1.0D0
+
+    INTEGER, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_KIND
+    LOGICAL, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_READY
+
+    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_R_GRID
+    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_RHO_L_GRID
+    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_PHI_L_GRID
+    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DPHI_L_DR_GRID
+
+    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_SIGMA0
+    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_HR
+    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_HZ
+
     ! Private internal routines (not exposed to Python/caller)
     PRIVATE :: default_init_basis_expansion
     PRIVATE :: project_exponential_oblate_halo
     PRIVATE :: compute_phi_tables_from_rho
     PRIVATE :: axisymmetricbasisexpansion_eval
     PRIVATE :: project_ibata2024halo
+    PRIVATE :: compute_phi_tables_from_rho_component
+    PRIVATE :: axisymmetricbasisexpansion_eval_component
+    PRIVATE :: bessel_disk_eval_component
 
     CONTAINS
     SUBROUTINE initaxisymmetricbasisexpansion(G, lmax, nr, r_grid)
@@ -69,6 +97,213 @@ MODULE potentials
         BASIS_NR   = -1
         BASIS_G    = -1.0D0
     END SUBROUTINE clearaxisymmetricbasisexpansion
+
+    SUBROUTINE clearcompositebasis()
+        IMPLICIT NONE
+
+        IF (ALLOCATED(COMPOSITE_KIND))            DEALLOCATE(COMPOSITE_KIND)
+        IF (ALLOCATED(COMPOSITE_READY))           DEALLOCATE(COMPOSITE_READY)
+        IF (ALLOCATED(COMPOSITE_R_GRID))          DEALLOCATE(COMPOSITE_R_GRID)
+        IF (ALLOCATED(COMPOSITE_RHO_L_GRID))      DEALLOCATE(COMPOSITE_RHO_L_GRID)
+        IF (ALLOCATED(COMPOSITE_PHI_L_GRID))      DEALLOCATE(COMPOSITE_PHI_L_GRID)
+        IF (ALLOCATED(COMPOSITE_DPHI_L_DR_GRID))  DEALLOCATE(COMPOSITE_DPHI_L_DR_GRID)
+        IF (ALLOCATED(COMPOSITE_DISK_SIGMA0))     DEALLOCATE(COMPOSITE_DISK_SIGMA0)
+        IF (ALLOCATED(COMPOSITE_DISK_HR))         DEALLOCATE(COMPOSITE_DISK_HR)
+        IF (ALLOCATED(COMPOSITE_DISK_HZ))         DEALLOCATE(COMPOSITE_DISK_HZ)
+
+        COMPOSITE_BASIS_GRID_SET = .FALSE.
+        COMPOSITE_BASIS_FINALIZED = .FALSE.
+        COMPOSITE_NCOMP = 0
+        COMPOSITE_LMAX = -1
+        COMPOSITE_NR = -1
+        COMPOSITE_G = -1.0D0
+    END SUBROUTINE clearcompositebasis
+
+    SUBROUTINE initcompositebasis(G, lmax, nr, r_grid, ncomp)
+        IMPLICIT NONE
+        REAL*8, INTENT(IN) :: G
+        INTEGER, INTENT(IN) :: lmax, nr, ncomp
+        REAL*8, INTENT(IN), DIMENSION(nr) :: r_grid
+
+        CALL clearcompositebasis()
+
+        ALLOCATE(COMPOSITE_KIND(ncomp), COMPOSITE_READY(ncomp))
+        ALLOCATE(COMPOSITE_R_GRID(nr))
+        ALLOCATE(COMPOSITE_RHO_L_GRID(0:lmax, nr, ncomp))
+        ALLOCATE(COMPOSITE_PHI_L_GRID(0:lmax, nr, ncomp))
+        ALLOCATE(COMPOSITE_DPHI_L_DR_GRID(0:lmax, nr, ncomp))
+        ALLOCATE(COMPOSITE_DISK_SIGMA0(ncomp), COMPOSITE_DISK_HR(ncomp), COMPOSITE_DISK_HZ(ncomp))
+
+        COMPOSITE_KIND = BFE_KIND_NONE
+        COMPOSITE_READY = .FALSE.
+        COMPOSITE_RHO_L_GRID = 0.0D0
+        COMPOSITE_PHI_L_GRID = 0.0D0
+        COMPOSITE_DPHI_L_DR_GRID = 0.0D0
+        COMPOSITE_DISK_SIGMA0 = 0.0D0
+        COMPOSITE_DISK_HR = 0.0D0
+        COMPOSITE_DISK_HZ = 0.0D0
+
+        COMPOSITE_G = G
+        COMPOSITE_LMAX = lmax
+        COMPOSITE_NR = nr
+        COMPOSITE_NCOMP = ncomp
+        COMPOSITE_R_GRID = r_grid
+        COMPOSITE_BASIS_GRID_SET = .TRUE.
+        COMPOSITE_BASIS_FINALIZED = .FALSE.
+    END SUBROUTINE initcompositebasis
+
+    SUBROUTINE addcompositeexponentialoblate(component_index, rho0, s0, q)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: component_index
+        REAL*8, INTENT(IN) :: rho0, s0, q
+        INTEGER :: n_mu, i_r, l, k
+        REAL*8, ALLOCATABLE :: mu_q(:), w_q(:), p(:)
+        REAL*8 :: mu, rho_val, eta, factor
+
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initcompositebasis must be called before addcompositeexponentialoblate"
+        IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) STOP "invalid composite component_index"
+
+        n_mu = MAX(4 * (COMPOSITE_LMAX + 1), 40)
+        ALLOCATE(mu_q(n_mu), w_q(n_mu), p(0:COMPOSITE_LMAX))
+        CALL gauss_legendre_nodes_weights(n_mu, mu_q, w_q)
+
+        eta = 1.0D0 - 1.0D0 / (q * q)
+        COMPOSITE_RHO_L_GRID(:,:,component_index) = 0.0D0
+        DO i_r = 1, COMPOSITE_NR
+            DO k = 1, n_mu
+                mu = mu_q(k)
+                rho_val = rho0 * EXP(-COMPOSITE_R_GRID(i_r) / s0 * SQRT(MAX(1.0D0 - eta*mu*mu, 0.0D0)))
+                CALL legendre_p_all_axisymmetric(COMPOSITE_LMAX, mu, p)
+                DO l = 0, COMPOSITE_LMAX, 2
+                    factor = (2*l + 1) * 0.5D0 * w_q(k)
+                    COMPOSITE_RHO_L_GRID(l, i_r, component_index) = COMPOSITE_RHO_L_GRID(l, i_r, component_index) + factor * rho_val * p(l)
+                END DO
+            END DO
+        END DO
+        DEALLOCATE(mu_q, w_q, p)
+
+        CALL compute_phi_tables_from_rho_component(COMPOSITE_R_GRID, COMPOSITE_G, &
+            COMPOSITE_RHO_L_GRID(:,:,component_index), COMPOSITE_PHI_L_GRID(:,:,component_index), &
+            COMPOSITE_DPHI_L_DR_GRID(:,:,component_index))
+
+        COMPOSITE_KIND(component_index) = BFE_KIND_LEGENDRE
+        COMPOSITE_READY(component_index) = .TRUE.
+        COMPOSITE_BASIS_FINALIZED = .FALSE.
+    END SUBROUTINE addcompositeexponentialoblate
+
+    SUBROUTINE addcompositeibata2024(component_index, rho0, r0, rt, q, gamma, beta)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: component_index
+        REAL*8, INTENT(IN) :: rho0, r0, rt, q, gamma, beta
+        INTEGER :: n_mu, i_r, l, k
+        REAL*8, ALLOCATABLE :: mu_q(:), w_q(:), p(:)
+        REAL*8 :: mu, rho_val, eta, factor, s, x
+        REAL*8, PARAMETER :: s_floor = 1.0D-12
+
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initcompositebasis must be called before addcompositeibata2024"
+        IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) STOP "invalid composite component_index"
+
+        n_mu = MAX(4 * (COMPOSITE_LMAX + 1), 40)
+        ALLOCATE(mu_q(n_mu), w_q(n_mu), p(0:COMPOSITE_LMAX))
+        CALL gauss_legendre_nodes_weights(n_mu, mu_q, w_q)
+
+        eta = 1.0D0 - 1.0D0 / (q * q)
+        COMPOSITE_RHO_L_GRID(:,:,component_index) = 0.0D0
+        DO i_r = 1, COMPOSITE_NR
+            DO k = 1, n_mu
+                mu = mu_q(k)
+                s = COMPOSITE_R_GRID(i_r) * SQRT(MAX(1.0D0 - eta*mu*mu, 0.0D0))
+                x = MAX(s / r0, s_floor)
+                rho_val = rho0 * x**(-gamma) * (1.0D0 + x)**(gamma - beta) * EXP(-(s/rt)**2)
+                CALL legendre_p_all_axisymmetric(COMPOSITE_LMAX, mu, p)
+                DO l = 0, COMPOSITE_LMAX, 2
+                    factor = (2*l + 1) * 0.5D0 * w_q(k)
+                    COMPOSITE_RHO_L_GRID(l, i_r, component_index) = COMPOSITE_RHO_L_GRID(l, i_r, component_index) + factor * rho_val * p(l)
+                END DO
+            END DO
+        END DO
+        DEALLOCATE(mu_q, w_q, p)
+
+        CALL compute_phi_tables_from_rho_component(COMPOSITE_R_GRID, COMPOSITE_G, &
+            COMPOSITE_RHO_L_GRID(:,:,component_index), COMPOSITE_PHI_L_GRID(:,:,component_index), &
+            COMPOSITE_DPHI_L_DR_GRID(:,:,component_index))
+
+        COMPOSITE_KIND(component_index) = BFE_KIND_LEGENDRE
+        COMPOSITE_READY(component_index) = .TRUE.
+        COMPOSITE_BASIS_FINALIZED = .FALSE.
+    END SUBROUTINE addcompositeibata2024
+
+    SUBROUTINE addcompositebesseldisk(component_index, sigma0, hR, hZ)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: component_index
+        REAL*8, INTENT(IN) :: sigma0, hR, hZ
+
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initcompositebasis must be called before addcompositebesseldisk"
+        IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) STOP "invalid composite component_index"
+        IF (hR <= 0.0D0 .OR. hZ <= 0.0D0) STOP "hR and hZ must be positive"
+
+        COMPOSITE_DISK_SIGMA0(component_index) = sigma0
+        COMPOSITE_DISK_HR(component_index) = hR
+        COMPOSITE_DISK_HZ(component_index) = hZ
+        COMPOSITE_KIND(component_index) = BFE_KIND_BESSEL_DISK
+        COMPOSITE_READY(component_index) = .TRUE.
+        COMPOSITE_BASIS_FINALIZED = .FALSE.
+    END SUBROUTINE addcompositebesseldisk
+
+    SUBROUTINE finalizecompositebasis()
+        IMPLICIT NONE
+        INTEGER :: i
+
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initcompositebasis must be called before finalizecompositebasis"
+        DO i = 1, COMPOSITE_NCOMP
+            IF (.NOT. COMPOSITE_READY(i)) STOP "all composite components must be configured before finalizecompositebasis"
+        END DO
+        COMPOSITE_BASIS_FINALIZED = .TRUE.
+    END SUBROUTINE finalizecompositebasis
+
+    SUBROUTINE compositebasispotential(params, N, x, y, z, ax, ay, az, phi)
+        ! Evaluate all configured composite basis components and sum their forces.
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(*) :: params
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        REAL*8, ALLOCATABLE :: ax_comp(:), ay_comp(:), az_comp(:), phi_comp(:)
+        INTEGER :: i
+
+        ax = 0.0D0
+        ay = 0.0D0
+        az = 0.0D0
+        phi = 0.0D0
+
+        IF (.NOT. COMPOSITE_BASIS_FINALIZED) STOP "finalizecompositebasis must be called before compositebasispotential"
+
+        ALLOCATE(ax_comp(N), ay_comp(N), az_comp(N), phi_comp(N))
+        DO i = 1, COMPOSITE_NCOMP
+            ax_comp = 0.0D0
+            ay_comp = 0.0D0
+            az_comp = 0.0D0
+            phi_comp = 0.0D0
+
+            SELECT CASE (COMPOSITE_KIND(i))
+            CASE (BFE_KIND_LEGENDRE)
+                CALL axisymmetricbasisexpansion_eval_component(N, x, y, z, COMPOSITE_R_GRID, &
+                    COMPOSITE_PHI_L_GRID(:,:,i), COMPOSITE_DPHI_L_DR_GRID(:,:,i), &
+                    ax_comp, ay_comp, az_comp, phi_comp)
+            CASE (BFE_KIND_BESSEL_DISK)
+                CALL bessel_disk_eval_component(N, x, y, z, COMPOSITE_G, COMPOSITE_DISK_SIGMA0(i), &
+                    COMPOSITE_DISK_HR(i), COMPOSITE_DISK_HZ(i), ax_comp, ay_comp, az_comp, phi_comp)
+            CASE DEFAULT
+                STOP "unknown component kind in compositebasispotential"
+            END SELECT
+
+            ax = ax + ax_comp
+            ay = ay + ay_comp
+            az = az + az_comp
+            phi = phi + phi_comp
+        END DO
+        DEALLOCATE(ax_comp, ay_comp, az_comp, phi_comp)
+    END SUBROUTINE compositebasispotential
 
     SUBROUTINE hernquist(params,N,x,y,z,ax,ay,az,phi)
         ! Hernquist potential
@@ -539,6 +774,186 @@ MODULE potentials
             az(i) = -dphi_dr_v * z(i)/r_safe - dphi_dmu_v * R_cyl_sq/r_safe**3
         END DO
     END SUBROUTINE axisymmetricbasisexpansion_eval
+
+    SUBROUTINE compute_phi_tables_from_rho_component(r_grid, G, rho_l_grid, phi_l_grid, dphi_l_dr_grid)
+        IMPLICIT NONE
+        REAL*8, INTENT(IN), DIMENSION(:) :: r_grid
+        REAL*8, INTENT(IN) :: G
+        REAL*8, INTENT(IN), DIMENSION(:,:) :: rho_l_grid
+        REAL*8, INTENT(OUT), DIMENSION(:,:) :: phi_l_grid, dphi_l_dr_grid
+        REAL*8, PARAMETER :: pi_phi = 3.14159265358979323846D0
+        INTEGER :: l, i, l_lo, l_hi, nr
+        REAL*8  :: prefactor, r_lo, r_hi, f_lo, f_hi, dr
+        REAL*8, ALLOCATABLE :: I_less(:), I_greater(:)
+
+        nr = SIZE(r_grid)
+        l_lo = LBOUND(rho_l_grid, 1)
+        l_hi = UBOUND(rho_l_grid, 1)
+
+        ALLOCATE(I_less(nr), I_greater(nr))
+
+        DO l = l_lo, l_hi, 2
+            prefactor = -4.0D0 * pi_phi * G / DBLE(2*l + 1)
+
+            I_less(1) = 0.0D0
+            DO i = 2, nr
+                r_lo = r_grid(i-1);  r_hi = r_grid(i)
+                f_lo = r_lo**(l+2) * rho_l_grid(l, i-1)
+                f_hi = r_hi**(l+2) * rho_l_grid(l, i)
+                I_less(i) = I_less(i-1) + 0.5D0 * (r_hi - r_lo) * (f_lo + f_hi)
+            END DO
+
+            I_greater(nr) = 0.0D0
+            DO i = nr-1, 1, -1
+                r_lo = r_grid(i);  r_hi = r_grid(i+1)
+                f_lo = r_lo**(1-l) * rho_l_grid(l, i)
+                f_hi = r_hi**(1-l) * rho_l_grid(l, i+1)
+                dr = r_hi - r_lo
+                I_greater(i) = I_greater(i+1) + 0.5D0 * dr * (f_lo + f_hi)
+            END DO
+
+            DO i = 1, nr
+                phi_l_grid(l, i) = prefactor * ( &
+                    r_grid(i)**(-(l+1)) * I_less(i) + &
+                    r_grid(i)**l        * I_greater(i) )
+                dphi_l_dr_grid(l, i) = prefactor * ( &
+                    -(l+1) * r_grid(i)**(-(l+2)) * I_less(i) + &
+                    DBLE(l) * r_grid(i)**(l-1)   * I_greater(i) )
+            END DO
+        END DO
+
+        DEALLOCATE(I_less, I_greater)
+    END SUBROUTINE compute_phi_tables_from_rho_component
+
+    SUBROUTINE axisymmetricbasisexpansion_eval_component(N, x, y, z, r_grid, phi_l_grid, dphi_l_dr_grid, ax, ay, az, phi_out)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN),  DIMENSION(:) :: r_grid
+        REAL*8, INTENT(IN),  DIMENSION(:,:) :: phi_l_grid, dphi_l_dr_grid
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi_out
+        INTEGER :: i, l, jlo, jhi, jmid, l_lo, l_hi, nr
+        REAL*8  :: r, r_safe, mu, R_cyl_sq
+        REAL*8  :: alpha_r, phi_l_r, dphi_l_dr_r
+        REAL*8  :: phi_v, dphi_dr_v, dphi_dmu_v
+        REAL*8, ALLOCATABLE :: p(:), dp_dmu(:)
+        REAL*8, PARAMETER :: eps_r = 1.0D-30
+
+        nr = SIZE(r_grid)
+        l_lo = LBOUND(phi_l_grid, 1)
+        l_hi = UBOUND(phi_l_grid, 1)
+        ALLOCATE(p(l_lo:l_hi), dp_dmu(l_lo:l_hi))
+
+        DO i = 1, N
+            r      = SQRT(x(i)**2 + y(i)**2 + z(i)**2)
+            r_safe = MAX(r, eps_r)
+            mu     = z(i) / r_safe
+            R_cyl_sq = x(i)**2 + y(i)**2
+
+            IF (r_safe <= r_grid(1)) THEN
+                jlo = 1;  alpha_r = 0.0D0
+            ELSE IF (r_safe >= r_grid(nr)) THEN
+                jlo = nr - 1;  alpha_r = 1.0D0
+            ELSE
+                jlo = 1;  jhi = nr
+                DO WHILE (jhi - jlo > 1)
+                    jmid = (jlo + jhi) / 2
+                    IF (r_grid(jmid) <= r_safe) THEN
+                        jlo = jmid
+                    ELSE
+                        jhi = jmid
+                    END IF
+                END DO
+                alpha_r = LOG(r_safe / r_grid(jlo)) / LOG(r_grid(jlo+1) / r_grid(jlo))
+            END IF
+
+            CALL legendre_axisymmetric_basis(l_hi, mu, p, dp_dmu)
+
+            phi_v = 0.0D0;  dphi_dr_v = 0.0D0;  dphi_dmu_v = 0.0D0
+            DO l = l_lo, l_hi, 2
+                phi_l_r     = linear_interp_scalar(phi_l_grid(l,jlo),     phi_l_grid(l,jlo+1),     alpha_r)
+                dphi_l_dr_r = linear_interp_scalar(dphi_l_dr_grid(l,jlo), dphi_l_dr_grid(l,jlo+1), alpha_r)
+                phi_v      = phi_v      + phi_l_r     * p(l)
+                dphi_dr_v  = dphi_dr_v  + dphi_l_dr_r * p(l)
+                dphi_dmu_v = dphi_dmu_v + phi_l_r     * dp_dmu(l)
+            END DO
+
+            phi_out(i) = phi_v
+            ax(i) = -dphi_dr_v * x(i)/r_safe + dphi_dmu_v * z(i)*x(i)/r_safe**3
+            ay(i) = -dphi_dr_v * y(i)/r_safe + dphi_dmu_v * z(i)*y(i)/r_safe**3
+            az(i) = -dphi_dr_v * z(i)/r_safe - dphi_dmu_v * R_cyl_sq/r_safe**3
+        END DO
+
+        DEALLOCATE(p, dp_dmu)
+    END SUBROUTINE axisymmetricbasisexpansion_eval_component
+
+    SUBROUTINE bessel_disk_eval_component(N, x, y, z, G, sigma0, hR, hZ, ax, ay, az, phi)
+        ! Axisymmetric disk evaluator via finite-k Hankel quadrature.
+        ! Density model associated with this basis component:
+        !   rho(R,z) = sigma0/(2*hZ) * exp(-R/hR - |z|/hZ)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN) :: G, sigma0, hR, hZ
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        INTEGER, PARAMETER :: nk = 256
+        REAL*8, PARAMETER :: pi = 3.14159265358979323846D0
+        REAL*8, PARAMETER :: eps = 1.0D-16
+        INTEGER :: i, j
+        REAL*8 :: R, absz, signz, aR, k, dk, kmax, A
+        REAL*8 :: sum_phi, sum_ar, sum_az, weight
+        REAL*8 :: kernel, j0, j1
+        REAL*8 :: scale_min
+
+        scale_min = MAX(MIN(hR, hZ), 1.0D-6)
+        kmax = 60.0D0 / scale_min
+        dk = kmax / DBLE(nk - 1)
+        A = 2.0D0 * pi * G * sigma0 * hR * hR
+
+        DO i = 1, N
+            R = SQRT(x(i)**2 + y(i)**2)
+            absz = ABS(z(i))
+            IF (z(i) > 0.0D0) THEN
+                signz = 1.0D0
+            ELSE IF (z(i) < 0.0D0) THEN
+                signz = -1.0D0
+            ELSE
+                signz = 0.0D0
+            END IF
+
+            sum_phi = 0.0D0
+            sum_ar = 0.0D0
+            sum_az = 0.0D0
+            DO j = 1, nk
+                k = DBLE(j-1) * dk
+                IF (j == 1 .OR. j == nk) THEN
+                    weight = 0.5D0
+                ELSE
+                    weight = 1.0D0
+                END IF
+
+                kernel = EXP(-k * absz) / ( (1.0D0 + (k*hR)**2)**1.5D0 * (1.0D0 + k*hZ) )
+                j0 = bessel_j0_scalar(k * R)
+                j1 = bessel_j1_scalar(k * R)
+
+                sum_phi = sum_phi + weight * j0 * kernel
+                sum_ar  = sum_ar  + weight * k * j1 * kernel
+                sum_az  = sum_az  + weight * k * j0 * kernel
+            END DO
+
+            phi(i) = -A * dk * sum_phi
+            aR = -A * dk * sum_ar
+            az(i) = -A * dk * signz * sum_az
+
+            IF (R > eps) THEN
+                ax(i) = aR * x(i) / R
+                ay(i) = aR * y(i) / R
+            ELSE
+                ax(i) = 0.0D0
+                ay(i) = 0.0D0
+            END IF
+        END DO
+    END SUBROUTINE bessel_disk_eval_component
 
     SUBROUTINE exponential_oblate_halo(params, N, x, y, z, ax, ay, az, phi)
         ! Axisymmetric exponential oblate halo:

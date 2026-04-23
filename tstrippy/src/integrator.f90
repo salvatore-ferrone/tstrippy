@@ -4,6 +4,12 @@ MODULE integrator
     ! it needs to be able to integrate the positions and velocities
     use potentials, ONLY: pot_clear_basis          => clearaxisymmetricbasisexpansion, &
                           pot_init_basis           => initaxisymmetricbasisexpansion,  &
+                          pot_clear_composite_basis => clearcompositebasis,             &
+                          pot_init_composite_basis  => initcompositebasis,              &
+                          pot_add_composite_exp     => addcompositeexponentialoblate,   &
+                          pot_add_composite_ibata   => addcompositeibata2024,           &
+                          pot_add_composite_bessel  => addcompositebesseldisk,          &
+                          pot_finalize_composite    => finalizecompositebasis,          &
                           pot_model_pouliasis2017  => pouliasis2017PII,                &
                           pot_model_miyamoto_nagai => miyamotonagai,                   &
                           pot_model_allen_santillan=> allensantillianhalo,             &
@@ -11,6 +17,7 @@ MODULE integrator
                           pot_model_long_murai_bar => longmuralibar,                   &
                           pot_model_exp_oblate_halo=> exponential_oblate_halo,         &
                           pot_model_ibata2024halo  => ibata2024halo,                   &
+                          pot_model_composite_basis => compositebasispotential,         &
                           pot_nbody_plummers       => NBODYPLUMMERS
     use perturbers, ONLY: pert_init          => perturberinitialization, &
                           pert_deallocate    => perturberdeallocation,   &
@@ -45,6 +52,9 @@ MODULE integrator
     PUBLIC :: initwritestream, writestream
     PUBLIC :: deallocate
     PUBLIC :: clearaxisymmetricbasisexpansion, initaxisymmetricbasisexpansion
+    PUBLIC :: clearcompositebasisexpansion, initcompositebasisexpansion
+    PUBLIC :: addcompositeexponentialcomponent, addcompositeibata2024component
+    PUBLIC :: addcompositebesseldiskcomponent, finalizecompositebasisexpansion
     ! DECIDE WHICH PHYSICS TO INCLUDE
     LOGICAL, PUBLIC :: DONBODY = .FALSE.
     LOGICAL, PUBLIC :: DOPERTURBERS = .FALSE.
@@ -104,6 +114,8 @@ MODULE integrator
             milkywaypotential => pot_model_exp_oblate_halo
         else if (milkywaypotentialname.EQ."ibata2024halo") then 
             milkywaypotential => pot_model_ibata2024halo
+        else if (milkywaypotentialname.EQ."composite_basis") then
+            milkywaypotential => pot_model_composite_basis
         else
             print*, "ERROR. milkywaypotential not found"
             print*, "the string must be a valid potential name from potentials.f90"
@@ -128,6 +140,39 @@ MODULE integrator
         REAL*8, DIMENSION(nr), INTENT(IN) :: r_grid
         CALL pot_init_basis(G_in, lmax, nr, r_grid)
     END SUBROUTINE initaxisymmetricbasisexpansion    
+
+    SUBROUTINE clearcompositebasisexpansion()
+        CALL pot_clear_composite_basis()
+    END SUBROUTINE clearcompositebasisexpansion
+
+    SUBROUTINE initcompositebasisexpansion(G_in, lmax, nr, r_grid, ncomp)
+        REAL*8, INTENT(IN) :: G_in
+        INTEGER, INTENT(IN) :: lmax, nr, ncomp
+        REAL*8, DIMENSION(nr), INTENT(IN) :: r_grid
+        CALL pot_init_composite_basis(G_in, lmax, nr, r_grid, ncomp)
+    END SUBROUTINE initcompositebasisexpansion
+
+    SUBROUTINE addcompositeexponentialcomponent(component_index, rho0, s0, q)
+        INTEGER, INTENT(IN) :: component_index
+        REAL*8, INTENT(IN) :: rho0, s0, q
+        CALL pot_add_composite_exp(component_index, rho0, s0, q)
+    END SUBROUTINE addcompositeexponentialcomponent
+
+    SUBROUTINE addcompositeibata2024component(component_index, rho0, r0, rt, q, gamma, beta)
+        INTEGER, INTENT(IN) :: component_index
+        REAL*8, INTENT(IN) :: rho0, r0, rt, q, gamma, beta
+        CALL pot_add_composite_ibata(component_index, rho0, r0, rt, q, gamma, beta)
+    END SUBROUTINE addcompositeibata2024component
+
+    SUBROUTINE addcompositebesseldiskcomponent(component_index, sigma0, hR, hZ)
+        INTEGER, INTENT(IN) :: component_index
+        REAL*8, INTENT(IN) :: sigma0, hR, hZ
+        CALL pot_add_composite_bessel(component_index, sigma0, hR, hZ)
+    END SUBROUTINE addcompositebesseldiskcomponent
+
+    SUBROUTINE finalizecompositebasisexpansion()
+        CALL pot_finalize_composite()
+    END SUBROUTINE finalizecompositebasisexpansion
 
     SUBROUTINE assert_gravitational_constant_initialized()
         if (G <= 0 ) then

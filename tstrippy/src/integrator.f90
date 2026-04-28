@@ -2,22 +2,23 @@ MODULE integrator
     ! this integrator needs to contain the current positions
     ! it needs to be able to apply any force that I want at any time
     ! it needs to be able to integrate the positions and velocities
-    use potentials, ONLY: pot_clear_basis          => clearaxisymmetricbasisexpansion, &
-                          pot_init_basis           => initaxisymmetricbasisexpansion,  &
-                          pot_clear_composite_basis => clearcompositebasis,             &
-                          pot_init_composite_basis  => initcompositebasis,              &
-                          pot_add_composite_exp     => addcompositeexponentialoblate,   &
-                          pot_add_composite_ibata   => addcompositeibata2024,           &
-                          pot_add_composite_bessel  => addcompositebesseldisk,          &
-                          pot_finalize_composite    => finalizecompositebasis,          &
+    use potentials, ONLY: pot_clear_basis                                   => clearaxisymmetricbasisexpansion,             &
+                          pot_init_basis                                    => initaxisymmetricbasisexpansion,              &
+                          pot_clear_axisymmetric_composite_basis_expansion  => clearaxisymmetriccompositebasisexpansion,    &
+                          pot_init_axisymmetric_composite_basis_expansion   => initaxisymmetriccompositebasisexpansion,     &
+                          pot_add_composite_expponential_oblate_halo        => addcompositeexponentialoblate,               &
+                          pot_add_composite_ibata2024_halo                  => addcompositeibata2024halo,                   &
+                          pot_add_composite_bessel_exponential_disk         => addcompositebesselexponentialdisk,           &
+                          pot_model_exp_oblate_halo                         => exponential_oblate_halo,         &
+                          pot_model_ibata2024halo                           => ibata2024halo,                   &
+                          pot_model_axisymmetric_composite_basis            => axisymmetriccompositebasispotential_dispatch, &
+                          pot_finalize_axisymmetric_composite               => finalizeaxisymmetriccompositebasisexpansion, &
+                          ! analytical podential denity pairs 
                           pot_model_pouliasis2017   => pouliasis2017PII,                &
                           pot_model_miyamoto_nagai  => miyamotonagai,                   &
                           pot_model_allen_santillan => allensantillianhalo,             &
                           pot_model_plummer         => plummer,                         &
                           pot_model_long_murai_bar  => longmuralibar,                   &
-                          pot_model_exp_oblate_halo => exponential_oblate_halo,         &
-                          pot_model_ibata2024halo   => ibata2024halo,                   &
-                          pot_model_composite_basis => compositebasispotential,         &
                           pot_nbody_plummers        => NBODYPLUMMERS
     use perturbers, ONLY: pert_init          => perturberinitialization, &
                           pert_deallocate    => perturberdeallocation,   &
@@ -52,9 +53,11 @@ MODULE integrator
     PUBLIC :: initwritestream, writestream
     PUBLIC :: deallocate
     PUBLIC :: clearaxisymmetricbasisexpansion, initaxisymmetricbasisexpansion
+    PUBLIC :: clearaxisymmetriccompositebasisexpansion, initaxisymmetriccompositebasisexpansion
     PUBLIC :: clearcompositebasisexpansion, initcompositebasisexpansion
-    PUBLIC :: addcompositeexponentialcomponent, addcompositeibata2024component
-    PUBLIC :: addcompositebesseldiskcomponent, finalizecompositebasisexpansion
+    PUBLIC :: addcompositeexponentialoblatehalo, addcompositeibata2024halo
+    PUBLIC :: addcompositebesselexponentialdisk
+    PUBLIC :: finalizeaxisymmetriccompositebasisexpansion, finalizecompositebasisexpansion
     ! DECIDE WHICH PHYSICS TO INCLUDE
     LOGICAL, PUBLIC :: DONBODY = .FALSE.
     LOGICAL, PUBLIC :: DOPERTURBERS = .FALSE.
@@ -115,7 +118,7 @@ MODULE integrator
         else if (milkywaypotentialname.EQ."ibata2024halo") then 
             milkywaypotential => pot_model_ibata2024halo
         else if (milkywaypotentialname.EQ."composite_basis") then
-            milkywaypotential => pot_model_composite_basis
+            milkywaypotential => pot_model_axisymmetric_composite_basis
         else
             print*, "ERROR. milkywaypotential not found"
             print*, "the string must be a valid potential name from potentials.f90"
@@ -141,37 +144,55 @@ MODULE integrator
         CALL pot_init_basis(G_in, lmax, nr, r_grid)
     END SUBROUTINE initaxisymmetricbasisexpansion    
 
+    SUBROUTINE clearaxisymmetriccompositebasisexpansion()
+        CALL pot_clear_axisymmetric_composite_basis_expansion()
+    END SUBROUTINE clearaxisymmetriccompositebasisexpansion
+
     SUBROUTINE clearcompositebasisexpansion()
-        CALL pot_clear_composite_basis()
+        ! Backward-compatible alias.
+        CALL clearaxisymmetriccompositebasisexpansion()
     END SUBROUTINE clearcompositebasisexpansion
 
-    SUBROUTINE initcompositebasisexpansion(G_in, lmax, nr, r_grid, ncomp)
+    SUBROUTINE initaxisymmetriccompositebasisexpansion(G_in, lmax, nr, r_grid, ncomp)
         REAL*8, INTENT(IN) :: G_in
         INTEGER, INTENT(IN) :: lmax, nr, ncomp
         REAL*8, DIMENSION(nr), INTENT(IN) :: r_grid
-        CALL pot_init_composite_basis(G_in, lmax, nr, r_grid, ncomp)
+        CALL pot_init_axisymmetric_composite_basis_expansion(G_in, lmax, nr, r_grid, ncomp)
+    END SUBROUTINE initaxisymmetriccompositebasisexpansion
+
+    SUBROUTINE initcompositebasisexpansion(G_in, lmax, nr, r_grid, ncomp)
+        ! Backward-compatible alias.
+        REAL*8, INTENT(IN) :: G_in
+        INTEGER, INTENT(IN) :: lmax, nr, ncomp
+        REAL*8, DIMENSION(nr), INTENT(IN) :: r_grid
+        CALL initaxisymmetriccompositebasisexpansion(G_in, lmax, nr, r_grid, ncomp)
     END SUBROUTINE initcompositebasisexpansion
 
-    SUBROUTINE addcompositeexponentialcomponent(component_index, rho0, s0, q)
+    SUBROUTINE addcompositeexponentialoblatehalo(component_index, rho0, s0, q)
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN) :: rho0, s0, q
-        CALL pot_add_composite_exp(component_index, rho0, s0, q)
-    END SUBROUTINE addcompositeexponentialcomponent
+        CALL pot_add_composite_expponential_oblate_halo(component_index, rho0, s0, q)
+    END SUBROUTINE addcompositeexponentialoblatehalo
 
-    SUBROUTINE addcompositeibata2024component(component_index, rho0, r0, rt, q, gamma, beta)
+    SUBROUTINE addcompositeibata2024halo(component_index, rho0, r0, rt, q, gamma, beta)
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN) :: rho0, r0, rt, q, gamma, beta
-        CALL pot_add_composite_ibata(component_index, rho0, r0, rt, q, gamma, beta)
-    END SUBROUTINE addcompositeibata2024component
+        CALL pot_add_composite_ibata2024_halo(component_index, rho0, r0, rt, q, gamma, beta)
+    END SUBROUTINE addcompositeibata2024halo
 
-    SUBROUTINE addcompositebesseldiskcomponent(component_index, sigma0, hR, hZ)
+    SUBROUTINE addcompositebesselexponentialdisk(component_index, sigma0, hR, hZ)
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN) :: sigma0, hR, hZ
-        CALL pot_add_composite_bessel(component_index, sigma0, hR, hZ)
-    END SUBROUTINE addcompositebesseldiskcomponent
+        CALL pot_add_composite_bessel_exponential_disk(component_index, sigma0, hR, hZ)
+    END SUBROUTINE addcompositebesselexponentialdisk
+
+    SUBROUTINE finalizeaxisymmetriccompositebasisexpansion()
+        CALL pot_finalize_axisymmetric_composite()
+    END SUBROUTINE finalizeaxisymmetriccompositebasisexpansion
 
     SUBROUTINE finalizecompositebasisexpansion()
-        CALL pot_finalize_composite()
+        ! Backward-compatible alias.
+        CALL finalizeaxisymmetriccompositebasisexpansion()
     END SUBROUTINE finalizecompositebasisexpansion
 
     SUBROUTINE assert_gravitational_constant_initialized()

@@ -25,13 +25,13 @@ This plan consolidates integrator stabilization, basis-expansion documentation, 
 **Goal:** Validate Bessel function approximations for exponential disk profiles and transition from single-component to composite basis workflows.
 
 #### 1.1: Refactor Exponential Disk Bessel Implementation
-- [ ] Separate `bessel_disk_eval_component` logic:
+- [x] Separate `bessel_disk_eval_component` logic:
   - Rename to `exponential_disk_bessel_eval_component`
   - Document that Bessel functions solve Poisson equation for arbitrary density profiles (not just this one)
   - Create abstract bessel-function interface in `potentials.f90` for future density profiles
   - Keep exponential disk as canonical first example
-- [ ] Update integration tests to reflect new naming
-- [ ] Add docstrings explaining when Bessel vs Legendre is preferred:
+- [x] Update integration tests to reflect new naming (no external symbol rename required; validated via build + package tests)
+- [x] Add docstrings explaining when Bessel vs Legendre is preferred:
   - Bessel: disk-like (q < 0.3), flattened systems, arbitrary disk density profiles
   - Legendre: spherical/near-spherical mass distributions
 

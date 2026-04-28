@@ -4,6 +4,15 @@ MODULE potentials
                          bessel_j0_scalar, bessel_j1_scalar
     IMPLICIT NONE
 
+    ABSTRACT INTERFACE
+        SUBROUTINE bessel_component_evaluator_interface(params, N, x, y, z, ax, ay, az, phi)
+            REAL*8, INTENT(IN), DIMENSION(*) :: params
+            INTEGER, INTENT(IN) :: N
+            REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+            REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        END SUBROUTINE bessel_component_evaluator_interface
+    END INTERFACE
+
     ! Axisymmetric basis-expansion tables (l-mode by radial grid index).
     ! BASIS_GRID_SET: r_grid allocated, arrays ready for projection.
     ! BASIS_EXPANSION_INITIALIZED: projection + potential tables computed, ready to evaluate.
@@ -22,6 +31,7 @@ MODULE potentials
     INTEGER, PARAMETER, PUBLIC :: BFE_KIND_NONE = 0
     INTEGER, PARAMETER, PUBLIC :: BFE_KIND_LEGENDRE = 1
     INTEGER, PARAMETER, PUBLIC :: BFE_KIND_BESSEL_DISK = 2
+    INTEGER, PARAMETER, PUBLIC :: COMPOSITE_BESSEL_MAX_PARAMS = 16
 
     LOGICAL, PUBLIC :: COMPOSITE_BASIS_GRID_SET = .FALSE.
     LOGICAL, PUBLIC :: COMPOSITE_BASIS_FINALIZED = .FALSE.
@@ -32,15 +42,14 @@ MODULE potentials
 
     INTEGER, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_KIND
     LOGICAL, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_READY
+    INTEGER, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_BESSEL_NPARAMS
 
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_R_GRID
     REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_RHO_L_GRID
     REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_PHI_L_GRID
     REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DPHI_L_DR_GRID
 
-    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_SIGMA0
-    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_HR
-    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_HZ
+    REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_BESSEL_PARAMS
 
     ! Private internal routines (not exposed to Python/caller)
     PRIVATE :: default_init_basis_expansion
@@ -50,7 +59,8 @@ MODULE potentials
     PRIVATE :: project_ibata2024halo
     PRIVATE :: compute_phi_tables_from_rho_component
     PRIVATE :: axisymmetricbasisexpansion_eval_component
-    PRIVATE :: bessel_disk_eval_component
+    PRIVATE :: bessel_eval_component
+    PRIVATE :: exponential_disk_bessel_eval_component
 
     CONTAINS
     SUBROUTINE initaxisymmetricbasisexpansion(G, lmax, nr, r_grid)
@@ -98,7 +108,7 @@ MODULE potentials
         BASIS_G    = -1.0D0
     END SUBROUTINE clearaxisymmetricbasisexpansion
 
-    SUBROUTINE clearcompositebasis()
+    SUBROUTINE clearaxisymmetriccompositebasisexpansion()
         IMPLICIT NONE
 
         IF (ALLOCATED(COMPOSITE_KIND))            DEALLOCATE(COMPOSITE_KIND)
@@ -107,9 +117,8 @@ MODULE potentials
         IF (ALLOCATED(COMPOSITE_RHO_L_GRID))      DEALLOCATE(COMPOSITE_RHO_L_GRID)
         IF (ALLOCATED(COMPOSITE_PHI_L_GRID))      DEALLOCATE(COMPOSITE_PHI_L_GRID)
         IF (ALLOCATED(COMPOSITE_DPHI_L_DR_GRID))  DEALLOCATE(COMPOSITE_DPHI_L_DR_GRID)
-        IF (ALLOCATED(COMPOSITE_DISK_SIGMA0))     DEALLOCATE(COMPOSITE_DISK_SIGMA0)
-        IF (ALLOCATED(COMPOSITE_DISK_HR))         DEALLOCATE(COMPOSITE_DISK_HR)
-        IF (ALLOCATED(COMPOSITE_DISK_HZ))         DEALLOCATE(COMPOSITE_DISK_HZ)
+        IF (ALLOCATED(COMPOSITE_BESSEL_NPARAMS))  DEALLOCATE(COMPOSITE_BESSEL_NPARAMS)
+        IF (ALLOCATED(COMPOSITE_BESSEL_PARAMS))   DEALLOCATE(COMPOSITE_BESSEL_PARAMS)
 
         COMPOSITE_BASIS_GRID_SET = .FALSE.
         COMPOSITE_BASIS_FINALIZED = .FALSE.
@@ -117,31 +126,37 @@ MODULE potentials
         COMPOSITE_LMAX = -1
         COMPOSITE_NR = -1
         COMPOSITE_G = -1.0D0
-    END SUBROUTINE clearcompositebasis
+    END SUBROUTINE clearaxisymmetriccompositebasisexpansion
 
-    SUBROUTINE initcompositebasis(G, lmax, nr, r_grid, ncomp)
+    SUBROUTINE clearcompositebasisexpansion()
+        ! Backward-compatible alias.
+        IMPLICIT NONE
+        CALL clearaxisymmetriccompositebasisexpansion()
+    END SUBROUTINE clearcompositebasisexpansion
+
+    SUBROUTINE initaxisymmetriccompositebasisexpansion(G, lmax, nr, r_grid, ncomp)
         IMPLICIT NONE
         REAL*8, INTENT(IN) :: G
         INTEGER, INTENT(IN) :: lmax, nr, ncomp
         REAL*8, INTENT(IN), DIMENSION(nr) :: r_grid
 
-        CALL clearcompositebasis()
+        CALL clearaxisymmetriccompositebasisexpansion()
 
         ALLOCATE(COMPOSITE_KIND(ncomp), COMPOSITE_READY(ncomp))
+        ALLOCATE(COMPOSITE_BESSEL_NPARAMS(ncomp))
         ALLOCATE(COMPOSITE_R_GRID(nr))
         ALLOCATE(COMPOSITE_RHO_L_GRID(0:lmax, nr, ncomp))
         ALLOCATE(COMPOSITE_PHI_L_GRID(0:lmax, nr, ncomp))
         ALLOCATE(COMPOSITE_DPHI_L_DR_GRID(0:lmax, nr, ncomp))
-        ALLOCATE(COMPOSITE_DISK_SIGMA0(ncomp), COMPOSITE_DISK_HR(ncomp), COMPOSITE_DISK_HZ(ncomp))
+        ALLOCATE(COMPOSITE_BESSEL_PARAMS(COMPOSITE_BESSEL_MAX_PARAMS, ncomp))
 
         COMPOSITE_KIND = BFE_KIND_NONE
         COMPOSITE_READY = .FALSE.
+        COMPOSITE_BESSEL_NPARAMS = 0
         COMPOSITE_RHO_L_GRID = 0.0D0
         COMPOSITE_PHI_L_GRID = 0.0D0
         COMPOSITE_DPHI_L_DR_GRID = 0.0D0
-        COMPOSITE_DISK_SIGMA0 = 0.0D0
-        COMPOSITE_DISK_HR = 0.0D0
-        COMPOSITE_DISK_HZ = 0.0D0
+        COMPOSITE_BESSEL_PARAMS = 0.0D0
 
         COMPOSITE_G = G
         COMPOSITE_LMAX = lmax
@@ -150,9 +165,20 @@ MODULE potentials
         COMPOSITE_R_GRID = r_grid
         COMPOSITE_BASIS_GRID_SET = .TRUE.
         COMPOSITE_BASIS_FINALIZED = .FALSE.
-    END SUBROUTINE initcompositebasis
+    END SUBROUTINE initaxisymmetriccompositebasisexpansion
+
+    SUBROUTINE initcompositebasisexpansion(G, lmax, nr, r_grid, ncomp)
+        ! Backward-compatible alias.
+        IMPLICIT NONE
+        REAL*8, INTENT(IN) :: G
+        INTEGER, INTENT(IN) :: lmax, nr, ncomp
+        REAL*8, INTENT(IN), DIMENSION(nr) :: r_grid
+
+        CALL initaxisymmetriccompositebasisexpansion(G, lmax, nr, r_grid, ncomp)
+    END SUBROUTINE initcompositebasisexpansion
 
     SUBROUTINE addcompositeexponentialoblate(component_index, rho0, s0, q)
+        ! Legendre basis path: preferred for spherical or near-spherical components.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN) :: rho0, s0, q
@@ -160,7 +186,7 @@ MODULE potentials
         REAL*8, ALLOCATABLE :: mu_q(:), w_q(:), p(:)
         REAL*8 :: mu, rho_val, eta, factor
 
-        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initcompositebasis must be called before addcompositeexponentialoblate"
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initaxisymmetriccompositebasisexpansion must be called before addcompositeexponentialoblate"
         IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) STOP "invalid composite component_index"
 
         n_mu = MAX(4 * (COMPOSITE_LMAX + 1), 40)
@@ -191,7 +217,7 @@ MODULE potentials
         COMPOSITE_BASIS_FINALIZED = .FALSE.
     END SUBROUTINE addcompositeexponentialoblate
 
-    SUBROUTINE addcompositeibata2024(component_index, rho0, r0, rt, q, gamma, beta)
+    SUBROUTINE addcompositeibata2024halo(component_index, rho0, r0, rt, q, gamma, beta)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN) :: rho0, r0, rt, q, gamma, beta
@@ -200,7 +226,7 @@ MODULE potentials
         REAL*8 :: mu, rho_val, eta, factor, s, x
         REAL*8, PARAMETER :: s_floor = 1.0D-12
 
-        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initcompositebasis must be called before addcompositeibata2024"
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initaxisymmetriccompositebasisexpansion must be called before addcompositeibata2024"
         IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) STOP "invalid composite component_index"
 
         n_mu = MAX(4 * (COMPOSITE_LMAX + 1), 40)
@@ -231,52 +257,103 @@ MODULE potentials
         COMPOSITE_KIND(component_index) = BFE_KIND_LEGENDRE
         COMPOSITE_READY(component_index) = .TRUE.
         COMPOSITE_BASIS_FINALIZED = .FALSE.
-    END SUBROUTINE addcompositeibata2024
+    END SUBROUTINE addcompositeibata2024halo
 
-    SUBROUTINE addcompositebesseldisk(component_index, sigma0, hR, hZ)
+    SUBROUTINE addcompositebesselcomponent(component_index, params, nparams)
+        ! Generic Bessel component registration.
+        ! params is evaluator-specific and interpreted by the selected
+        ! Bessel application evaluator.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: component_index
-        REAL*8, INTENT(IN) :: sigma0, hR, hZ
+        INTEGER, INTENT(IN) :: nparams
+        REAL*8, INTENT(IN), DIMENSION(nparams) :: params
 
-        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initcompositebasis must be called before addcompositebesseldisk"
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initaxisymmetriccompositebasisexpansion must be called before addcompositebesselcomponent"
         IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) STOP "invalid composite component_index"
-        IF (hR <= 0.0D0 .OR. hZ <= 0.0D0) STOP "hR and hZ must be positive"
+        IF (nparams < 1) STOP "nparams must be >= 1 in addcompositebesselcomponent"
+        IF (nparams > COMPOSITE_BESSEL_MAX_PARAMS) STOP "nparams exceeds COMPOSITE_BESSEL_MAX_PARAMS"
 
-        COMPOSITE_DISK_SIGMA0(component_index) = sigma0
-        COMPOSITE_DISK_HR(component_index) = hR
-        COMPOSITE_DISK_HZ(component_index) = hZ
+        COMPOSITE_BESSEL_PARAMS(:, component_index) = 0.0D0
+        COMPOSITE_BESSEL_PARAMS(1:nparams, component_index) = params(1:nparams)
+        COMPOSITE_BESSEL_NPARAMS(component_index) = nparams
         COMPOSITE_KIND(component_index) = BFE_KIND_BESSEL_DISK
         COMPOSITE_READY(component_index) = .TRUE.
         COMPOSITE_BASIS_FINALIZED = .FALSE.
-    END SUBROUTINE addcompositebesseldisk
+    END SUBROUTINE addcompositebesselcomponent
 
-    SUBROUTINE finalizecompositebasis()
+    SUBROUTINE addcompositebesselexponentialdisk(component_index, sigma0, hR, hZ)
+        ! Backward-compatible helper for the exponential-disk Bessel model.
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: component_index
+        REAL*8, INTENT(IN) :: sigma0, hR, hZ
+        REAL*8, DIMENSION(4) :: params_disk
+
+        IF (hR <= 0.0D0 .OR. hZ <= 0.0D0) STOP "hR and hZ must be positive"
+
+        params_disk(1) = COMPOSITE_G
+        params_disk(2) = sigma0
+        params_disk(3) = hR
+        params_disk(4) = hZ
+        CALL addcompositebesselcomponent(component_index, params_disk, 4)
+    END SUBROUTINE addcompositebesselexponentialdisk
+
+    SUBROUTINE finalizeaxisymmetriccompositebasisexpansion()
         IMPLICIT NONE
         INTEGER :: i
 
-        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initcompositebasis must be called before finalizecompositebasis"
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initaxisymmetriccompositebasisexpansion must be called before finalizeaxisymmetriccompositebasisexpansion"
         DO i = 1, COMPOSITE_NCOMP
-            IF (.NOT. COMPOSITE_READY(i)) STOP "all composite components must be configured before finalizecompositebasis"
+            IF (.NOT. COMPOSITE_READY(i)) STOP "all composite components must be configured before finalizeaxisymmetriccompositebasisexpansion"
         END DO
         COMPOSITE_BASIS_FINALIZED = .TRUE.
-    END SUBROUTINE finalizecompositebasis
+    END SUBROUTINE finalizeaxisymmetriccompositebasisexpansion
 
-    SUBROUTINE compositebasispotential(params, N, x, y, z, ax, ay, az, phi)
-        ! Evaluate all configured composite basis components and sum their forces.
+    SUBROUTINE finalizecompositebasisexpansion()
+        ! Backward-compatible alias.
+        IMPLICIT NONE
+        CALL finalizeaxisymmetriccompositebasisexpansion()
+    END SUBROUTINE finalizecompositebasisexpansion
+
+    SUBROUTINE axisymmetriccompositebasispotential_dispatch(params, N, x, y, z, ax, ay, az, phi)
+        ! Dispatch wrapper that preserves the standard potential signature
+        ! used by integrator procedure-pointer wiring.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(*) :: params
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+
+        ! Keep params consumed so compilers do not warn in this wrapper.
+        IF (params(1) /= params(1)) STOP "invalid NaN parameter in axisymmetriccompositebasispotential_dispatch"
+        CALL axisymmetriccompositebasispotential(N, x, y, z, ax, ay, az, phi)
+    END SUBROUTINE axisymmetriccompositebasispotential_dispatch
+
+    SUBROUTINE compositebasispotential_dispatch(params, N, x, y, z, ax, ay, az, phi)
+        ! Backward-compatible alias.
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(*) :: params
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+
+        CALL axisymmetriccompositebasispotential_dispatch(params, N, x, y, z, ax, ay, az, phi)
+    END SUBROUTINE compositebasispotential_dispatch
+
+    SUBROUTINE axisymmetriccompositebasispotential(N, x, y, z, ax, ay, az, phi)
+        ! Evaluate all configured composite basis components and sum their forces.
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
         REAL*8, ALLOCATABLE :: ax_comp(:), ay_comp(:), az_comp(:), phi_comp(:)
-        INTEGER :: i
+        INTEGER :: i, nparams_bessel
 
         ax = 0.0D0
         ay = 0.0D0
         az = 0.0D0
         phi = 0.0D0
 
-        IF (.NOT. COMPOSITE_BASIS_FINALIZED) STOP "finalizecompositebasis must be called before compositebasispotential"
+        IF (.NOT. COMPOSITE_BASIS_FINALIZED) STOP "finalizeaxisymmetriccompositebasisexpansion must be called before axisymmetriccompositebasispotential"
 
         ALLOCATE(ax_comp(N), ay_comp(N), az_comp(N), phi_comp(N))
         DO i = 1, COMPOSITE_NCOMP
@@ -291,10 +368,13 @@ MODULE potentials
                     COMPOSITE_PHI_L_GRID(:,:,i), COMPOSITE_DPHI_L_DR_GRID(:,:,i), &
                     ax_comp, ay_comp, az_comp, phi_comp)
             CASE (BFE_KIND_BESSEL_DISK)
-                CALL bessel_disk_eval_component(N, x, y, z, COMPOSITE_G, COMPOSITE_DISK_SIGMA0(i), &
-                    COMPOSITE_DISK_HR(i), COMPOSITE_DISK_HZ(i), ax_comp, ay_comp, az_comp, phi_comp)
+                nparams_bessel = COMPOSITE_BESSEL_NPARAMS(i)
+                IF (nparams_bessel < 1) STOP "invalid bessel parameter count in axisymmetriccompositebasispotential"
+                CALL bessel_eval_component(exponential_disk_bessel_eval_component, &
+                    COMPOSITE_BESSEL_PARAMS(1:nparams_bessel, i), N, &
+                    x, y, z, ax_comp, ay_comp, az_comp, phi_comp)
             CASE DEFAULT
-                STOP "unknown component kind in compositebasispotential"
+                STOP "unknown component kind in axisymmetriccompositebasispotential"
             END SELECT
 
             ax = ax + ax_comp
@@ -303,7 +383,33 @@ MODULE potentials
             phi = phi + phi_comp
         END DO
         DEALLOCATE(ax_comp, ay_comp, az_comp, phi_comp)
+    END SUBROUTINE axisymmetriccompositebasispotential
+
+    SUBROUTINE compositebasispotential(N, x, y, z, ax, ay, az, phi)
+        ! Backward-compatible alias.
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+
+        CALL axisymmetriccompositebasispotential(N, x, y, z, ax, ay, az, phi)
     END SUBROUTINE compositebasispotential
+
+    SUBROUTINE bessel_eval_component(component_evaluator, params, N, x, y, z, ax, ay, az, phi)
+        ! Generic Bessel-component dispatcher.
+        ! Method: Bessel/Hankel representation used to solve Poisson for
+        ! flattened axisymmetric components.
+        ! Application: the specific density profile is implemented by the
+        ! passed component_evaluator.
+        IMPLICIT NONE
+        PROCEDURE(bessel_component_evaluator_interface) :: component_evaluator
+        REAL*8, INTENT(IN), DIMENSION(*) :: params
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+
+        CALL component_evaluator(params, N, x, y, z, ax, ay, az, phi)
+    END SUBROUTINE bessel_eval_component
 
     SUBROUTINE hernquist(params,N,x,y,z,ax,ay,az,phi)
         ! Hernquist potential
@@ -887,23 +993,33 @@ MODULE potentials
         DEALLOCATE(p, dp_dmu)
     END SUBROUTINE axisymmetricbasisexpansion_eval_component
 
-    SUBROUTINE bessel_disk_eval_component(N, x, y, z, G, sigma0, hR, hZ, ax, ay, az, phi)
-        ! Axisymmetric disk evaluator via finite-k Hankel quadrature.
-        ! Density model associated with this basis component:
+    SUBROUTINE exponential_disk_bessel_eval_component(params, N, x, y, z, ax, ay, az, phi)
+        ! Exponential-disk application of the generic Bessel/Poisson method.
+        ! This is the preferred basis path for strongly flattened disk-like
+        ! components (e.g. q <= 0.3), while Legendre is better for near-
+        ! spherical components.
+        !
+        ! Density model associated with this evaluator:
         !   rho(R,z) = sigma0/(2*hZ) * exp(-R/hR - |z|/hZ)
         IMPLICIT NONE
+        REAL*8, INTENT(IN), DIMENSION(*) :: params
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN) :: G, sigma0, hR, hZ
         REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
         INTEGER, PARAMETER :: nk = 256
         REAL*8, PARAMETER :: pi = 3.14159265358979323846D0
         REAL*8, PARAMETER :: eps = 1.0D-16
         INTEGER :: i, j
         REAL*8 :: R, absz, signz, aR, k, dk, kmax, A
+        REAL*8 :: G, sigma0, hR, hZ
         REAL*8 :: sum_phi, sum_ar, sum_az, weight
         REAL*8 :: kernel, j0, j1
         REAL*8 :: scale_min
+
+        G = params(1)
+        sigma0 = params(2)
+        hR = params(3)
+        hZ = params(4)
 
         scale_min = MAX(MIN(hR, hZ), 1.0D-6)
         kmax = 60.0D0 / scale_min
@@ -953,7 +1069,7 @@ MODULE potentials
                 ay(i) = 0.0D0
             END IF
         END DO
-    END SUBROUTINE bessel_disk_eval_component
+    END SUBROUTINE exponential_disk_bessel_eval_component
 
     SUBROUTINE exponential_oblate_halo(params, N, x, y, z, ax, ay, az, phi)
         ! Axisymmetric exponential oblate halo:

@@ -1,94 +1,165 @@
-# TSTRIPPY Stabilization Plan Before New Features
-Date: 2026-04-15
+# TSTRIPPY Development Plan
+Date: 2026-04-28
 
-## Goal
-Make the code operational, well documented, and up to date before adding new science features.
+## Overview
 
-## Key Technical Notes From This Session
-- The host perturber currently selects the nearest host timestamp.  
-  This creates force discontinuities and can hurt time-reversibility.
-- Linear interpolation in time is the right next step for host force evaluation at leapfrog mid-steps.
-- There is likely an initialization-time consistency issue in the leapfrog-to-final-positions path that should be checked first.
-- Fast tests should stay very small and deterministic.
-- Heavy physics validation should run separately (nightly or pre-release).
-- Documentation can absolutely serve as executable scientific validation, but only a lightweight subset should run in routine CI.
+This plan consolidates integrator stabilization, basis-expansion documentation, and composite potential workflows into a unified roadmap. The strategy is to develop features alongside their scientific validation—documentation notebooks serve as both teaching tools and executable convergence tests.
 
-## Priority Roadmap
+## Completed Work
 
-### Phase 1: Integrator Stabilization
-1. Ensure consistent time handling at integration start in all integrator entry points.
-2. Replace nearest-time host sampling with linear interpolation in time for:
-   - Host position
-   - Host velocity
-   - Host mass evaluation time
-3. Add out-of-range time behavior policy:
-   - Clamp to boundaries, or
-   - Fail fast with a clear error
-4. Verify consistency between full-orbit and final-position integrators under identical initial conditions.
+### Phase 0: Basis-Expansion Foundation ✅
+- [x] Implemented axisymmetric Legendre polynomial expansion in Fortran (`mathutils.f90`)
+- [x] Created convergence validation in `basis_expansion_verification.ipynb`
+- [x] Demonstrated spherical harmonics convergence in `legendre_BFE_orbit_convergence.ipynb`
+- [x] Identified spherical harmonics limitations for flattened systems (q < 0.3)
+- [x] Refactored tstrippy module structure to allow composite (multi-component) basis potentials
+- [x] Started `composite_basis_potential.ipynb` documentation
+- [x] Updated `io/` module structure (relocated from `Parsers/`)
+- [x] Removed `constants.f90`
+- [x] Added Fortran aliasing optimization in `mathutils.f90`
 
-### Phase 2: Test Architecture Refresh
-1. Split tests into fast and slow tiers.
-2. Keep fast tests mandatory on every push.
-3. Run slow physics and docs execution on nightly or pre-release jobs.
-4. Add regression coverage for the host interpolation and bar-plus-leapfrog behavior.
+## Active Roadmap
 
-### Phase 3: Documentation Refresh
-1. Keep tutorials lightweight and executable.
-2. Keep heavier scientific notebooks as reproducibility artifacts.
-3. Use docs to communicate reverse-integrability evidence, while preserving tiny fast assertions in tests.
+### Phase 1: Bessel Function Expansion (Current Focus)
 
-## Test Matrix
+**Goal:** Validate Bessel function approximations for exponential disk profiles and transition from single-component to composite basis workflows.
 
-| Tier | Perspective | What it validates | Minimal setup | Pass criteria | Runtime target | Cadence | Marker |
-|---|---|---|---|---|---|---|---|
-| T0 | Software | Package/API integrity | Import checks | No import/type failures | under 10s | every push | core |
-| T0 | Software | Parser and units integrity | Instantiate parsers, verify keys/units | Expected keys and unit types exist | under 10s | every push | core |
-| T1 | Software | Potential interface contracts | Small direct calls | Correct output shape and finite values | under 10s | every push | core |
-| T1 | Numerics | Integrator state correctness | 1 particle, short run | Array sizes correct, finite outputs, monotonic timestamps | under 15s | every push | core |
-| T1 | Numerics | Determinism | Fixed seed repeat run | Identical or tight-tolerance equality | under 15s | every push | core |
-| T1 | Numerics | Host interpolation correctness | Synthetic host track with known midpoint | Midpoint interpolation error below tolerance | under 20s | every push | core |
-| T1 | Numerics | Integrator path consistency | Same ICs, compare orbit vs final-position path | Final state mismatch below tolerance | under 20s | every push | core |
-| T2 | Physics | Time reversibility (static) | N=1 and N=5 short runs | Round-trip relative error under threshold | under 30s | every push | physics_fast |
-| T2 | Physics | Timestep convergence | dt, dt/2, dt/4 runs | Error decreases with refinement | under 45s | push or nightly | physics_fast |
-| T2 | Physics | Energy drift in static potential | 1 particle, longer run | Relative drift bounded | under 45s | nightly | physics_slow |
-| T3 | Physics | Rotating bar invariant behavior | Constant pattern-speed bar case | Invariant drift bounded | 1 to 3 min | nightly | physics_slow |
-| T3 | Physics | Host perturber regression | Small stream setup | Stable finite outputs and regression match | 1 to 3 min | nightly | physics_slow |
-| T4 | Docs | Executable docs sanity | Selected lightweight notebooks | Notebook execution success | 2 to 5 min | nightly | docs_exec |
-| T4 | Docs | Scientific reproducibility | Reverse-integrability notebook set | Key metrics/figures reproduced within tolerance | 5 to 15 min | pre-release | docs_repro |
+#### 1.1: Refactor Exponential Disk Bessel Implementation
+- [ ] Separate `bessel_disk_eval_component` logic:
+  - Rename to `exponential_disk_bessel_eval_component`
+  - Document that Bessel functions solve Poisson equation for arbitrary density profiles (not just this one)
+  - Create abstract bessel-function interface in `potentials.f90` for future density profiles
+  - Keep exponential disk as canonical first example
+- [ ] Update integration tests to reflect new naming
+- [ ] Add docstrings explaining when Bessel vs Legendre is preferred:
+  - Bessel: disk-like (q < 0.3), flattened systems, arbitrary disk density profiles
+  - Legendre: spherical/near-spherical mass distributions
 
-## Initial Thresholds
-- Static reversibility:
-  - Median relative error below 1e-8
-  - Max relative error below 1e-6
-- Orbit-path vs final-position-path mismatch:
-  - Below 1e-10 absolute in simple baseline cases
-- Static-potential energy drift:
-  - Fast tests: max relative drift below 1e-5
-  - Slow tests: max relative drift below 1e-6
-- Synthetic interpolation midpoint error:
-  - Near machine precision for linear test tracks
+#### 1.2: Convergence Validation Notebook (`bessel_functions_expansion.ipynb`)
+- [ ] Single exponential disk profile, systematic convergence study
+- [ ] Subsection 1: Density profile accuracy
+  - Sweep Bessel function order $n_{\max}$
+  - Fix ratio of scale length to scale height (e.g., $h/z_0 = 3, 5, 10$)
+  - Show how density profile reproduction improves with order
+  - Include comparison to analytic density profile
+- [ ] Subsection 2: Potential accuracy
+  - Plot convergence of potential vs radius and height
+  - Finite-difference gradient check: $\mathbf{a} \stackrel{?}{=} -\nabla\Phi$
+- [ ] Subsection 3: Orbit convergence
+  - Integrate single test particles in Bessel potential
+  - Show conservation metrics (energy drift, angular momentum) vs Bessel order
+  - Demonstrate time-reversibility as order increases
+  - Iterate over 2–3 different $h/z_0$ ratios to show regime-dependent convergence
 
-## Practical Policy Decisions
-- Yes: keep tiny particle counts (for example N=5) in mandatory CI tests.
-- Yes: keep heavier, publication-style demonstrations in documentation notebooks.
-- Yes: treat docs as tests, but only execute a curated fast subset in routine CI.
+#### 1.3: Completion Criteria for Phase 1
+- [ ] `bessel_functions_expansion.ipynb` executes without error
+- [ ] Convergence plots show monotonic improvement with order
+- [ ] Orbit metrics (energy, $L_z$, reversibility) meet target thresholds by $n_{\max} \approx 8\text{–}10$
+- [ ] Code comments explain Bessel–Legendre trade-off and guide future density profile implementations
+- [ ] Fast test suite passes; no regressions in existing potentials
 
-## Next Working Session Scope
-Focus: Implement linear interpolation for host perturber.
+---
 
-Proposed implementation checklist:
-1. Add bracket-index search around current time.
-2. Compute interpolation weight alpha.
-3. Interpolate host position and velocity.
-4. Evaluate host mass at current integration time.
-5. Use interpolated host state in force evaluation.
-6. Add tests:
-   - Unit interpolation correctness
-   - Leapfrog midpoint force continuity regression
-   - Time-reversibility improvement check
+### Phase 2: Composite Basis Potential Validation (Follow-On)
 
-## Definition of Done for This Sprint
-- Core and physics_fast tiers pass.
-- Host interpolation regression tests pass.
-- No discontinuous force artifacts from nearest-time switching.
-- Documentation page updated with a short validation result and method note.
+**Goal:** Validate multi-component basis expansions using real Galactic model and globular cluster data.
+
+#### 2.1: Composite Model Setup
+- [ ] Create or load Ibata2024 Milky Way model configuration
+  - Multiple disk components (thin, thick, or thin + Bessel exponential disk)
+  - Halo (Legendre expansion or fixed profile)
+  - Bulge (if present in model)
+- [ ] Verify component registration and dispatch in `integrator.f90`
+- [ ] Test that each component can be toggled independently
+
+#### 2.2: Globular Cluster Orbit Convergence Study (`composite_basis_potential.ipynb`)
+- [ ] Load sample of globular clusters from Baumgardt catalog
+- [ ] For each cluster:
+  - Integrate orbit in full Ibata2024 model
+  - Sweep $\ell_{\max}$ (halo) and $n_{\max}$ (disk) independently
+  - Record final position, energy, angular momentum
+- [ ] Convergence metrics:
+  - Orbit endpoint mismatch vs reference (full order)
+  - Energy drift vs parameter space
+  - Histogram of convergence rates across catalog
+- [ ] Identify optimal order trade-off for production runs
+- [ ] Document method in notebook with cross-references to component-level validation
+
+#### 2.3: Completion Criteria for Phase 2
+- [ ] Notebook executes without error on full catalog subset (e.g., N ≥ 20 clusters)
+- [ ] Convergence plateaus well-defined for each component
+- [ ] Composite model runtimes are feasible for science production
+- [ ] Clear guidance on recommended orders for different science goals
+
+---
+
+## Integrator Stabilization (Background)
+
+The following integrator improvements remain priority for robustness but can proceed in parallel:
+
+- [ ] Linear interpolation for host perturber (replace nearest-time sampling)
+- [ ] Consistent time handling at integrator entry points
+- [ ] Out-of-range time handling policy
+- [ ] Full regression test suite (T0–T4 matrix per prior plan)
+
+**Test Matrix** (from prior session):
+- T0: API integrity, unit tests (every push, <10s)
+- T1: Numerics correctness, determinism, host interpolation (every push, <20s)
+- T2: Time reversibility, timestep convergence (every push or nightly, <45s)
+- T3: Bar physics, host perturber regression (nightly, 1–3 min)
+- T4: Executable notebooks (nightly, 2–15 min)
+
+---
+
+## Documentation and Testing Philosophy
+
+**Two birds, one stone:** Validation notebooks serve dual purpose:
+1. **Executable documentation** – readers understand method and implementation via reproducible examples
+2. **Scientific validation** – convergence plots, metric stability, and comparison to theory all in one place
+3. **Regression prevention** – notebooks run in CI (or nightly) to catch silent degradation
+
+**Lightweight fast tests** remain in `tests/` for quick feedback.  
+**Heavy validation and showcase notebooks** live in `docs/source/` and execute on nightly or pre-release CI.
+
+---
+
+## File Organization
+
+### Current Structure (Post-Refactor)
+- `tstrippy/src/potentials.f90` – static potentials (Legendre, Bessel, composites)
+- `tstrippy/src/mathutils.f90` – Legendre recursion, Bessel utilities, interpolation, Fortran aliasing
+- `tstrippy/src/integrator.f90` – dispatch and integration kernels
+- `tstrippy/src/hostperturber.f90`, `galacticbar.f90`, `perturbers.f90` – additional physics
+- `tstrippy/io/` – parameter loading and data access (relocated from `Parsers/`)
+- `docs/source/basis_expansion_verification.ipynb` – Legendre convergence ✅
+- `docs/source/legendre_BFE_orbit_convergence.ipynb` – spherical harmonic orbit validation ✅
+- `docs/source/bessel_functions_expansion.ipynb` – Bessel convergence (Phase 1.2)
+- `docs/source/composite_basis_potential.ipynb` – multi-component validation (Phase 2.2)
+
+---
+
+## Feedback and Recommendations
+
+The plan is well-structured and pragmatic. Here are notes:
+
+### Strengths
+1. **Incremental validation:** Single-component convergence before composite ensures you catch bugs early.
+2. **Documentation-as-testing:** Dual-purpose notebooks keep science and code coupled, reducing drift.
+3. **Realistic data:** Using Ibata2024 + globular clusters gives concrete performance targets and credibility.
+4. **Clear separation of concerns:** Exponential disk → abstract Bessel interface → future profiles is good extensibility.
+
+### Watch-Outs
+1. **Naming precision:** Ensure docs clearly state "Bessel functions for Poisson equation" vs "Bessel expansion for exponential disk profile" so future contributors understand the scope and don't conflate method with application.
+2. **Convergence plateaus:** In Phase 2 with composite models, you may see order-dependent improvement that stalls due to other approximations (e.g., radial grid resolution, integration timestep). Document those coupling effects explicitly.
+3. **Table caching strategy:** When composing multiple Bessel and Legendre expansions, precomputed tables can dominate memory. Consider lazy initialization or disk persistence in `io/` if needed.
+4. **CI runtime:** Phase 2 on full cluster catalogs may be slow. Plan for nightly-only execution; keep a small smoke-test subset (e.g., 5 clusters) for push-gate CI.
+
+### Suggestions
+1. **Add a "method selector" table** early in `composite_basis_potential.ipynb`:
+   - When to use spherical harmonics vs Bessel (q threshold, flattening, profile shape)
+   - Computational cost and memory trade-off
+2. **Cross-reference at notebook boundaries:** Each convergence notebook should link forward to the next stage so readers understand the scientific flow.
+3. **Consider a "best-practices" section** in ARCHITECTURE.md on adding new density profiles to the Bessel framework (for your future self and contributors).
+
+### Overall Assessment
+**Direction is sound.** The pipeline from component validation → composite integration → production application is pedagogically and scientifically correct. The dual-purpose documentation approach is modern CI/CD best practice. You're on a good trajectory to produce both robust code and credible science.

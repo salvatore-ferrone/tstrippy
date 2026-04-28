@@ -3,14 +3,40 @@ TIDAL-STRIPPING-PYTHON
 ./tstrippy/__init__.py
 """
 from importlib import import_module
+import warnings
 
-# Import the Fortran modules and move them to the top level
-from .lib.integrator import integrator
-from .lib.potentials import potentials
-from .lib.mathutils import mathutils
+# Try to import Fortran modules (they're compiled into lib/)
+# If they don't exist, provide helpful error messages
+try:
+    from .lib.integrator import integrator
+except ModuleNotFoundError:
+    integrator = None
+    warnings.warn(
+        "Fortran module 'tstrippy.lib.integrator' not found. "
+        "Have you built the package? Run: python -m pip install -e . --no-build-isolation"
+    )
 
-# Import Parsers module
+try:
+    from .lib.potentials import potentials
+except ModuleNotFoundError:
+    potentials = None
+    warnings.warn(
+        "Fortran module 'tstrippy.lib.potentials' not found. "
+        "Have you built the package? Run: python -m pip install -e . --no-build-isolation"
+    )
+
+try:
+    from .lib.mathutils import mathutils
+except ModuleNotFoundError:
+    mathutils = None
+    warnings.warn(
+        "Fortran module 'tstrippy.lib.mathutils' not found. "
+        "Have you built the package? Run: python -m pip install -e . --no-build-isolation"
+    )
+
+# Import pure Python modules
 from . import io
+from . import code
 
 # Define what's available at the top level
 __all__ = [
@@ -19,17 +45,13 @@ __all__ = [
     'mathutils',
     'io',
     'code',
-    'bfe',
-    'sampling',
-    'orbits',
 ]
 
 # Check for Fortran compiler
 import subprocess
-import warnings
 def _check_fortran_compiler():
     try:
-        subprocess.run(['gfortran', '--version'], capture_output=True)
+        subprocess.run(['gfortran', '--version'], capture_output=True, check=False)  # noqa: F841
     except FileNotFoundError:
         warnings.warn(
             "No Fortran compiler found. Some features of tstrippy may not work. "
@@ -37,22 +59,3 @@ def _check_fortran_compiler():
         )
 
 _check_fortran_compiler()
-
-
-def __getattr__(name):
-    if name == 'code':
-        return import_module('.code', __name__)
-    if name == 'bfe':
-        return import_module('.code.bfe', __name__)
-    if name == 'sampling':
-        return import_module('.code.sampling', __name__)
-    if name == 'orbits':
-        return import_module('.code.orbits', __name__)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-def __dir__():
-    return sorted(set(globals()) | set(__all__))
-
-# delete subprocess and warnings
-del subprocess, warnings 

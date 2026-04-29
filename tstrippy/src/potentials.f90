@@ -1010,21 +1010,34 @@ MODULE potentials
         REAL*8, PARAMETER :: pi = 3.14159265358979323846D0
         REAL*8, PARAMETER :: eps = 1.0D-16
         INTEGER :: i, j
-        REAL*8 :: R, absz, signz, aR, k, dk, kmax, A
+        REAL*8 :: R, absz, signz, aR, A
         REAL*8 :: G, sigma0, hR, hZ
-        REAL*8 :: sum_phi, sum_ar, sum_az, weight
+        REAL*8 :: sum_phi, sum_ar, sum_az
         REAL*8 :: kernel, j0, j1
-        REAL*8 :: scale_min
+        REAL*8 :: kval, t, mu
+        REAL*8, DIMENSION(nk) :: k_grid, quad_w, base_kernel, mu_q, w_q
 
         G = params(1)
         sigma0 = params(2)
         hR = params(3)
         hZ = params(4)
 
-        scale_min = MAX(MIN(hR, hZ), 1.0D-6)
-        kmax = 60.0D0 / scale_min
-        dk = kmax / DBLE(nk - 1)
         A = 2.0D0 * pi * G * sigma0 * hR * hR
+
+        ! Integrate k in [0, +inf) via t in [0,1):
+        !   k = t/(1-t),   dk = dt/(1-t)^2
+        ! This avoids a hard k cutoff and substantially reduces ringing.
+        CALL gauss_legendre_nodes_weights(nk, mu_q, w_q)
+        DO j = 1, nk
+            mu = mu_q(j)
+            t = 0.5D0 * (mu + 1.0D0)
+            kval = t / MAX(1.0D0 - t, 1.0D-14)
+            k_grid(j) = kval
+
+            ! 0.5 converts [-1,1] -> [0,1], jacobian handles [0,1) -> [0,+inf)
+            quad_w(j) = 0.5D0 * w_q(j) / MAX((1.0D0 - t)**2, 1.0D-14)
+            base_kernel(j) = 1.0D0 / ( (1.0D0 + (kval*hR)**2)**1.5D0 * (1.0D0 + kval*hZ) )
+        END DO
 
         DO i = 1, N
             R = SQRT(x(i)**2 + y(i)**2)
@@ -1041,25 +1054,19 @@ MODULE potentials
             sum_ar = 0.0D0
             sum_az = 0.0D0
             DO j = 1, nk
-                k = DBLE(j-1) * dk
-                IF (j == 1 .OR. j == nk) THEN
-                    weight = 0.5D0
-                ELSE
-                    weight = 1.0D0
-                END IF
+                kval = k_grid(j)
+                kernel = EXP(-kval * absz) * base_kernel(j)
+                j0 = bessel_j0_scalar(kval * R)
+                j1 = bessel_j1_scalar(kval * R)
 
-                kernel = EXP(-k * absz) / ( (1.0D0 + (k*hR)**2)**1.5D0 * (1.0D0 + k*hZ) )
-                j0 = bessel_j0_scalar(k * R)
-                j1 = bessel_j1_scalar(k * R)
-
-                sum_phi = sum_phi + weight * j0 * kernel
-                sum_ar  = sum_ar  + weight * k * j1 * kernel
-                sum_az  = sum_az  + weight * k * j0 * kernel
+                sum_phi = sum_phi + quad_w(j) * j0 * kernel
+                sum_ar  = sum_ar  + quad_w(j) * kval * j1 * kernel
+                sum_az  = sum_az  + quad_w(j) * kval * j0 * kernel
             END DO
 
-            phi(i) = -A * dk * sum_phi
-            aR = -A * dk * sum_ar
-            az(i) = -A * dk * signz * sum_az
+            phi(i) = -A * sum_phi
+            aR = -A * sum_ar
+            az(i) = -A * signz * sum_az
 
             IF (R > eps) THEN
                 ax(i) = aR * x(i) / R

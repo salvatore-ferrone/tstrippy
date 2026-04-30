@@ -2,6 +2,7 @@ MODULE mathutils
     IMPLICIT NONE
     PRIVATE
     PUBLIC :: linear_interp_scalar
+    PUBLIC :: bilinear_interp_2d
     PUBLIC :: legendre_p_all_axisymmetric
     PUBLIC :: legendre_dp_dmu_all_axisymmetric
     PUBLIC :: legendre_axisymmetric_basis
@@ -20,6 +21,23 @@ MODULE mathutils
         a = MAX(0.0D0, MIN(1.0D0, alpha))
         y = (1.0D0 - a) * y0 + a * y1
     END FUNCTION linear_interp_scalar
+
+    FUNCTION bilinear_interp_2d(f00, f10, f01, f11, alphaR, alphaZ) RESULT(val)
+        ! Bilinear interpolation given four corner values and two fractional
+        ! offsets. alphaR and alphaZ are each in [0,1]; the caller is responsible
+        ! for clamping them before calling this function.
+        !
+        !  f01 ------ f11
+        !   |          |
+        !  f00 ------ f10
+        !      alphaR ->
+        REAL*8, INTENT(IN) :: f00, f10, f01, f11, alphaR, alphaZ
+        REAL*8 :: val
+        val = (1.0D0 - alphaR) * (1.0D0 - alphaZ) * f00 &
+            +          alphaR  * (1.0D0 - alphaZ) * f10 &
+            + (1.0D0 - alphaR) *          alphaZ  * f01 &
+            +          alphaR  *          alphaZ  * f11
+    END FUNCTION bilinear_interp_2d
 
     SUBROUTINE legendre_p_all_axisymmetric(lmax, mu, p)
         ! Compute P_l(mu) for l=0..lmax using three-term recurrence.

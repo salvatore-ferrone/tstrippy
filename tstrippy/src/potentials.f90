@@ -1,5 +1,5 @@
 MODULE potentials
-    USE mathutils, ONLY: linear_interp_scalar, legendre_axisymmetric_basis, &
+    USE mathutils, ONLY: linear_interp_scalar, bilinear_interp_2d, legendre_axisymmetric_basis, &
                          legendre_p_all_axisymmetric, gauss_legendre_nodes_weights, &
                          bessel_j0_scalar, bessel_j1_scalar
     IMPLICIT NONE
@@ -30,8 +30,13 @@ MODULE potentials
     ! Composite BFE manager state.
     INTEGER, PARAMETER, PUBLIC :: BFE_KIND_NONE = 0
     INTEGER, PARAMETER, PUBLIC :: BFE_KIND_LEGENDRE = 1
-    INTEGER, PARAMETER, PUBLIC :: BFE_KIND_BESSEL_DISK = 2
+    INTEGER, PARAMETER, PUBLIC :: BFE_KIND_BESSEL_DISK = 2    ! direct quadrature (reference only)
+    INTEGER, PARAMETER, PUBLIC :: BFE_KIND_DISK_TABLE = 3     ! precomputed cylindrical table (production)
     INTEGER, PARAMETER, PUBLIC :: COMPOSITE_BESSEL_MAX_PARAMS = 16
+
+    ! Disk table resolution (shared across all disk components).
+    INTEGER, PARAMETER, PUBLIC :: COMPOSITE_DISK_TABLE_NR = 256  ! log-spaced R nodes
+    INTEGER, PARAMETER, PUBLIC :: COMPOSITE_DISK_TABLE_NZ = 128  ! linear z nodes (z >= 0)
 
     LOGICAL, PUBLIC :: COMPOSITE_BASIS_GRID_SET = .FALSE.
     LOGICAL, PUBLIC :: COMPOSITE_BASIS_FINALIZED = .FALSE.
@@ -51,6 +56,13 @@ MODULE potentials
 
     REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_BESSEL_PARAMS
 
+    ! Per-component disk-table metadata: row 1 = logR_min, row 2 = dlogR, row 3 = dz.
+    REAL*8, DIMENSION(:,:),   ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_META   ! (3, ncomp)
+    ! Precomputed cylindrical (R, z) tables per disk component.
+    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_PHI    ! (nR, nZ, ncomp)
+    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_AR     ! (nR, nZ, ncomp)
+    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_AZ     ! (nR, nZ, ncomp), z>=0
+
     ! Private internal routines (not exposed to Python/caller)
     PRIVATE :: default_init_basis_expansion
     PRIVATE :: project_exponential_oblate_halo
@@ -61,6 +73,8 @@ MODULE potentials
     PRIVATE :: axisymmetricbasisexpansion_eval_component
     PRIVATE :: bessel_eval_component
     PRIVATE :: exponential_disk_bessel_eval_component
+    PRIVATE :: build_exponential_disk_table
+    PRIVATE :: disk_table_eval_component
 
     CONTAINS
     SUBROUTINE initaxisymmetricbasisexpansion(G, lmax, nr, r_grid)
@@ -117,8 +131,12 @@ MODULE potentials
         IF (ALLOCATED(COMPOSITE_RHO_L_GRID))      DEALLOCATE(COMPOSITE_RHO_L_GRID)
         IF (ALLOCATED(COMPOSITE_PHI_L_GRID))      DEALLOCATE(COMPOSITE_PHI_L_GRID)
         IF (ALLOCATED(COMPOSITE_DPHI_L_DR_GRID))  DEALLOCATE(COMPOSITE_DPHI_L_DR_GRID)
-        IF (ALLOCATED(COMPOSITE_BESSEL_NPARAMS))  DEALLOCATE(COMPOSITE_BESSEL_NPARAMS)
-        IF (ALLOCATED(COMPOSITE_BESSEL_PARAMS))   DEALLOCATE(COMPOSITE_BESSEL_PARAMS)
+        IF (ALLOCATED(COMPOSITE_BESSEL_NPARAMS))    DEALLOCATE(COMPOSITE_BESSEL_NPARAMS)
+        IF (ALLOCATED(COMPOSITE_BESSEL_PARAMS))      DEALLOCATE(COMPOSITE_BESSEL_PARAMS)
+        IF (ALLOCATED(COMPOSITE_DISK_TABLE_META))    DEALLOCATE(COMPOSITE_DISK_TABLE_META)
+        IF (ALLOCATED(COMPOSITE_DISK_TABLE_PHI))     DEALLOCATE(COMPOSITE_DISK_TABLE_PHI)
+        IF (ALLOCATED(COMPOSITE_DISK_TABLE_AR))      DEALLOCATE(COMPOSITE_DISK_TABLE_AR)
+        IF (ALLOCATED(COMPOSITE_DISK_TABLE_AZ))      DEALLOCATE(COMPOSITE_DISK_TABLE_AZ)
 
         COMPOSITE_BASIS_GRID_SET = .FALSE.
         COMPOSITE_BASIS_FINALIZED = .FALSE.
@@ -149,6 +167,10 @@ MODULE potentials
         ALLOCATE(COMPOSITE_PHI_L_GRID(0:lmax, nr, ncomp))
         ALLOCATE(COMPOSITE_DPHI_L_DR_GRID(0:lmax, nr, ncomp))
         ALLOCATE(COMPOSITE_BESSEL_PARAMS(COMPOSITE_BESSEL_MAX_PARAMS, ncomp))
+        ALLOCATE(COMPOSITE_DISK_TABLE_META(3, ncomp))
+        ALLOCATE(COMPOSITE_DISK_TABLE_PHI(COMPOSITE_DISK_TABLE_NR, COMPOSITE_DISK_TABLE_NZ, ncomp))
+        ALLOCATE(COMPOSITE_DISK_TABLE_AR( COMPOSITE_DISK_TABLE_NR, COMPOSITE_DISK_TABLE_NZ, ncomp))
+        ALLOCATE(COMPOSITE_DISK_TABLE_AZ( COMPOSITE_DISK_TABLE_NR, COMPOSITE_DISK_TABLE_NZ, ncomp))
 
         COMPOSITE_KIND = BFE_KIND_NONE
         COMPOSITE_READY = .FALSE.
@@ -156,7 +178,11 @@ MODULE potentials
         COMPOSITE_RHO_L_GRID = 0.0D0
         COMPOSITE_PHI_L_GRID = 0.0D0
         COMPOSITE_DPHI_L_DR_GRID = 0.0D0
-        COMPOSITE_BESSEL_PARAMS = 0.0D0
+        COMPOSITE_BESSEL_PARAMS  = 0.0D0
+        COMPOSITE_DISK_TABLE_META = 0.0D0
+        COMPOSITE_DISK_TABLE_PHI  = 0.0D0
+        COMPOSITE_DISK_TABLE_AR   = 0.0D0
+        COMPOSITE_DISK_TABLE_AZ   = 0.0D0
 
         COMPOSITE_G = G
         COMPOSITE_LMAX = lmax
@@ -282,19 +308,34 @@ MODULE potentials
     END SUBROUTINE addcompositebesselcomponent
 
     SUBROUTINE addcompositebesselexponentialdisk(component_index, sigma0, hR, hZ)
-        ! Backward-compatible helper for the exponential-disk Bessel model.
+        ! Register and precompute an exponential-disk component using the
+        ! tabulated cylindrical force representation (BFE_KIND_DISK_TABLE).
+        ! The one-time Bessel/Hankel quadrature is performed here at setup time;
+        ! runtime evaluation uses bilinear interpolation on the stored table.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN) :: sigma0, hR, hZ
         REAL*8, DIMENSION(4) :: params_disk
 
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initaxisymmetriccompositebasisexpansion must be called before addcompositebesselexponentialdisk"
+        IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) STOP "invalid composite component_index"
         IF (hR <= 0.0D0 .OR. hZ <= 0.0D0) STOP "hR and hZ must be positive"
 
+        ! Retain raw params for the reference direct-quadrature path.
         params_disk(1) = COMPOSITE_G
         params_disk(2) = sigma0
         params_disk(3) = hR
         params_disk(4) = hZ
-        CALL addcompositebesselcomponent(component_index, params_disk, 4)
+        COMPOSITE_BESSEL_PARAMS(:, component_index) = 0.0D0
+        COMPOSITE_BESSEL_PARAMS(1:4, component_index) = params_disk
+        COMPOSITE_BESSEL_NPARAMS(component_index) = 4
+
+        ! Build the 2D cylindrical table (expensive offline step).
+        CALL build_exponential_disk_table(component_index, COMPOSITE_G, sigma0, hR, hZ)
+
+        COMPOSITE_KIND(component_index) = BFE_KIND_DISK_TABLE
+        COMPOSITE_READY(component_index) = .TRUE.
+        COMPOSITE_BASIS_FINALIZED = .FALSE.
     END SUBROUTINE addcompositebesselexponentialdisk
 
     SUBROUTINE finalizeaxisymmetriccompositebasisexpansion()
@@ -373,6 +414,8 @@ MODULE potentials
                 CALL bessel_eval_component(exponential_disk_bessel_eval_component, &
                     COMPOSITE_BESSEL_PARAMS(1:nparams_bessel, i), N, &
                     x, y, z, ax_comp, ay_comp, az_comp, phi_comp)
+            CASE (BFE_KIND_DISK_TABLE)
+                CALL disk_table_eval_component(i, N, x, y, z, ax_comp, ay_comp, az_comp, phi_comp)
             CASE DEFAULT
                 STOP "unknown component kind in axisymmetriccompositebasispotential"
             END SELECT
@@ -1077,6 +1120,158 @@ MODULE potentials
             END IF
         END DO
     END SUBROUTINE exponential_disk_bessel_eval_component
+
+    SUBROUTINE build_exponential_disk_table(component_index, G, sigma0, hR, hZ)
+        ! Build a precomputed 2D (R, z>=0) force and potential table for an
+        ! exponential-disk component. The expensive Bessel/Hankel quadrature is
+        ! performed once here at setup time; runtime evaluation uses O(1)
+        ! bilinear interpolation from the stored table.
+        !
+        ! Table R extent: [0.001*hR, 200*hR], COMPOSITE_DISK_TABLE_NR nodes, log-spaced.
+        ! Table z extent: [0, 200*hZ],        COMPOSITE_DISK_TABLE_NZ nodes, linear.
+        ! Quadrature nodes: nk=512 (higher accuracy acceptable for offline build).
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: component_index
+        REAL*8, INTENT(IN) :: G, sigma0, hR, hZ
+        INTEGER, PARAMETER :: nk = 512
+        REAL*8, PARAMETER :: pi = 3.14159265358979323846D0
+        INTEGER :: iR, iZ, j
+        REAL*8 :: R, z_val, A
+        REAL*8 :: logR_min, logR_max, dlogR, z_max, dz
+        REAL*8 :: sum_phi, sum_ar, sum_az, kernel, j0v, j1v
+        REAL*8 :: kval, t, mu
+        REAL*8, DIMENSION(nk) :: k_grid, quad_w, base_kernel, mu_q, w_q
+
+        A = 2.0D0 * pi * G * sigma0 * hR * hR
+
+        logR_min = LOG(1.0D-3 * hR)
+        logR_max = LOG(2.0D2 * hR)
+        dlogR    = (logR_max - logR_min) / DBLE(COMPOSITE_DISK_TABLE_NR - 1)
+        z_max    = 2.0D2 * hZ
+        dz       = z_max / DBLE(COMPOSITE_DISK_TABLE_NZ - 1)
+
+        ! Store grid metadata for runtime interpolation
+        COMPOSITE_DISK_TABLE_META(1, component_index) = logR_min
+        COMPOSITE_DISK_TABLE_META(2, component_index) = dlogR
+        COMPOSITE_DISK_TABLE_META(3, component_index) = dz
+
+        ! Precompute k quadrature nodes and k-independent kernel factor
+        CALL gauss_legendre_nodes_weights(nk, mu_q, w_q)
+        DO j = 1, nk
+            mu       = mu_q(j)
+            t        = 0.5D0 * (mu + 1.0D0)
+            kval     = t / MAX(1.0D0 - t, 1.0D-14)
+            k_grid(j) = kval
+            quad_w(j) = 0.5D0 * w_q(j) / MAX((1.0D0 - t)**2, 1.0D-14)
+            base_kernel(j) = 1.0D0 / ((1.0D0 + (kval*hR)**2)**1.5D0 * (1.0D0 + kval*hZ))
+        END DO
+
+        ! Evaluate Phi, aR, az on each (R, z) grid point
+        DO iR = 1, COMPOSITE_DISK_TABLE_NR
+            R = EXP(logR_min + DBLE(iR - 1) * dlogR)
+            DO iZ = 1, COMPOSITE_DISK_TABLE_NZ
+                z_val = DBLE(iZ - 1) * dz
+
+                sum_phi = 0.0D0
+                sum_ar  = 0.0D0
+                sum_az  = 0.0D0
+                DO j = 1, nk
+                    kval   = k_grid(j)
+                    kernel = EXP(-kval * z_val) * base_kernel(j)
+                    j0v    = bessel_j0_scalar(kval * R)
+                    j1v    = bessel_j1_scalar(kval * R)
+
+                    sum_phi = sum_phi + quad_w(j) * j0v * kernel
+                    sum_ar  = sum_ar  + quad_w(j) * kval * j1v * kernel
+                    sum_az  = sum_az  + quad_w(j) * kval * j0v * kernel
+                END DO
+
+                COMPOSITE_DISK_TABLE_PHI(iR, iZ, component_index) = -A * sum_phi
+                COMPOSITE_DISK_TABLE_AR( iR, iZ, component_index) = -A * sum_ar
+                COMPOSITE_DISK_TABLE_AZ( iR, iZ, component_index) = -A * sum_az
+            END DO
+        END DO
+    END SUBROUTINE build_exponential_disk_table
+
+    SUBROUTINE disk_table_eval_component(component_index, N, x, y, z, ax, ay, az, phi)
+        ! Evaluate disk force and potential from precomputed cylindrical table using
+        ! O(1) bilinear interpolation. Exploits z-reflection symmetry: table stores
+        ! z >= 0 only; the sign of az is flipped for z < 0.
+        ! Queries outside the table domain are clamped to the boundary.
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: component_index, N
+        REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        REAL*8, PARAMETER :: eps = 1.0D-16
+        INTEGER :: i, iR, iZ
+        REAL*8 :: R, logR, absz, signz, aR_val
+        REAL*8 :: logR_min, dlogR, dz
+        REAL*8 :: alphaR, alphaZ
+        REAL*8 :: f00, f10, f01, f11
+
+        logR_min = COMPOSITE_DISK_TABLE_META(1, component_index)
+        dlogR    = COMPOSITE_DISK_TABLE_META(2, component_index)
+        dz       = COMPOSITE_DISK_TABLE_META(3, component_index)
+
+        DO i = 1, N
+            R    = SQRT(x(i)**2 + y(i)**2)
+            absz = ABS(z(i))
+            IF (z(i) > 0.0D0) THEN
+                signz = 1.0D0
+            ELSE IF (z(i) < 0.0D0) THEN
+                signz = -1.0D0
+            ELSE
+                signz = 0.0D0
+            END IF
+
+            ! R fractional index in log space (O(1) lookup on uniform grid)
+            IF (R > eps) THEN
+                logR = LOG(R)
+            ELSE
+                logR = logR_min
+            END IF
+            iR     = INT((logR - logR_min) / dlogR)
+            iR     = MAX(0, MIN(COMPOSITE_DISK_TABLE_NR - 2, iR))
+            alphaR = (logR - logR_min) / dlogR - DBLE(iR)
+            alphaR = MAX(0.0D0, MIN(1.0D0, alphaR))
+
+            ! Z fractional index in linear space
+            iZ     = INT(absz / dz)
+            iZ     = MAX(0, MIN(COMPOSITE_DISK_TABLE_NZ - 2, iZ))
+            alphaZ = absz / dz - DBLE(iZ)
+            alphaZ = MAX(0.0D0, MIN(1.0D0, alphaZ))
+
+            ! phi
+            f00 = COMPOSITE_DISK_TABLE_PHI(iR+1, iZ+1, component_index)
+            f10 = COMPOSITE_DISK_TABLE_PHI(iR+2, iZ+1, component_index)
+            f01 = COMPOSITE_DISK_TABLE_PHI(iR+1, iZ+2, component_index)
+            f11 = COMPOSITE_DISK_TABLE_PHI(iR+2, iZ+2, component_index)
+            phi(i) = bilinear_interp_2d(f00, f10, f01, f11, alphaR, alphaZ)
+
+            ! aR
+            f00 = COMPOSITE_DISK_TABLE_AR(iR+1, iZ+1, component_index)
+            f10 = COMPOSITE_DISK_TABLE_AR(iR+2, iZ+1, component_index)
+            f01 = COMPOSITE_DISK_TABLE_AR(iR+1, iZ+2, component_index)
+            f11 = COMPOSITE_DISK_TABLE_AR(iR+2, iZ+2, component_index)
+            aR_val = bilinear_interp_2d(f00, f10, f01, f11, alphaR, alphaZ)
+
+            ! az (table is z>=0; restore sign from actual z)
+            f00 = COMPOSITE_DISK_TABLE_AZ(iR+1, iZ+1, component_index)
+            f10 = COMPOSITE_DISK_TABLE_AZ(iR+2, iZ+1, component_index)
+            f01 = COMPOSITE_DISK_TABLE_AZ(iR+1, iZ+2, component_index)
+            f11 = COMPOSITE_DISK_TABLE_AZ(iR+2, iZ+2, component_index)
+            az(i) = signz * bilinear_interp_2d(f00, f10, f01, f11, alphaR, alphaZ)
+
+            ! Project aR onto Cartesian x, y
+            IF (R > eps) THEN
+                ax(i) = aR_val * x(i) / R
+                ay(i) = aR_val * y(i) / R
+            ELSE
+                ax(i) = 0.0D0
+                ay(i) = 0.0D0
+            END IF
+        END DO
+    END SUBROUTINE disk_table_eval_component
 
     SUBROUTINE exponential_oblate_halo(params, N, x, y, z, ax, ay, az, phi)
         ! Axisymmetric exponential oblate halo:

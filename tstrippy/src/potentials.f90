@@ -1,5 +1,5 @@
 MODULE potentials
-    USE mathutils, ONLY: linear_interp_scalar, bilinear_interp_2d, legendre_axisymmetric_basis, &
+    USE mathutils, ONLY: linear_interp_scalar, bicubic_hermite_eval_2d, legendre_axisymmetric_basis, &
                          legendre_p_all_axisymmetric, gauss_legendre_nodes_weights, &
                          bessel_j0_scalar, bessel_j1_scalar
     IMPLICIT NONE
@@ -59,9 +59,10 @@ MODULE potentials
     ! Per-component disk-table metadata: row 1 = logR_min, row 2 = dlogR, row 3 = dz.
     REAL*8, DIMENSION(:,:),   ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_META   ! (3, ncomp)
     ! Precomputed cylindrical (R, z) tables per disk component.
-    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_PHI    ! (nR, nZ, ncomp)
-    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_AR     ! (nR, nZ, ncomp)
-    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_AZ     ! (nR, nZ, ncomp), z>=0
+    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_PHI        ! (nR, nZ, ncomp)
+    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_DPHI_DR    ! (nR, nZ, ncomp)
+    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_DPHI_DZ    ! (nR, nZ, ncomp), z>=0
+    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_D2PHI_DRDZ ! (nR, nZ, ncomp), z>=0
 
     ! Private internal routines (not exposed to Python/caller)
     PRIVATE :: default_init_basis_expansion
@@ -135,8 +136,9 @@ MODULE potentials
         IF (ALLOCATED(COMPOSITE_BESSEL_PARAMS))      DEALLOCATE(COMPOSITE_BESSEL_PARAMS)
         IF (ALLOCATED(COMPOSITE_DISK_TABLE_META))    DEALLOCATE(COMPOSITE_DISK_TABLE_META)
         IF (ALLOCATED(COMPOSITE_DISK_TABLE_PHI))     DEALLOCATE(COMPOSITE_DISK_TABLE_PHI)
-        IF (ALLOCATED(COMPOSITE_DISK_TABLE_AR))      DEALLOCATE(COMPOSITE_DISK_TABLE_AR)
-        IF (ALLOCATED(COMPOSITE_DISK_TABLE_AZ))      DEALLOCATE(COMPOSITE_DISK_TABLE_AZ)
+        IF (ALLOCATED(COMPOSITE_DISK_TABLE_DPHI_DR)) DEALLOCATE(COMPOSITE_DISK_TABLE_DPHI_DR)
+        IF (ALLOCATED(COMPOSITE_DISK_TABLE_DPHI_DZ)) DEALLOCATE(COMPOSITE_DISK_TABLE_DPHI_DZ)
+        IF (ALLOCATED(COMPOSITE_DISK_TABLE_D2PHI_DRDZ)) DEALLOCATE(COMPOSITE_DISK_TABLE_D2PHI_DRDZ)
 
         COMPOSITE_BASIS_GRID_SET = .FALSE.
         COMPOSITE_BASIS_FINALIZED = .FALSE.
@@ -169,8 +171,9 @@ MODULE potentials
         ALLOCATE(COMPOSITE_BESSEL_PARAMS(COMPOSITE_BESSEL_MAX_PARAMS, ncomp))
         ALLOCATE(COMPOSITE_DISK_TABLE_META(3, ncomp))
         ALLOCATE(COMPOSITE_DISK_TABLE_PHI(COMPOSITE_DISK_TABLE_NR, COMPOSITE_DISK_TABLE_NZ, ncomp))
-        ALLOCATE(COMPOSITE_DISK_TABLE_AR( COMPOSITE_DISK_TABLE_NR, COMPOSITE_DISK_TABLE_NZ, ncomp))
-        ALLOCATE(COMPOSITE_DISK_TABLE_AZ( COMPOSITE_DISK_TABLE_NR, COMPOSITE_DISK_TABLE_NZ, ncomp))
+        ALLOCATE(COMPOSITE_DISK_TABLE_DPHI_DR(COMPOSITE_DISK_TABLE_NR, COMPOSITE_DISK_TABLE_NZ, ncomp))
+        ALLOCATE(COMPOSITE_DISK_TABLE_DPHI_DZ(COMPOSITE_DISK_TABLE_NR, COMPOSITE_DISK_TABLE_NZ, ncomp))
+        ALLOCATE(COMPOSITE_DISK_TABLE_D2PHI_DRDZ(COMPOSITE_DISK_TABLE_NR, COMPOSITE_DISK_TABLE_NZ, ncomp))
 
         COMPOSITE_KIND = BFE_KIND_NONE
         COMPOSITE_READY = .FALSE.
@@ -181,8 +184,9 @@ MODULE potentials
         COMPOSITE_BESSEL_PARAMS  = 0.0D0
         COMPOSITE_DISK_TABLE_META = 0.0D0
         COMPOSITE_DISK_TABLE_PHI  = 0.0D0
-        COMPOSITE_DISK_TABLE_AR   = 0.0D0
-        COMPOSITE_DISK_TABLE_AZ   = 0.0D0
+        COMPOSITE_DISK_TABLE_DPHI_DR = 0.0D0
+        COMPOSITE_DISK_TABLE_DPHI_DZ = 0.0D0
+        COMPOSITE_DISK_TABLE_D2PHI_DRDZ = 0.0D0
 
         COMPOSITE_G = G
         COMPOSITE_LMAX = lmax
@@ -1122,10 +1126,10 @@ MODULE potentials
     END SUBROUTINE exponential_disk_bessel_eval_component
 
     SUBROUTINE build_exponential_disk_table(component_index, G, sigma0, hR, hZ)
-        ! Build a precomputed 2D (R, z>=0) force and potential table for an
-        ! exponential-disk component. The expensive Bessel/Hankel quadrature is
-        ! performed once here at setup time; runtime evaluation uses O(1)
-        ! bilinear interpolation from the stored table.
+        ! Build a precomputed 2D (R, z>=0) potential table and derivative tables
+        ! for conservative bicubic interpolation:
+        !   Phi, dPhi/dR, dPhi/dz, d2Phi/(dR dz)
+        ! Runtime forces are then computed as gradients of ONE interpolated Phi.
         !
         ! Table R extent: [0.001*hR, 200*hR], COMPOSITE_DISK_TABLE_NR nodes, log-spaced.
         ! Table z extent: [0, 200*hZ],        COMPOSITE_DISK_TABLE_NZ nodes, linear.
@@ -1138,7 +1142,7 @@ MODULE potentials
         INTEGER :: iR, iZ, j
         REAL*8 :: R, z_val, A
         REAL*8 :: logR_min, logR_max, dlogR, z_max, dz
-        REAL*8 :: sum_phi, sum_ar, sum_az, kernel, j0v, j1v
+        REAL*8 :: sum_phi, sum_dphi_dR, sum_dphi_dz, kernel, j0v, j1v
         REAL*8 :: kval, t, mu
         REAL*8, DIMENSION(nk) :: k_grid, quad_w, base_kernel, mu_q, w_q
 
@@ -1158,60 +1162,85 @@ MODULE potentials
         ! Precompute k quadrature nodes and k-independent kernel factor
         CALL gauss_legendre_nodes_weights(nk, mu_q, w_q)
         DO j = 1, nk
-            mu       = mu_q(j)
-            t        = 0.5D0 * (mu + 1.0D0)
-            kval     = t / MAX(1.0D0 - t, 1.0D-14)
+            mu        = mu_q(j)
+            t         = 0.5D0 * (mu + 1.0D0)
+            kval      = t / MAX(1.0D0 - t, 1.0D-14)
             k_grid(j) = kval
             quad_w(j) = 0.5D0 * w_q(j) / MAX((1.0D0 - t)**2, 1.0D-14)
             base_kernel(j) = 1.0D0 / ((1.0D0 + (kval*hR)**2)**1.5D0 * (1.0D0 + kval*hZ))
         END DO
 
-        ! Evaluate Phi, aR, az on each (R, z) grid point
+        ! Evaluate Phi and first derivatives on each (R, z>=0) grid point.
         DO iR = 1, COMPOSITE_DISK_TABLE_NR
             R = EXP(logR_min + DBLE(iR - 1) * dlogR)
             DO iZ = 1, COMPOSITE_DISK_TABLE_NZ
                 z_val = DBLE(iZ - 1) * dz
 
-                sum_phi = 0.0D0
-                sum_ar  = 0.0D0
-                sum_az  = 0.0D0
+                sum_phi     = 0.0D0
+                sum_dphi_dR = 0.0D0
+                sum_dphi_dz = 0.0D0
                 DO j = 1, nk
                     kval   = k_grid(j)
                     kernel = EXP(-kval * z_val) * base_kernel(j)
                     j0v    = bessel_j0_scalar(kval * R)
                     j1v    = bessel_j1_scalar(kval * R)
 
-                    sum_phi = sum_phi + quad_w(j) * j0v * kernel
-                    sum_ar  = sum_ar  + quad_w(j) * kval * j1v * kernel
-                    sum_az  = sum_az  + quad_w(j) * kval * j0v * kernel
+                    sum_phi     = sum_phi     + quad_w(j) * j0v * kernel
+                    sum_dphi_dR = sum_dphi_dR + quad_w(j) * kval * j1v * kernel
+                    sum_dphi_dz = sum_dphi_dz + quad_w(j) * kval * j0v * kernel
                 END DO
 
-                COMPOSITE_DISK_TABLE_PHI(iR, iZ, component_index) = -A * sum_phi
-                COMPOSITE_DISK_TABLE_AR( iR, iZ, component_index) = -A * sum_ar
-                COMPOSITE_DISK_TABLE_AZ( iR, iZ, component_index) = -A * sum_az
+                COMPOSITE_DISK_TABLE_PHI(iR, iZ, component_index)     = -A * sum_phi
+                COMPOSITE_DISK_TABLE_DPHI_DR(iR, iZ, component_index) =  A * sum_dphi_dR
+                COMPOSITE_DISK_TABLE_DPHI_DZ(iR, iZ, component_index) =  A * sum_dphi_dz
+            END DO
+        END DO
+
+        ! Mixed derivative d/dz(dPhi/dR) from the precomputed first derivative.
+        DO iR = 1, COMPOSITE_DISK_TABLE_NR
+            DO iZ = 1, COMPOSITE_DISK_TABLE_NZ
+                IF (iZ == 1) THEN
+                    COMPOSITE_DISK_TABLE_D2PHI_DRDZ(iR, iZ, component_index) = &
+                        (COMPOSITE_DISK_TABLE_DPHI_DR(iR, iZ+1, component_index) - &
+                         COMPOSITE_DISK_TABLE_DPHI_DR(iR, iZ,   component_index)) / dz
+                ELSE IF (iZ == COMPOSITE_DISK_TABLE_NZ) THEN
+                    COMPOSITE_DISK_TABLE_D2PHI_DRDZ(iR, iZ, component_index) = &
+                        (COMPOSITE_DISK_TABLE_DPHI_DR(iR, iZ,   component_index) - &
+                         COMPOSITE_DISK_TABLE_DPHI_DR(iR, iZ-1, component_index)) / dz
+                ELSE
+                    COMPOSITE_DISK_TABLE_D2PHI_DRDZ(iR, iZ, component_index) = &
+                        (COMPOSITE_DISK_TABLE_DPHI_DR(iR, iZ+1, component_index) - &
+                         COMPOSITE_DISK_TABLE_DPHI_DR(iR, iZ-1, component_index)) / (2.0D0 * dz)
+                END IF
             END DO
         END DO
     END SUBROUTINE build_exponential_disk_table
 
     SUBROUTINE disk_table_eval_component(component_index, N, x, y, z, ax, ay, az, phi)
-        ! Evaluate disk force and potential from precomputed cylindrical table using
-        ! O(1) bilinear interpolation. Exploits z-reflection symmetry: table stores
-        ! z >= 0 only; the sign of az is flipped for z < 0.
-        ! Queries outside the table domain are clamped to the boundary.
+        ! Conservative bicubic evaluation from one interpolated potential patch.
+        ! Forces are computed as gradients of the same interpolated Phi:
+        !   aR = -dPhi/dR, az = -dPhi/dz.
+        ! Table stores z>=0 values; odd/even symmetry is applied for z<0.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: component_index, N
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
         REAL*8, PARAMETER :: eps = 1.0D-16
         INTEGER :: i, iR, iZ
-        REAL*8 :: R, logR, absz, signz, aR_val
-        REAL*8 :: logR_min, dlogR, dz
-        REAL*8 :: alphaR, alphaZ
+        REAL*8 :: R, Rq, absz, signz, aR_val
+        REAL*8 :: logR, logR_min, dlogR, dz, logR_max
+        REAL*8 :: alphaR, alphaZ, zq
+        REAL*8 :: R_lo, R_hi, dR, z_lo
+        REAL*8 :: phi_loc, dphi_dR_loc, dphi_dz_abs
         REAL*8 :: f00, f10, f01, f11
+        REAL*8 :: fx00, fx10, fx01, fx11
+        REAL*8 :: fy00, fy10, fy01, fy11
+        REAL*8 :: fxy00, fxy10, fxy01, fxy11
 
         logR_min = COMPOSITE_DISK_TABLE_META(1, component_index)
         dlogR    = COMPOSITE_DISK_TABLE_META(2, component_index)
         dz       = COMPOSITE_DISK_TABLE_META(3, component_index)
+        logR_max = logR_min + DBLE(COMPOSITE_DISK_TABLE_NR - 1) * dlogR
 
         DO i = 1, N
             R    = SQRT(x(i)**2 + y(i)**2)
@@ -1224,45 +1253,64 @@ MODULE potentials
                 signz = 0.0D0
             END IF
 
-            ! R fractional index in log space (O(1) lookup on uniform grid)
+            ! Clamp query coordinates to table domain.
             IF (R > eps) THEN
-                logR = LOG(R)
+                logR = MIN(MAX(LOG(R), logR_min), logR_max)
+                Rq = EXP(logR)
             ELSE
                 logR = logR_min
+                Rq = EXP(logR_min)
             END IF
-            iR     = INT((logR - logR_min) / dlogR)
-            iR     = MAX(0, MIN(COMPOSITE_DISK_TABLE_NR - 2, iR))
-            alphaR = (logR - logR_min) / dlogR - DBLE(iR)
+            zq = MIN(absz, DBLE(COMPOSITE_DISK_TABLE_NZ - 1) * dz)
+
+            ! Cell lookup in logR index space.
+            iR = INT((logR - logR_min) / dlogR)
+            iR = MAX(0, MIN(COMPOSITE_DISK_TABLE_NR - 2, iR))
+            R_lo = EXP(logR_min + DBLE(iR) * dlogR)
+            R_hi = EXP(logR_min + DBLE(iR + 1) * dlogR)
+            dR = MAX(R_hi - R_lo, eps)
+            alphaR = (Rq - R_lo) / dR
             alphaR = MAX(0.0D0, MIN(1.0D0, alphaR))
 
-            ! Z fractional index in linear space
-            iZ     = INT(absz / dz)
-            iZ     = MAX(0, MIN(COMPOSITE_DISK_TABLE_NZ - 2, iZ))
-            alphaZ = absz / dz - DBLE(iZ)
+            ! Cell lookup in z index space.
+            iZ = INT(zq / dz)
+            iZ = MAX(0, MIN(COMPOSITE_DISK_TABLE_NZ - 2, iZ))
+            z_lo = DBLE(iZ) * dz
+            alphaZ = (zq - z_lo) / dz
             alphaZ = MAX(0.0D0, MIN(1.0D0, alphaZ))
 
-            ! phi
-            f00 = COMPOSITE_DISK_TABLE_PHI(iR+1, iZ+1, component_index)
-            f10 = COMPOSITE_DISK_TABLE_PHI(iR+2, iZ+1, component_index)
-            f01 = COMPOSITE_DISK_TABLE_PHI(iR+1, iZ+2, component_index)
-            f11 = COMPOSITE_DISK_TABLE_PHI(iR+2, iZ+2, component_index)
-            phi(i) = bilinear_interp_2d(f00, f10, f01, f11, alphaR, alphaZ)
+            ! Gather patch values and derivatives at corners.
+            f00   = COMPOSITE_DISK_TABLE_PHI(iR+1, iZ+1, component_index)
+            f10   = COMPOSITE_DISK_TABLE_PHI(iR+2, iZ+1, component_index)
+            f01   = COMPOSITE_DISK_TABLE_PHI(iR+1, iZ+2, component_index)
+            f11   = COMPOSITE_DISK_TABLE_PHI(iR+2, iZ+2, component_index)
 
-            ! aR
-            f00 = COMPOSITE_DISK_TABLE_AR(iR+1, iZ+1, component_index)
-            f10 = COMPOSITE_DISK_TABLE_AR(iR+2, iZ+1, component_index)
-            f01 = COMPOSITE_DISK_TABLE_AR(iR+1, iZ+2, component_index)
-            f11 = COMPOSITE_DISK_TABLE_AR(iR+2, iZ+2, component_index)
-            aR_val = bilinear_interp_2d(f00, f10, f01, f11, alphaR, alphaZ)
+            fx00  = COMPOSITE_DISK_TABLE_DPHI_DR(iR+1, iZ+1, component_index)
+            fx10  = COMPOSITE_DISK_TABLE_DPHI_DR(iR+2, iZ+1, component_index)
+            fx01  = COMPOSITE_DISK_TABLE_DPHI_DR(iR+1, iZ+2, component_index)
+            fx11  = COMPOSITE_DISK_TABLE_DPHI_DR(iR+2, iZ+2, component_index)
 
-            ! az (table is z>=0; restore sign from actual z)
-            f00 = COMPOSITE_DISK_TABLE_AZ(iR+1, iZ+1, component_index)
-            f10 = COMPOSITE_DISK_TABLE_AZ(iR+2, iZ+1, component_index)
-            f01 = COMPOSITE_DISK_TABLE_AZ(iR+1, iZ+2, component_index)
-            f11 = COMPOSITE_DISK_TABLE_AZ(iR+2, iZ+2, component_index)
-            az(i) = signz * bilinear_interp_2d(f00, f10, f01, f11, alphaR, alphaZ)
+            fy00  = COMPOSITE_DISK_TABLE_DPHI_DZ(iR+1, iZ+1, component_index)
+            fy10  = COMPOSITE_DISK_TABLE_DPHI_DZ(iR+2, iZ+1, component_index)
+            fy01  = COMPOSITE_DISK_TABLE_DPHI_DZ(iR+1, iZ+2, component_index)
+            fy11  = COMPOSITE_DISK_TABLE_DPHI_DZ(iR+2, iZ+2, component_index)
 
-            ! Project aR onto Cartesian x, y
+            fxy00 = COMPOSITE_DISK_TABLE_D2PHI_DRDZ(iR+1, iZ+1, component_index)
+            fxy10 = COMPOSITE_DISK_TABLE_D2PHI_DRDZ(iR+2, iZ+1, component_index)
+            fxy01 = COMPOSITE_DISK_TABLE_D2PHI_DRDZ(iR+1, iZ+2, component_index)
+            fxy11 = COMPOSITE_DISK_TABLE_D2PHI_DRDZ(iR+2, iZ+2, component_index)
+
+            CALL bicubic_hermite_eval_2d(f00, f10, f01, f11, &
+                                         fx00, fx10, fx01, fx11, &
+                                         fy00, fy10, fy01, fy11, &
+                                         fxy00, fxy10, fxy01, fxy11, &
+                                         dR, dz, alphaR, alphaZ, &
+                                         phi_loc, dphi_dR_loc, dphi_dz_abs)
+
+            phi(i) = phi_loc
+            aR_val = -dphi_dR_loc
+            az(i)  = -signz * dphi_dz_abs
+
             IF (R > eps) THEN
                 ax(i) = aR_val * x(i) / R
                 ay(i) = aR_val * y(i) / R

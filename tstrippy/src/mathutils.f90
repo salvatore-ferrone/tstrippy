@@ -3,6 +3,7 @@ MODULE mathutils
     PRIVATE
     PUBLIC :: linear_interp_scalar
     PUBLIC :: bilinear_interp_2d
+    PUBLIC :: bicubic_hermite_eval_2d
     PUBLIC :: legendre_p_all_axisymmetric
     PUBLIC :: legendre_dp_dmu_all_axisymmetric
     PUBLIC :: legendre_axisymmetric_basis
@@ -38,6 +39,79 @@ MODULE mathutils
             + (1.0D0 - alphaR) *          alphaZ  * f01 &
             +          alphaR  *          alphaZ  * f11
     END FUNCTION bilinear_interp_2d
+
+    SUBROUTINE bicubic_hermite_eval_2d(f00, f10, f01, f11, &
+                                       fx00, fx10, fx01, fx11, &
+                                       fy00, fy10, fy01, fy11, &
+                                       fxy00, fxy10, fxy01, fxy11, &
+                                       dx, dy, tx, ty, f, dfdx, dfdy)
+        ! Bicubic Hermite patch evaluation on one rectangle.
+        ! Inputs:
+        ! - f.. corner function values
+        ! - fx.., fy.. corner partial derivatives w.r.t physical x and y
+        ! - fxy.. corner mixed derivatives w.r.t physical x then y
+        ! - dx, dy rectangle widths in physical coordinates
+        ! - tx, ty local coordinates in [0,1]
+        ! Outputs:
+        ! - f, dfdx, dfdy evaluated from one single interpolant.
+        IMPLICIT NONE
+        REAL*8, INTENT(IN) :: f00, f10, f01, f11
+        REAL*8, INTENT(IN) :: fx00, fx10, fx01, fx11
+        REAL*8, INTENT(IN) :: fy00, fy10, fy01, fy11
+        REAL*8, INTENT(IN) :: fxy00, fxy10, fxy01, fxy11
+        REAL*8, INTENT(IN) :: dx, dy, tx, ty
+        REAL*8, INTENT(OUT) :: f, dfdx, dfdy
+
+        REAL*8 :: t, u
+        REAL*8 :: h00_t, h10_t, h01_t, h11_t
+        REAL*8 :: h00_u, h10_u, h01_u, h11_u
+        REAL*8 :: dh00_t, dh10_t, dh01_t, dh11_t
+        REAL*8 :: dh00_u, dh10_u, dh01_u, dh11_u
+        REAL*8 :: f0, f1, fy0, fy1
+        REAL*8 :: dfdx0, dfdx1, dfdxy0, dfdxy1
+
+        t = MAX(0.0D0, MIN(1.0D0, tx))
+        u = MAX(0.0D0, MIN(1.0D0, ty))
+
+        ! Cubic Hermite basis in x (t)
+        h00_t =  2.0D0*t**3 - 3.0D0*t**2 + 1.0D0
+        h10_t =        t**3 - 2.0D0*t**2 + t
+        h01_t = -2.0D0*t**3 + 3.0D0*t**2
+        h11_t =        t**3 -       t**2
+
+        dh00_t =  6.0D0*t**2 - 6.0D0*t
+        dh10_t =  3.0D0*t**2 - 4.0D0*t + 1.0D0
+        dh01_t = -6.0D0*t**2 + 6.0D0*t
+        dh11_t =  3.0D0*t**2 - 2.0D0*t
+
+        ! Cubic Hermite basis in y (u)
+        h00_u =  2.0D0*u**3 - 3.0D0*u**2 + 1.0D0
+        h10_u =        u**3 - 2.0D0*u**2 + u
+        h01_u = -2.0D0*u**3 + 3.0D0*u**2
+        h11_u =        u**3 -       u**2
+
+        dh00_u =  6.0D0*u**2 - 6.0D0*u
+        dh10_u =  3.0D0*u**2 - 4.0D0*u + 1.0D0
+        dh01_u = -6.0D0*u**2 + 6.0D0*u
+        dh11_u =  3.0D0*u**2 - 2.0D0*u
+
+        ! Interpolate in x at y=0 and y=1, including y-derivative tracks.
+        f0  = h00_t*f00  + h10_t*dx*fx00  + h01_t*f10  + h11_t*dx*fx10
+        f1  = h00_t*f01  + h10_t*dx*fx01  + h01_t*f11  + h11_t*dx*fx11
+        fy0 = h00_t*fy00 + h10_t*dx*fxy00 + h01_t*fy10 + h11_t*dx*fxy10
+        fy1 = h00_t*fy01 + h10_t*dx*fxy01 + h01_t*fy11 + h11_t*dx*fxy11
+
+        ! d/dx of the x-interpolants.
+        dfdx0  = (dh00_t*f00  + dh10_t*dx*fx00  + dh01_t*f10  + dh11_t*dx*fx10) / dx
+        dfdx1  = (dh00_t*f01  + dh10_t*dx*fx01  + dh01_t*f11  + dh11_t*dx*fx11) / dx
+        dfdxy0 = (dh00_t*fy00 + dh10_t*dx*fxy00 + dh01_t*fy10 + dh11_t*dx*fxy10) / dx
+        dfdxy1 = (dh00_t*fy01 + dh10_t*dx*fxy01 + dh01_t*fy11 + dh11_t*dx*fxy11) / dx
+
+        ! Final Hermite interpolation in y.
+        f    = h00_u*f0    + h10_u*dy*fy0    + h01_u*f1    + h11_u*dy*fy1
+        dfdx = h00_u*dfdx0 + h10_u*dy*dfdxy0 + h01_u*dfdx1 + h11_u*dy*dfdxy1
+        dfdy = (dh00_u*f0   + dh10_u*dy*fy0   + dh01_u*f1   + dh11_u*dy*fy1) / dy
+    END SUBROUTINE bicubic_hermite_eval_2d
 
     SUBROUTINE legendre_p_all_axisymmetric(lmax, mu, p)
         ! Compute P_l(mu) for l=0..lmax using three-term recurrence.

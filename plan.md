@@ -1,17 +1,17 @@
 # TSTRIPPY Development Plan
-Date: 2026-04-29
+Date: 2026-04-30
 
 ## Overview
 
-The scientific side of the exponential-disk prototype is now in acceptable shape: the composite axisymmetric workflow runs, the direct Bessel quadrature no longer shows the earlier ringing pathologies, and single-orbit integrations are producing sensible trajectories.
+The exponential-disk Bessel effort has now crossed the key production threshold:
 
-That is not enough for production. The current runtime path is far too slow for real orbit work:
+- The expensive Bessel/Hankel quadrature is paid offline during component setup
+- Runtime force evaluation is table-based and fast
+- The interpolation layer has been upgraded to a conservative bicubic-Hermite path so forces are derived from one interpolated potential
 
-- Measured composite Bessel benchmark: about `4.74e-04 s / step / particle`
-- Target production regime: about `1e-08 s / step / particle`
-- Required improvement: about `1e4` to `1e5` in hot-path performance
+Current measured runtime benchmark for the table path is on the order of about `2.5e-07 s / step / particle` with one-time setup of about `0.4-0.5 s` per component at the default table resolution.
 
-Because of that, the direct runtime Bessel evaluation is now treated as a scientific prototype, not the production implementation. The next phase is to replace it with a tabulated axisymmetric disk solver whose cost is paid at finalize time, not at every force evaluation.
+The next work is no longer about raw speed rescue. It is now about API cleanup, user-facing validation, and composite-science checks across Legendre + Bessel components.
 
 ## Current Findings
 
@@ -64,61 +64,19 @@ These points were verified by reading `potentials.f90`, `integrator.f90`, and by
 - [x] Verified that composite-Bessel orbit integration works scientifically
 - [x] Identified that the runtime Bessel design is not production-viable on performance grounds
 
+### Phase 2: Production Table Backend + Conservative Interpolation ✅
+- [x] Replaced direct runtime quadrature for exponential-disk composite components with precomputed cylindrical tables
+- [x] Moved expensive disk precompute into component setup (offline table build)
+- [x] Implemented fast runtime lookup path using table interpolation only
+- [x] Upgraded interpolation to conservative bicubic-Hermite evaluation (force from one interpolated potential)
+- [x] Added mixed-derivative table support for bicubic patches
+- [x] Verified compile + smoke benchmarks for the new path
+
 ## Active Roadmap
 
-### Phase 2: Replace Runtime Bessel With A Tabulated Cylindrical Solver (Top Priority)
+### Phase 3: Simplify The Composite API Around Finalize (Top Priority)
 
-**Goal:** Keep the science of the flattened disk model, but move all expensive work out of the integration hot loop.
-
-#### 2.1: Chosen numerical technique
-
-We will replace the current runtime Bessel-force evaluator with:
-
-- A precomputed axisymmetric cylindrical force table on a 2D `(R, z)` grid
-- Runtime evaluation by interpolation only (`Phi(R,z)`, `a_R(R,z)`, `a_z(R,z)`)
-- One-time Poisson solve during finalize, not during `HIT`
-
-The preferred construction path is:
-
-- Build a disk-component table at finalize time using a cylindrical Poisson solve that is allowed to be expensive offline
-- Use a spectral/Hankel-style precompute only during table construction if it remains the cleanest path
-- Store the finalized result as tabulated fields, not as a runtime quadrature evaluator
-
-This is the key architectural decision: even if Hankel/Bessel machinery survives inside the offline builder, it must disappear from the runtime force path.
-
-#### 2.2: Runtime representation requirements
-
-- Disk components must evaluate from a table, not from direct quadrature
-- Runtime work per particle should be reduced to interpolation and a small amount of geometry
-- The evaluator must return `ax`, `ay`, `az`, and `phi` directly from `(R, z)` with no special functions in the hot loop
-- The table format must support future arbitrary axisymmetric disk profiles, not only the exponential disk
-
-#### 2.3: Performance target
-
-- Target at least `1e4` faster than the current direct Bessel path on the single-particle benchmark
-- Stretch target: within one to two orders of magnitude of the analytic potentials already in tstrippy
-- Benchmark gate for acceptance: report `seconds / step / particle` before and after the replacement on the same orbit setup
-
-#### 2.4: Tomorrow's implementation plan
-
-- [ ] Introduce a new production backend for disk-like axisymmetric components based on tabulated cylindrical fields
-- [ ] Keep the current direct Bessel evaluator only as a validation/reference path until the replacement is trusted
-- [ ] Move all expensive disk precompute work into finalize
-- [ ] Ensure the runtime composite evaluator uses interpolation-only disk components
-- [ ] Add a focused benchmark script for `seconds / step / particle`
-
-#### 2.5: Acceptance criteria for Phase 2
-
-- [ ] No direct quadrature or per-call Bessel function evaluation remains in the production hot path
-- [ ] Single-particle integration speed improves by at least `1e4` relative to the current prototype benchmark
-- [ ] Orbit morphology remains scientifically consistent with the validated prototype
-- [ ] Potential-gradient consistency checks pass on the finalized table
-
----
-
-### Phase 3: Simplify The Composite API Around Finalize (Same Priority As Phase 2)
-
-**Goal:** Remove redundant user-facing setup steps and make the composite workflow reflect the true architecture.
+**Goal:** Make the composite workflow shorter, clearer, and less error-prone for real users.
 
 #### 3.1: Remove mandatory Legendre-style init for disk-only usage
 
@@ -165,22 +123,40 @@ Not:
 
 ---
 
-### Phase 4: Composite Validation After The Replacement Lands
+### Phase 4: Bessel Documentation + Orbit Sanity Checks
 
-**Goal:** Re-run the science validation after the production backend is in place.
+**Goal:** Package the Bessel-table workflow as reproducible documentation and enforce sanity checks for orbit use.
 
-#### 4.1: Scientific checks
+#### 4.1: Orbit sanity diagnostics (Bessel table path)
 
-- [ ] Compare orbit morphology between the old Bessel prototype and the new tabulated cylindrical backend
-- [ ] Compare `phi`, `a_R`, and `a_z` on representative cuts through the disk
-- [ ] Re-run force smoothness checks to ensure the interpolation layer does not reintroduce ringing or grid artifacts
-- [ ] Re-run time reversibility and conservation diagnostics for representative disk orbits
+- [ ] Add a reproducible conservation script/test for representative disk orbits
+- [ ] Add a bounded-error criterion for `dE/E` (max, std, and drift slope)
+- [ ] Add circular-orbit and eccentric-orbit sanity cases at multiple radii
+- [ ] Add a force/potential consistency check on the interpolation patch outputs
 
 #### 4.2: Documentation updates
 
-- [ ] Update `ARCHITECTURE.md` to describe the new production disk backend
-- [ ] Reframe the old Bessel notebook as method validation/reference, not the production runtime path
-- [ ] Add a short user-facing example showing the simplified composite workflow
+- [ ] Update `ARCHITECTURE.md` with the production table + Hermite interpolation design
+- [ ] Add/update a user-facing notebook demonstrating recommended setup and units
+- [ ] Document known unit pitfalls (`G=1` code units vs physical `G`) with examples
+
+---
+
+### Phase 5: Composite Science Validation (Legendre + Bessel, including Ibata 2024)
+
+**Goal:** Validate mixed-component composite models beyond single-component disk checks.
+
+#### 5.1: Mixed-model validation targets
+
+- [ ] Build and validate a composite model combining Ibata 2024 halo + exponential disk table components
+- [ ] Compare orbit morphology and force cuts between mixed-component composite and reference expectations
+- [ ] Check robustness across flattening, scale radii, and component mass fraction sweeps
+- [ ] Confirm conservation diagnostics remain acceptable in mixed Legendre + Bessel runs
+
+#### 5.2: Notebook/test deliverables
+
+- [ ] Add a dedicated notebook or script for Ibata 2024 + disk composite checks
+- [ ] Add a lightweight regression test for mixed composite setup and force-evaluation sanity
 
 ---
 
@@ -218,8 +194,8 @@ But performance now needs an equally explicit place in the workflow. From this p
 
 ## Immediate Next Session Checklist
 
-- [ ] Design the finalized disk table format: stored fields, coordinate system, interpolation order
-- [ ] Decide whether the offline builder uses Hankel/FFTLog or another cylindrical Poisson solve internally
-- [ ] Refactor finalize so it becomes the precompute-and-activate step
-- [ ] Remove the mandatory Legendre-style init from the disk-only user path
-- [ ] Add a benchmark harness before further scientific polishing
+- [ ] Start Phase 3 API cleanup: remove redundant disk-only init requirements where possible
+- [ ] Define and document the preferred simplified composite setup sequence
+- [ ] Add Bessel orbit conservation sanity harness and thresholds
+- [ ] Add mixed composite validation case: Ibata 2024 halo + exponential-disk table
+- [ ] Update user documentation with unit conventions and examples

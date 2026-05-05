@@ -224,7 +224,8 @@ MODULE gravity
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az
-        REAL*8, DIMENSION(N) :: ax_c, ay_c, az_c, phi_c
+        REAL*8, DIMENSION(N) :: ax_c, ay_c, az_c
+        REAL*8, DIMENSION(N,3) :: force_c
         REAL*8, DIMENSION(2) :: p2
         REAL*8, DIMENSION(3) :: p3
         REAL*8, DIMENSION(4) :: p4
@@ -239,24 +240,27 @@ MODULE gravity
         ax = 0.0D0;  ay = 0.0D0;  az = 0.0D0
 
         DO i = 1, GRAVITY_NCOMP
-            ax_c = 0.0D0;  ay_c = 0.0D0;  az_c = 0.0D0;  phi_c = 0.0D0
+            force_c = 0.0D0
             SELECT CASE (GRAVITY_KIND(i))
             CASE (GRAVITY_KIND_PLUMMER)
                 p2 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
-                CALL plummer(p2, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                CALL plummerforce(p2, N, x, y, z, force_c)
             CASE (GRAVITY_KIND_HERNQUIST)
                 p2 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
-                CALL hernquist(p2, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                CALL hernquistforce(p2, N, x, y, z, force_c)
             CASE (GRAVITY_KIND_MIYAMOTONAGAI)
                 p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
-                CALL miyamotonagai(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                CALL miyamotonagaiforce(p3, N, x, y, z, force_c)
             CASE (GRAVITY_KIND_LONGMURALIBAR)
                 p4 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), &
                       GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i)]
-                CALL longmuralibar(p4, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                CALL longmuralibarforce(p4, N, x, y, z, force_c)
             CASE DEFAULT
                 WRITE(*,'(A)') "WARNING: evaluategravityforces: unknown component kind"
             END SELECT
+            ax_c = force_c(:,1)
+            ay_c = force_c(:,2)
+            az_c = force_c(:,3)
             ax = ax + ax_c
             ay = ay + ay_c
             az = az + az_c
@@ -268,7 +272,7 @@ MODULE gravity
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: phi
-        REAL*8, DIMENSION(N) :: ax_c, ay_c, az_c, phi_c
+        REAL*8, DIMENSION(N) :: phi_c
         REAL*8, DIMENSION(2) :: p2
         REAL*8, DIMENSION(3) :: p3
         REAL*8, DIMENSION(4) :: p4
@@ -283,21 +287,21 @@ MODULE gravity
         phi = 0.0D0
 
         DO i = 1, GRAVITY_NCOMP
-            ax_c = 0.0D0;  ay_c = 0.0D0;  az_c = 0.0D0;  phi_c = 0.0D0
+            phi_c = 0.0D0
             SELECT CASE (GRAVITY_KIND(i))
             CASE (GRAVITY_KIND_PLUMMER)
                 p2 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
-                CALL plummer(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                CALL plummerpotential(p2, N, x, y, z, phi_c)
             CASE (GRAVITY_KIND_HERNQUIST)
                 p2 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
-                CALL hernquist(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                CALL hernquistpotential(p2, N, x, y, z, phi_c)
             CASE (GRAVITY_KIND_MIYAMOTONAGAI)
                 p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
-                CALL miyamotonagai(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                CALL miyamotonagaipotential(p3, N, x, y, z, phi_c)
             CASE (GRAVITY_KIND_LONGMURALIBAR)
                 p4 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), &
                       GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i)]
-                CALL longmuralibar(p4, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                CALL longmuralibarpotential(p4, N, x, y, z, phi_c)
             CASE DEFAULT
                 WRITE(*,'(A)') "WARNING: evaluategravitypotential: unknown component kind"
             END SELECT
@@ -679,189 +683,333 @@ MODULE gravity
     ! Closed-form gravity models with direct evaluation
     ! =======================================================================
 
-    SUBROUTINE hernquist(params,N,x,y,z,ax,ay,az,phi)
-        ! Hernquist potential
-        ! params = [M, a]
-        ! M = mass
-        ! a = scale length
-        ! x,y,z = coordinates
-        ! ax,ay,az = acceleration
-
+    SUBROUTINE hernquistforce(params, N, x, y, z, force)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
-        REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
-        REAL*8,INTENT(IN),dimension(2) :: params
-        REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
-        REAL*8, DIMENSION(N) :: r,amod
-        REAL*8 :: M,a
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(2) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
+        REAL*8, DIMENSION(N) :: r, amod
+        REAL*8 :: M, a
+
         M = params(1)
         a = params(2)
-
-        r = sqrt(x*x + y*y + z*z)
+        r = SQRT(x*x + y*y + z*z)
         amod = -GRAVITY_G*M / (r + a)**2
 
+        force(:,1) = amod*x
+        force(:,2) = amod*y
+        force(:,3) = amod*z
+    END SUBROUTINE hernquistforce
 
-        ax = amod*x
-        ay = amod*y
-        az = amod*z
-        phi = -GRAVITY_G*M / (r + a)
-    END SUBROUTINE hernquist
-    
-    SUBROUTINE plummer(params,N,x,y,z,ax,ay,az,phi)
-        ! Plummer potential
-        ! params = [M, a]
-        ! M = mass
-        ! b = scale length
-        ! x,y,z = coordinates
-        ! ax,ay,az = acceleration
-        ! N = number of particles
+    SUBROUTINE hernquistpotential(params, N, x, y, z, phi)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
-        REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
-        REAL*8,INTENT(IN),dimension(2) :: params
-        REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
-        REAL*8, DIMENSION(N) :: r,amod
-        REAL*8 :: M,b
-        M = params(1) 
-        b = params(2)
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(2) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi
+        REAL*8, DIMENSION(N) :: r
+        REAL*8 :: M, a
 
-        r = sqrt(x*x + y*y + z*z)
-        amod = -GRAVITY_G*M / (r*r + b*b)**1.5
-        
-        ax = amod*x
-        ay = amod*y
-        az = amod*z
-        phi = -GRAVITY_G*M / (r*r + b*b)**0.5
-    END SUBROUTINE plummer
-    
-    SUBROUTINE longmuralibar(params,N,x,y,z,ax,ay,az,phi)
-        IMPLICIT NONE 
+        M = params(1)
+        a = params(2)
+        r = SQRT(x*x + y*y + z*z)
+        phi = -GRAVITY_G*M / (r + a)
+    END SUBROUTINE hernquistpotential
+
+    SUBROUTINE hernquist(params, N, x, y, z, ax, ay, az, phi)
+        IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
-        REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
-        REAL*8,INTENT(IN),DIMENSION(4) :: params
-        REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
-        
-        REAL*8 :: M,abar,bbar,cbar
-        REAL*8,DIMENSION(N) :: Tplus,Tminus
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(2) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        REAL*8, DIMENSION(N,3) :: force
 
-        M=params(1)
-        abar=params(2)
-        bbar=params(3)
-        cbar=params(4)
+        CALL hernquistforce(params, N, x, y, z, force)
+        CALL hernquistpotential(params, N, x, y, z, phi)
+        ax = force(:,1)
+        ay = force(:,2)
+        az = force(:,3)
+    END SUBROUTINE hernquist
 
-        Tplus=sqrt((abar+x)**2.+y*y+(bbar+sqrt(cbar*cbar+z*z))**2.)
-        Tminus=sqrt((abar-x)**2.+y*y+(bbar+sqrt(cbar*cbar+z*z))**2.)
-        phi=(GRAVITY_G*M/2./abar)*log((x-abar+Tminus)/(x+abar+Tplus))
+    SUBROUTINE plummerforce(params, N, x, y, z, force)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(2) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
+        REAL*8, DIMENSION(N) :: r, amod
+        REAL*8 :: M, b
 
+        M = params(1)
+        b = params(2)
+        r = SQRT(x*x + y*y + z*z)
+        amod = -GRAVITY_G*M / (r*r + b*b)**1.5
 
-        ax=-2.*GRAVITY_G*M*x/((Tplus*Tminus)*(Tplus+Tminus))
-        ay=-GRAVITY_G*M*y/((2.*Tplus*Tminus)*(y*y+(bbar+sqrt(z*z+cbar*cbar))**2.))*(Tplus+Tminus-4*x*x/(Tplus+Tminus))
-        az=-GRAVITY_G*M*z/((2.*Tplus*Tminus)*(y*y+(bbar+sqrt(z*z+cbar*cbar))**2.))*(Tplus+Tminus-4*x*x/(Tplus+Tminus))*&
-        ((bbar+sqrt(z*z+cbar*cbar))/sqrt(z*z+cbar*cbar))
+        force(:,1) = amod*x
+        force(:,2) = amod*y
+        force(:,3) = amod*z
+    END SUBROUTINE plummerforce
 
+    SUBROUTINE plummerpotential(params, N, x, y, z, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(2) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi
+        REAL*8, DIMENSION(N) :: r
+        REAL*8 :: M, b
 
+        M = params(1)
+        b = params(2)
+        r = SQRT(x*x + y*y + z*z)
+        phi = -GRAVITY_G*M / SQRT(r*r + b*b)
+    END SUBROUTINE plummerpotential
+
+    SUBROUTINE longmuralibarforce(params, N, x, y, z, force)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
+        REAL*8 :: M, abar, bbar, cbar
+        REAL*8, DIMENSION(N) :: Tplus, Tminus
+
+        M = params(1)
+        abar = params(2)
+        bbar = params(3)
+        cbar = params(4)
+
+        Tplus = SQRT((abar+x)**2 + y*y + (bbar+SQRT(cbar*cbar+z*z))**2)
+        Tminus = SQRT((abar-x)**2 + y*y + (bbar+SQRT(cbar*cbar+z*z))**2)
+
+        force(:,1) = -2.0D0*GRAVITY_G*M*x / ((Tplus*Tminus)*(Tplus+Tminus))
+        force(:,2) = -GRAVITY_G*M*y/((2.0D0*Tplus*Tminus)*(y*y+(bbar+SQRT(z*z+cbar*cbar))**2)) * &
+                     (Tplus+Tminus-4.0D0*x*x/(Tplus+Tminus))
+        force(:,3) = -GRAVITY_G*M*z/((2.0D0*Tplus*Tminus)*(y*y+(bbar+SQRT(z*z+cbar*cbar))**2)) * &
+                     (Tplus+Tminus-4.0D0*x*x/(Tplus+Tminus)) * &
+                     ((bbar+SQRT(z*z+cbar*cbar))/SQRT(z*z+cbar*cbar))
+    END SUBROUTINE longmuralibarforce
+
+    SUBROUTINE longmuralibarpotential(params, N, x, y, z, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi
+        REAL*8 :: M, abar, bbar, cbar
+        REAL*8, DIMENSION(N) :: Tplus, Tminus
+
+        M = params(1)
+        abar = params(2)
+        bbar = params(3)
+        cbar = params(4)
+
+        Tplus = SQRT((abar+x)**2 + y*y + (bbar+SQRT(cbar*cbar+z*z))**2)
+        Tminus = SQRT((abar-x)**2 + y*y + (bbar+SQRT(cbar*cbar+z*z))**2)
+        phi = (GRAVITY_G*M / (2.0D0*abar)) * LOG((x-abar+Tminus)/(x+abar+Tplus))
+    END SUBROUTINE longmuralibarpotential
+
+    SUBROUTINE longmuralibar(params, N, x, y, z, ax, ay, az, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        REAL*8, DIMENSION(N,3) :: force
+
+        CALL longmuralibarforce(params, N, x, y, z, force)
+        CALL longmuralibarpotential(params, N, x, y, z, phi)
+        ax = force(:,1)
+        ay = force(:,2)
+        az = force(:,3)
     END SUBROUTINE longmuralibar
 
-    SUBROUTINE allensantillianhalo(params,N,x,y,z,ax,ay,az,phi)
+    SUBROUTINE allensantillianhaloforce(params, N, x, y, z, force)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
-        REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
-        REAL*8,INTENT(IN),dimension(4) :: params
-        REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
-        REAL*8, DIMENSION(N) :: term1
-        REAL*8:: M,scale_length,exp,cutoffradius, Mtot
-        REAL*8, DIMENSION(N) :: r,amod,d
-        REAL*8:: term2,dcut
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
+        REAL*8 :: M, scale_length, exp, cutoffradius, Mtot, dcut
+        REAL*8, DIMENSION(N) :: r, amod, d, d_exp_minus_1, d_exp_minus_3
         LOGICAL, DIMENSION(N) :: outside_cutoff, at_zero
 
-        REAL*8, DIMENSION(N) :: d_exp_minus_1, d_exp_minus_3
+        M = params(1)
+        scale_length = params(2)
+        exp = params(3)
+        cutoffradius = params(4)
 
-        M = params(1) ! mass parameter NOT total mass 
-        scale_length = params(2) ! size parameter
-        exp = params(3) ! exponential profile  (intended to be: 2.02)
-        cutoffradius = params(4) ! cutoff radius (intended to be: 100 kpc)
-
-        ! make dimensionless distance
-        r = sqrt(x*x + y*y + z*z)
-        d = r/scale_length
-        dcut = cutoffradius/scale_length
-        ! compute once for a speed up 
+        r = SQRT(x*x + y*y + z*z)
+        d = r / scale_length
+        dcut = cutoffradius / scale_length
         d_exp_minus_1 = d**(exp-1)
         d_exp_minus_3 = d**(exp-3)
-        
-        Mtot = M * dcut**exp / (1 + dcut**(exp-1)) 
-        amod = -(GRAVITY_G*M/scale_length**3) * (d_exp_minus_3 / (1 + d_exp_minus_1))
-        
-        term1 = 1 + d_exp_minus_1
-        term2 = 1 + dcut**(exp-1)
 
-        phi = GRAVITY_G*m/(scale_length*(exp-1)) * &
-            log(term1/term2)  &
-            - GRAVITY_G*Mtot/cutoffradius
+        Mtot = M * dcut**exp / (1.0D0 + dcut**(exp-1))
+        amod = -(GRAVITY_G*M/scale_length**3) * (d_exp_minus_3 / (1.0D0 + d_exp_minus_1))
 
-        ! Create masks for special cases
         outside_cutoff = (r > cutoffradius)
-        at_zero = (r == 0)
-        ! Handle special cases using MERGE instead of WHERE
-        ! For points outside cutoff radius
+        at_zero = (r == 0.0D0)
         amod = MERGE(-(GRAVITY_G*Mtot/r**3), amod, outside_cutoff)
-        phi = MERGE(-GRAVITY_G*Mtot/r, phi, outside_cutoff)
+        amod = MERGE(0.0D0, amod, at_zero)
 
-        ! For points at r=0 (prevent division by zero)
-        amod = MERGE(0.0d0, amod, at_zero)
-    
-        ax=amod*x
-        ay=amod*y
-        az=amod*z
+        force(:,1) = amod*x
+        force(:,2) = amod*y
+        force(:,3) = amod*z
+    END SUBROUTINE allensantillianhaloforce
 
-    end SUBROUTINE allensantillianhalo
-
-    SUBROUTINE miyamotonagai(params,N,x,y,z,ax,ay,az,phi)
+    SUBROUTINE allensantillianhalopotential(params, N, x, y, z, phi)
         IMPLICIT NONE
-        REAL*8,INTENT(IN), DIMENSION(3) :: params
         INTEGER, INTENT(IN) :: N
-        REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
-        REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
-        REAL*8, DIMENSION(N) :: R,amod,zmod
-        REAL*8 :: M,a,b
-        M = params(1) ! disk mass
-        a = params(2) ! disk length
-        b = params(3) ! disk height (thus, for galaxies a>b)
-    
-        R = sqrt(x*x + y*y)
-        zmod =  a+(z*z + b*b)**0.5
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi
+        REAL*8, DIMENSION(N) :: term1, r, d, d_exp_minus_1
+        REAL*8 :: M, scale_length, exp, cutoffradius, Mtot, term2, dcut
+        LOGICAL, DIMENSION(N) :: outside_cutoff
+
+        M = params(1)
+        scale_length = params(2)
+        exp = params(3)
+        cutoffradius = params(4)
+
+        r = SQRT(x*x + y*y + z*z)
+        d = r / scale_length
+        dcut = cutoffradius / scale_length
+        d_exp_minus_1 = d**(exp-1)
+        term1 = 1.0D0 + d_exp_minus_1
+        term2 = 1.0D0 + dcut**(exp-1)
+
+        Mtot = M * dcut**exp / (1.0D0 + dcut**(exp-1))
+        phi = GRAVITY_G*M/(scale_length*(exp-1.0D0)) * LOG(term1/term2) - GRAVITY_G*Mtot/cutoffradius
+
+        outside_cutoff = (r > cutoffradius)
+        phi = MERGE(-GRAVITY_G*Mtot/r, phi, outside_cutoff)
+    END SUBROUTINE allensantillianhalopotential
+
+    SUBROUTINE allensantillianhalo(params, N, x, y, z, ax, ay, az, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        REAL*8, DIMENSION(N,3) :: force
+
+        CALL allensantillianhaloforce(params, N, x, y, z, force)
+        CALL allensantillianhalopotential(params, N, x, y, z, phi)
+        ax = force(:,1)
+        ay = force(:,2)
+        az = force(:,3)
+    END SUBROUTINE allensantillianhalo
+
+    SUBROUTINE miyamotonagaiforce(params, N, x, y, z, force)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(3) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
+        REAL*8, DIMENSION(N) :: R, amod, zmod
+        REAL*8 :: M, a, b
+
+        M = params(1)
+        a = params(2)
+        b = params(3)
+
+        R = SQRT(x*x + y*y)
+        zmod = a + SQRT(z*z + b*b)
         amod = -GRAVITY_G*M / (R*R + zmod*zmod)**1.5
-        ax=amod*x
-        ay=amod*y
-        az=amod*z*zmod/(sqrt(z*z+b*b))
-        phi = -GRAVITY_G*M / (R*R + zmod*zmod)**0.5
+
+        force(:,1) = amod*x
+        force(:,2) = amod*y
+        force(:,3) = amod*z*zmod/SQRT(z*z+b*b)
+    END SUBROUTINE miyamotonagaiforce
+
+    SUBROUTINE miyamotonagaipotential(params, N, x, y, z, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(3) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi
+        REAL*8, DIMENSION(N) :: R, zmod
+        REAL*8 :: M, a, b
+
+        M = params(1)
+        a = params(2)
+        b = params(3)
+        R = SQRT(x*x + y*y)
+        zmod = a + SQRT(z*z + b*b)
+        phi = -GRAVITY_G*M / SQRT(R*R + zmod*zmod)
+    END SUBROUTINE miyamotonagaipotential
+
+    SUBROUTINE miyamotonagai(params, N, x, y, z, ax, ay, az, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(3) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        REAL*8, DIMENSION(N,3) :: force
+
+        CALL miyamotonagaiforce(params, N, x, y, z, force)
+        CALL miyamotonagaipotential(params, N, x, y, z, phi)
+        ax = force(:,1)
+        ay = force(:,2)
+        az = force(:,3)
     END SUBROUTINE miyamotonagai
 
-    SUBROUTINE pouliasis2017pii(params,N,x,y,z,ax,ay,az,phi)
-        ! from pouliasis et al 2017
+    SUBROUTINE pouliasis2017piiforce(params, N, x, y, z, force)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
-        REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
-        REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
-        REAL*8, INTENT(IN),DIMENSION(10) :: params
-        REAL*8, DIMENSION(3) :: thindisk,thickdisk
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(10) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
+        REAL*8, DIMENSION(3) :: thindisk, thickdisk
         REAL*8, DIMENSION(4) :: halo
-        REAL*8, DIMENSION(N) :: axH,ayH,azH,axD1,ayD1,azD1,axD2,ayD2,azD2
-        REAL*8, DIMENSION(N) :: phiD1,phiD2,phiH
-        ! HERE IS THE ORDER OF THE PARAMETERS
-        ! params = [2halo, 3halo, 4xp, 5utoffradius, 6disk1, 7calelength, 8caleheight, 9disk2, 10alelength, 11aleheight]        
-        ! params = [Mhalo, ahalo, exp, cutoffradius, Mdisk1, scalelength, scaleheight, Mdisk2, scalelength, scaleheight]
-        halo = (/params(1),params(2),params(3),params(4)/)
-        thindisk = (/params(5),params(6),params(7)/)
-        thickdisk = (/params(8),params(9),params(10)/)
-        CALL allensantillianhalo(halo,N,x,y,z,axH,ayH,azH,phiH)
-        CALL miyamotonagai(thindisk,N,x,y,z,axD1,ayD1,azD1,phiD1)
-        CALL miyamotonagai(thickdisk,N,x,y,z,axD2,ayD2,azD2,phiD2)
-        ax=axH+axD1+axD2
-        ay=ayH+ayD1+ayD2
-        az=azH+azD1+azD2
-        phi=phiH+phiD1+phiD2
+        REAL*8, DIMENSION(N,3) :: force_h, force_d1, force_d2
 
+        halo = (/params(1), params(2), params(3), params(4)/)
+        thindisk = (/params(5), params(6), params(7)/)
+        thickdisk = (/params(8), params(9), params(10)/)
+
+        CALL allensantillianhaloforce(halo, N, x, y, z, force_h)
+        CALL miyamotonagaiforce(thindisk, N, x, y, z, force_d1)
+        CALL miyamotonagaiforce(thickdisk, N, x, y, z, force_d2)
+        force = force_h + force_d1 + force_d2
+    END SUBROUTINE pouliasis2017piiforce
+
+    SUBROUTINE pouliasis2017piipotential(params, N, x, y, z, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(10) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi
+        REAL*8, DIMENSION(3) :: thindisk, thickdisk
+        REAL*8, DIMENSION(4) :: halo
+        REAL*8, DIMENSION(N) :: phi_h, phi_d1, phi_d2
+
+        halo = (/params(1), params(2), params(3), params(4)/)
+        thindisk = (/params(5), params(6), params(7)/)
+        thickdisk = (/params(8), params(9), params(10)/)
+
+        CALL allensantillianhalopotential(halo, N, x, y, z, phi_h)
+        CALL miyamotonagaipotential(thindisk, N, x, y, z, phi_d1)
+        CALL miyamotonagaipotential(thickdisk, N, x, y, z, phi_d2)
+        phi = phi_h + phi_d1 + phi_d2
+    END SUBROUTINE pouliasis2017piipotential
+
+    SUBROUTINE pouliasis2017pii(params, N, x, y, z, ax, ay, az, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(10) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        REAL*8, DIMENSION(N,3) :: force
+
+        CALL pouliasis2017piiforce(params, N, x, y, z, force)
+        CALL pouliasis2017piipotential(params, N, x, y, z, phi)
+        ax = force(:,1)
+        ay = force(:,2)
+        az = force(:,3)
     END SUBROUTINE pouliasis2017pii
 
     SUBROUTINE NBODYPLUMMERS(params,N,x,y,z,ax,ay,az,phiTensor)
@@ -875,17 +1023,21 @@ MODULE gravity
         REAL*8, INTENT(OUT),DIMENSION(N,N) :: phiTensor
         REAL*8, DIMENSION(N,N) :: FX,FY,FZ ! the forces on each particle
         REAL*8, DIMENSION(N) :: masses,scaleradii 
-        REAL*8, DIMENSION(3) :: params2
+        REAL*8, DIMENSION(2) :: params2
+        REAL*8, DIMENSION(N,3) :: force
         integer :: i,j
         masses=params(1+1:N+1)
         scaleradii=params(N+1+1:2*N+1) ! plus ones for the gravitational constant 
         ! force from i on all the others
         DO j=1,N
-            params2(1)=params(1)
-            params2(2)=masses(j)
-            params2(3)=scaleradii(j)
+            params2(1)=masses(j)
+            params2(2)=scaleradii(j)
             ! potential calculates the force of i on all the other particles
-            CALL Plummer(params2,N,x-x(j),y-y(j),z-z(j),ax,ay,az,phiTensor(:,j))
+            CALL plummerforce(params2, N, x-x(j), y-y(j), z-z(j), force)
+            CALL plummerpotential(params2, N, x-x(j), y-y(j), z-z(j), phiTensor(:,j))
+            ax = force(:,1)
+            ay = force(:,2)
+            az = force(:,3)
             FX(:,j)=ax*masses
             FY(:,j)=ay*masses
             FZ(:,j)=az*masses

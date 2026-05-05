@@ -17,7 +17,8 @@ MODULE simulator
                           pot_model_pouliasis2017   => pouliasis2017PII,                &
                           pot_model_miyamoto_nagai  => miyamotonagai,                   &
                           pot_model_allen_santillan => allensantillianhalo,             &
-                          pot_model_plummer         => plummer,                         &
+                          pot_model_plummer_force   => plummerforce,                    &
+                          pot_model_plummer_phi     => plummerpotential,                &
                           pot_model_long_murai_bar  => longmuralibar,                   &
                           pot_nbody_plummers        => NBODYPLUMMERS
     use perturbers, ONLY: pert_init          => perturberinitialization, &
@@ -113,7 +114,7 @@ MODULE simulator
         else if (milkywaypotentialname.EQ."allensantillianhalo") then
             milkywaypotential => pot_model_allen_santillan
         else if (milkywaypotentialname.EQ."plummer") then
-            milkywaypotential => pot_model_plummer
+            milkywaypotential => plummerdispatch
         else if (milkywaypotentialname.EQ."longmuralibar") then
             milkywaypotential => pot_model_long_murai_bar
         else if (milkywaypotentialname.EQ."exponential_oblate_halo") then 
@@ -134,6 +135,23 @@ MODULE simulator
         G = mwparams(1) ! the gravitational constant is now set
     
     END SUBROUTINE setstaticgalaxy
+
+    SUBROUTINE plummerdispatch(params, N, x, y, z, ax, ay, az, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(*) :: params
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
+        REAL*8, DIMENSION(2) :: p2
+        REAL*8, DIMENSION(N,3) :: force
+
+        p2 = [params(1), params(2)]
+        CALL pot_model_plummer_force(p2, N, x, y, z, force)
+        CALL pot_model_plummer_phi(p2, N, x, y, z, phi)
+        ax = force(:,1)
+        ay = force(:,2)
+        az = force(:,3)
+    END SUBROUTINE plummerdispatch
 
     ! SUBROUTINES FOR MANUALLY SETTING THE BASIS EXPANSION PARAMS
     SUBROUTINE clearaxisymmetricbasisexpansion()

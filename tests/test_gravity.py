@@ -145,13 +145,16 @@ def test_evaluategravityforces_returns_arrays():
     assert az.shape == (1,)
 
 
-def test_evaluategravityforces_before_finalize_stops():
+def test_evaluategravityforces_before_finalize_autofinalizes_for_analytic():
     g = tstrippy.gravity
     g.addgravitycomponent("plummer", np.array([1e11, 2.0]))
     x = np.array([8.0]);  y = np.zeros(1);  z = np.zeros(1)
     ax, ay, az = g.evaluategravityforces(x, y, z)
-    # Before finalize, forces should be zero (not evaluated)
-    assert ax[0] == 0.0 and ay[0] == 0.0 and az[0] == 0.0
+    # Analytic-only configurations auto-finalize on first evaluate call.
+    assert g.gravity_finalized
+    assert ax[0] != 0.0
+    assert abs(ay[0]) < 1e-10
+    assert abs(az[0]) < 1e-10
 
 
 def test_evaluategravityforces_direction_on_axis():
@@ -222,10 +225,11 @@ def test_evaluategravitypotential_decreases_with_distance():
     assert phi[0] < phi[1] < phi[2]
 
 
-def test_evaluategravitypotential_before_finalize_stops():
+def test_evaluategravitypotential_before_finalize_autofinalizes_for_analytic():
     g = tstrippy.gravity
     g.addgravitycomponent("plummer", np.array([1e11, 2.0]))
     x = np.array([8.0]);  y = np.zeros(1);  z = np.zeros(1)
     phi = g.evaluategravitypotential(x, y, z)
-    # Before finalize, potential should be zero (not evaluated)
-    assert phi[0] == 0.0
+    # Analytic-only configurations auto-finalize on first evaluate call.
+    assert g.gravity_finalized
+    assert phi[0] < 0.0

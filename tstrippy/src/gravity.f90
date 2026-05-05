@@ -92,6 +92,11 @@ MODULE gravity
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_HERNQUIST     = 11
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_MIYAMOTONAGAI = 12
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_LONGMURALIBAR = 13
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_ALLENSANTILLIANHALO = 14
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_POULIASIS2017PII    = 15
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_EXPONENTIAL_OBLATE_HALO = 20
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_IBATA2024HALO           = 21
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_EXPONENTIAL_DISK_BESSEL = 30
 
     REAL*8,  PUBLIC :: GRAVITY_G            = GRAVITY_G_DEFAULT
     LOGICAL, PUBLIC :: GRAVITY_G_IS_DEFAULT = .TRUE.
@@ -113,8 +118,26 @@ MODULE gravity
     PRIVATE :: exponential_disk_bessel_eval_component
     PRIVATE :: build_exponential_disk_table
     PRIVATE :: disk_table_eval_component
+    PRIVATE :: gravity_components_are_analytic
 
     CONTAINS
+
+    LOGICAL FUNCTION gravity_components_are_analytic()
+        IMPLICIT NONE
+        INTEGER :: i
+
+        gravity_components_are_analytic = .TRUE.
+        DO i = 1, GRAVITY_NCOMP
+            SELECT CASE (GRAVITY_KIND(i))
+            CASE (GRAVITY_KIND_PLUMMER, GRAVITY_KIND_HERNQUIST, GRAVITY_KIND_MIYAMOTONAGAI, &
+                  GRAVITY_KIND_LONGMURALIBAR, GRAVITY_KIND_ALLENSANTILLIANHALO, GRAVITY_KIND_POULIASIS2017PII)
+                CONTINUE
+            CASE DEFAULT
+                gravity_components_are_analytic = .FALSE.
+                RETURN
+            END SELECT
+        END DO
+    END FUNCTION gravity_components_are_analytic
 
     ! =======================================================================
     ! STATE SUBROUTINES (Lifecycle API)
@@ -177,6 +200,21 @@ MODULE gravity
         CASE ("longmuralibar")
             kind_code = GRAVITY_KIND_LONGMURALIBAR
             required_params = 4  ! M, abar, bbar, cbar
+        CASE ("allensantillianhalo")
+            kind_code = GRAVITY_KIND_ALLENSANTILLIANHALO
+            required_params = 4  ! M, scale_length, exp, cutoffradius
+        CASE ("pouliasis2017pii")
+            kind_code = GRAVITY_KIND_POULIASIS2017PII
+            required_params = 10  ! halo(4), thin disk(3), thick disk(3)
+        CASE ("exponential_oblate_halo")
+            kind_code = GRAVITY_KIND_EXPONENTIAL_OBLATE_HALO
+            required_params = 3  ! rho0, s0, q
+        CASE ("ibata2024halo")
+            kind_code = GRAVITY_KIND_IBATA2024HALO
+            required_params = 6  ! rho0, r0, rt, q, gamma, beta
+        CASE ("exponential_disk_bessel")
+            kind_code = GRAVITY_KIND_EXPONENTIAL_DISK_BESSEL
+            required_params = 3  ! sigma0, hR, hZ
         CASE DEFAULT
             WRITE(*,'(A)') "WARNING: addgravitycomponent: unknown model_name (must be lowercase)"
             RETURN
@@ -224,17 +262,28 @@ MODULE gravity
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az
-        REAL*8, DIMENSION(N) :: ax_c, ay_c, az_c
+        REAL*8, DIMENSION(N) :: ax_c, ay_c, az_c, phi_c
         REAL*8, DIMENSION(N,3) :: force_c
         REAL*8, DIMENSION(2) :: p2
         REAL*8, DIMENSION(3) :: p3
         REAL*8, DIMENSION(4) :: p4
+        REAL*8, DIMENSION(6) :: p6
+        REAL*8, DIMENSION(10) :: p10
         INTEGER :: i
 
         IF (.NOT. GRAVITY_FINALIZED) THEN
-            WRITE(*,'(A)') "WARNING: evaluategravityforces: not finalized yet"
-            ax = 0.0D0;  ay = 0.0D0;  az = 0.0D0
-            RETURN
+            IF (GRAVITY_NCOMP < 1) THEN
+                WRITE(*,'(A)') "WARNING: evaluategravityforces: no components registered"
+                ax = 0.0D0;  ay = 0.0D0;  az = 0.0D0
+                RETURN
+            END IF
+            IF (gravity_components_are_analytic()) THEN
+                CALL finalizegravity()
+            ELSE
+                WRITE(*,'(A)') "WARNING: evaluategravityforces: finalizegravity required for non-analytic components"
+                ax = 0.0D0;  ay = 0.0D0;  az = 0.0D0
+                RETURN
+            END IF
         END IF
 
         ax = 0.0D0;  ay = 0.0D0;  az = 0.0D0
@@ -255,6 +304,34 @@ MODULE gravity
                 p4 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), &
                       GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i)]
                 CALL longmuralibarforce(p4, N, x, y, z, force_c)
+            CASE (GRAVITY_KIND_ALLENSANTILLIANHALO)
+                p4 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), &
+                      GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i)]
+                CALL allensantillianhaloforce(p4, N, x, y, z, force_c)
+            CASE (GRAVITY_KIND_POULIASIS2017PII)
+                p10 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i), &
+                       GRAVITY_PARAMS(5,i), GRAVITY_PARAMS(6,i), GRAVITY_PARAMS(7,i), GRAVITY_PARAMS(8,i), &
+                       GRAVITY_PARAMS(9,i), GRAVITY_PARAMS(10,i)]
+                CALL pouliasis2017piiforce(p10, N, x, y, z, force_c)
+            CASE (GRAVITY_KIND_EXPONENTIAL_OBLATE_HALO)
+                p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
+                CALL exponential_oblate_halo(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                force_c(:,1) = ax_c
+                force_c(:,2) = ay_c
+                force_c(:,3) = az_c
+            CASE (GRAVITY_KIND_IBATA2024HALO)
+                p6 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i), &
+                      GRAVITY_PARAMS(4,i), GRAVITY_PARAMS(5,i), GRAVITY_PARAMS(6,i)]
+                CALL ibata2024halo(p6, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                force_c(:,1) = ax_c
+                force_c(:,2) = ay_c
+                force_c(:,3) = az_c
+            CASE (GRAVITY_KIND_EXPONENTIAL_DISK_BESSEL)
+                p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
+                CALL exponential_disk_bessel_eval_component(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                force_c(:,1) = ax_c
+                force_c(:,2) = ay_c
+                force_c(:,3) = az_c
             CASE DEFAULT
                 WRITE(*,'(A)') "WARNING: evaluategravityforces: unknown component kind"
             END SELECT
@@ -273,15 +350,27 @@ MODULE gravity
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: phi
         REAL*8, DIMENSION(N) :: phi_c
+        REAL*8, DIMENSION(N) :: ax_tmp, ay_tmp, az_tmp
         REAL*8, DIMENSION(2) :: p2
         REAL*8, DIMENSION(3) :: p3
         REAL*8, DIMENSION(4) :: p4
+        REAL*8, DIMENSION(6) :: p6
+        REAL*8, DIMENSION(10) :: p10
         INTEGER :: i
 
         IF (.NOT. GRAVITY_FINALIZED) THEN
-            WRITE(*,'(A)') "WARNING: evaluategravitypotential: not finalized yet"
-            phi = 0.0D0
-            RETURN
+            IF (GRAVITY_NCOMP < 1) THEN
+                WRITE(*,'(A)') "WARNING: evaluategravitypotential: no components registered"
+                phi = 0.0D0
+                RETURN
+            END IF
+            IF (gravity_components_are_analytic()) THEN
+                CALL finalizegravity()
+            ELSE
+                WRITE(*,'(A)') "WARNING: evaluategravitypotential: finalizegravity required for non-analytic components"
+                phi = 0.0D0
+                RETURN
+            END IF
         END IF
 
         phi = 0.0D0
@@ -302,6 +391,25 @@ MODULE gravity
                 p4 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), &
                       GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i)]
                 CALL longmuralibarpotential(p4, N, x, y, z, phi_c)
+            CASE (GRAVITY_KIND_ALLENSANTILLIANHALO)
+                p4 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), &
+                      GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i)]
+                CALL allensantillianhalopotential(p4, N, x, y, z, phi_c)
+            CASE (GRAVITY_KIND_POULIASIS2017PII)
+                p10 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i), &
+                       GRAVITY_PARAMS(5,i), GRAVITY_PARAMS(6,i), GRAVITY_PARAMS(7,i), GRAVITY_PARAMS(8,i), &
+                       GRAVITY_PARAMS(9,i), GRAVITY_PARAMS(10,i)]
+                CALL pouliasis2017piipotential(p10, N, x, y, z, phi_c)
+            CASE (GRAVITY_KIND_EXPONENTIAL_OBLATE_HALO)
+                p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
+                CALL exponential_oblate_halo(p3, N, x, y, z, ax_tmp, ay_tmp, az_tmp, phi_c)
+            CASE (GRAVITY_KIND_IBATA2024HALO)
+                p6 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i), &
+                      GRAVITY_PARAMS(4,i), GRAVITY_PARAMS(5,i), GRAVITY_PARAMS(6,i)]
+                CALL ibata2024halo(p6, N, x, y, z, ax_tmp, ay_tmp, az_tmp, phi_c)
+            CASE (GRAVITY_KIND_EXPONENTIAL_DISK_BESSEL)
+                p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
+                CALL exponential_disk_bessel_eval_component(p3, N, x, y, z, ax_tmp, ay_tmp, az_tmp, phi_c)
             CASE DEFAULT
                 WRITE(*,'(A)') "WARNING: evaluategravitypotential: unknown component kind"
             END SELECT
@@ -328,6 +436,11 @@ MODULE gravity
             CASE (GRAVITY_KIND_HERNQUIST);      kind_name = "hernquist"
             CASE (GRAVITY_KIND_MIYAMOTONAGAI);  kind_name = "miyamotonagai"
             CASE (GRAVITY_KIND_LONGMURALIBAR);  kind_name = "longmuralibar"
+            CASE (GRAVITY_KIND_ALLENSANTILLIANHALO); kind_name = "allensantillianhalo"
+            CASE (GRAVITY_KIND_POULIASIS2017PII);    kind_name = "pouliasis2017pii"
+            CASE (GRAVITY_KIND_EXPONENTIAL_OBLATE_HALO); kind_name = "exponential_oblate_halo"
+            CASE (GRAVITY_KIND_IBATA2024HALO);           kind_name = "ibata2024halo"
+            CASE (GRAVITY_KIND_EXPONENTIAL_DISK_BESSEL); kind_name = "exponential_disk_bessel"
             CASE DEFAULT;                        kind_name = "unknown"
             END SELECT
             WRITE(*,'(A,I0,A,A)') "  component ", i, ": ", TRIM(kind_name)
@@ -1320,7 +1433,7 @@ MODULE gravity
         ! Subsequent calls skip projection and go straight to evaluation.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN),  DIMENSION(4) :: params
+        REAL*8, INTENT(IN),  DIMENSION(3) :: params
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
         REAL*8 :: rho0, s0, q
@@ -1390,7 +1503,7 @@ MODULE gravity
         ! Same initialization logic as exponential_oblate_halo.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN),  DIMENSION(7) :: params
+        REAL*8, INTENT(IN),  DIMENSION(6) :: params
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
         REAL*8 :: rho0, r0, rt, q, gamma, beta

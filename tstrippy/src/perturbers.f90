@@ -5,7 +5,7 @@ MODULE perturbers
     ! so we have NPERTURBERS * Ntimesteps for x,y,z 
     ! then we have a one dimensional array of the time
     ! everything should be in galactic coordinates
-    use potentials, only : plummer
+    use gravity, only : plummer
     IMPLICIT NONE
     PRIVATE
     REAL*8, DIMENSION(:,:), PUBLIC, ALLOCATABLE :: xperturbers,yperturbers,zperturbers 

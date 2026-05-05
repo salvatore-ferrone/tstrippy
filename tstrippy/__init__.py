@@ -8,20 +8,20 @@ import warnings
 # Try to import Fortran modules (they're compiled into lib/)
 # If they don't exist, provide helpful error messages
 try:
-    from .lib.integrator import integrator
+    from .lib.simulator import simulator
 except ModuleNotFoundError:
-    integrator = None
+    simulator = None
     warnings.warn(
-        "Fortran module 'tstrippy.lib.integrator' not found. "
+        "Fortran module 'tstrippy.lib.simulator' not found. "
         "Have you built the package? Run: python -m pip install -e . --no-build-isolation"
     )
 
 try:
-    from .lib.potentials import potentials
+    from .lib.gravity import gravity
 except ModuleNotFoundError:
-    potentials = None
+    gravity = None
     warnings.warn(
-        "Fortran module 'tstrippy.lib.potentials' not found. "
+        "Fortran module 'tstrippy.lib.gravity' not found. "
         "Have you built the package? Run: python -m pip install -e . --no-build-isolation"
     )
 
@@ -40,8 +40,8 @@ from . import code
 
 # Define what's available at the top level
 __all__ = [
-    'integrator',
-    'potentials',
+    'simulator',
+    'gravity',
     'mathutils',
     'io',
     'code',

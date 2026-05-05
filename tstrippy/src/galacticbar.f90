@@ -9,7 +9,7 @@ MODULE galacticbar
     ! theta = theta0 + b*t + c*t^2 + d*t^3 + ...
     ! THUS  barorientationpolynomailcoeffs(1) = theta0
     ! use constants
-    use potentials
+    use gravity
     IMPLICIT NONE
     PRIVATE 
     ! DECLARE SUBROUTINES

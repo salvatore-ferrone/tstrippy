@@ -1,8 +1,8 @@
-MODULE integrator 
+MODULE simulator 
     ! this integrator needs to contain the current positions
     ! it needs to be able to apply any force that I want at any time
     ! it needs to be able to integrate the positions and velocities
-    use potentials, ONLY: pot_clear_basis                                   => clearaxisymmetricbasisexpansion,             &
+    use gravity, ONLY: pot_clear_basis                                   => clearaxisymmetricbasisexpansion,             &
                           pot_init_basis                                    => initaxisymmetricbasisexpansion,              &
                           pot_clear_axisymmetric_composite_basis_expansion  => clearaxisymmetriccompositebasisexpansion,    &
                           pot_init_axisymmetric_composite_basis_expansion   => initaxisymmetriccompositebasisexpansion,     &
@@ -47,10 +47,12 @@ MODULE integrator
     PUBLIC :: initnbodysystem,initgalacticbar,initperturbers
     PUBLIC :: leapfrogintime, leapfrogtofinalpositions
     PUBLIC :: ruthforestintime
+    PUBLIC :: setintegratormethod, runsimulation
     PUBLIC :: HIT
     PUBLIC :: assert_gravitational_constant_initialized
     PUBLIC :: initwriteparticleorbits, writeparticleorbits
     PUBLIC :: initwritestream, writestream
+    PUBLIC :: initwritesnapshot, writesnapshot
     PUBLIC :: deallocate
     PUBLIC :: clearaxisymmetricbasisexpansion, initaxisymmetricbasisexpansion
     PUBLIC :: clearaxisymmetriccompositebasisexpansion, initaxisymmetriccompositebasisexpansion
@@ -84,6 +86,7 @@ MODULE integrator
     REAL*8,DIMENSION(:),PUBLIC,allocatable :: milkwayparams
     REAL*8, PUBLIC :: currenttime,dt
     INTEGER, PUBLIC :: ntimesteps,ntimepoints,nparticles,nwriteskip
+    INTEGER, PUBLIC :: INTEGRATIONMETHOD = 0 ! 0=leapfrog, 1=forest_ruth
     INTEGER, PUBLIC :: FILEUNITBASE 
     CHARACTER*500, PUBLIC :: outname,outdir,streamdir,streamname
     !! THE ACCELEARTIONS ARE PUBLIC SO THAT THEY CAN BE ACCESSED BY THE DEBUGGING SUBROUTINES
@@ -243,6 +246,49 @@ MODULE integrator
 
         
     END SUBROUTINE setintegrationparameters
+
+    SUBROUTINE setintegratormethod(methodname)
+        ! Select integration backend for runsimulation().
+        CHARACTER*100, INTENT(IN) :: methodname
+
+        IF (TRIM(methodname) .EQ. "leapfrog") THEN
+            INTEGRATIONMETHOD = 0
+        ELSE IF (TRIM(methodname) .EQ. "forest_ruth") THEN
+            INTEGRATIONMETHOD = 1
+        ELSE
+            PRINT*, "E301: invalid integration method"
+            PRINT*, "      valid methods: leapfrog, forest_ruth"
+            STOP
+        END IF
+    END SUBROUTINE setintegratormethod
+
+    SUBROUTINE runsimulation()
+        ! Unified run entrypoint (first refactor slice).
+        ! Consumes configured module state and updates final phase-space arrays.
+        IF (.NOT. GALAXYISSET) THEN
+            PRINT*, "E302: gravitational field not initialized before runsimulation"
+            STOP
+        END IF
+        IF (.NOT. INITIALKINEMATICSSET) THEN
+            PRINT*, "E303: setinitialkinematics must be called before runsimulation"
+            STOP
+        END IF
+        IF (.NOT. INTEGRATIONPARAMETERSSET) THEN
+            PRINT*, "E304: setintegrationparameters must be called before runsimulation"
+            STOP
+        END IF
+
+        IF (INTEGRATIONMETHOD .EQ. 0) THEN
+            CALL leapfrogtofinalpositions()
+        ELSE IF (INTEGRATIONMETHOD .EQ. 1) THEN
+            PRINT*, "E305: runsimulation forest_ruth backend not wired in this slice"
+            PRINT*, "      use ruthforestintime directly for now"
+            STOP
+        ELSE
+            PRINT*, "E306: unknown INTEGRATIONMETHOD state"
+            STOP
+        END IF
+    END SUBROUTINE runsimulation
     
     SUBROUTINE setbackwardorbit()
         ! Changes the sign of the velocities and the timestamps
@@ -380,6 +426,16 @@ MODULE integrator
         nwriteskip=nskip
     END SUBROUTINE initwritestream
 
+    SUBROUTINE initwritesnapshot(nskip,myoutname,myoutdir,memorybaseint)
+        ! New naming alias for stream-style snapshot writing.
+        INTEGER, intent(in) :: nskip
+        CHARACTER*500, intent(in) :: myoutname
+        CHARACTER*500, intent(in) :: myoutdir
+        integer, intent(in),optional :: memorybaseint
+
+        CALL initwritestream(nskip,myoutname,myoutdir,memorybaseint)
+    END SUBROUTINE initwritesnapshot
+
     SUBROUTINE writestream(index,N,x,y,z,vx,vy,vz)
         integer, intent(in) :: N
         REAL*8, DIMENSION(N), intent(in) :: x,y,z,vx,vy,vz
@@ -397,6 +453,15 @@ MODULE integrator
         ! close the file
         close(FILEUNITBASE)
     END SUBROUTINE writestream
+
+    SUBROUTINE writesnapshot(index,N,x,y,z,vx,vy,vz)
+        ! New naming alias for stream-style snapshot writing.
+        integer, intent(in) :: N
+        REAL*8, DIMENSION(N), intent(in) :: x,y,z,vx,vy,vz
+        integer::index
+
+        CALL writestream(index,N,x,y,z,vx,vy,vz)
+    END SUBROUTINE writesnapshot
     
     SUBROUTINE initwriteparticleorbits(nskip,myoutname,myoutdir,memorybaseint)
         ! INITIALIZE THE WRITING OF THE PARTICLE ORBITS
@@ -1003,6 +1068,6 @@ MODULE integrator
     END SUBROUTINE DEALLOCATE
 
 
-END MODULE integrator
+END MODULE simulator
 
 

@@ -1,4 +1,4 @@
-MODULE potentials
+MODULE gravity
     USE mathutils, ONLY: linear_interp_scalar, bicubic_hermite_eval_2d, legendre_axisymmetric_basis, &
                          legendre_p_all_axisymmetric, gauss_legendre_nodes_weights, &
                          bessel_j0_scalar, bessel_j1_scalar
@@ -1429,7 +1429,7 @@ MODULE potentials
         CALL axisymmetricbasisexpansion_eval(N, x, y, z, ax, ay, az, phi)
     END SUBROUTINE ibata2024halo
 
-end module potentials
+end module gravity
 
 
 

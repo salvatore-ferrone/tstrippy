@@ -80,34 +80,34 @@ mathutils_build = custom_target('mathutils',
     install_dir: module_install_dir
     )
 
-potentials_sources = [
+gravity_sources = [
     'tstrippy/src/mathutils.f90',
-    'tstrippy/src/potentials.f90'
+    'tstrippy/src/gravity.f90'
 ]
-potentials_out = 'potentials' + ext_suffix
+gravity_out = 'gravity' + ext_suffix
 
-potentials_build = custom_target('potentials',
-    output: potentials_out,
-    input: potentials_sources,
-    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'potentials'],
+gravity_build = custom_target('gravity',
+    output: gravity_out,
+    input: gravity_sources,
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'gravity'],
     env: fc_env,
     install: true,
     install_dir: module_install_dir
 )
 
-integrator_sources = [
-    'tstrippy/src/potentials.f90',
+simulator_sources = [
+    'tstrippy/src/gravity.f90',
     'tstrippy/src/perturbers.f90',
     'tstrippy/src/mathutils.f90',
     'tstrippy/src/hostperturber.f90',
     'tstrippy/src/galacticbar.f90',
-    'tstrippy/src/integrator.f90'
+    'tstrippy/src/simulator.f90'
 ]
-integrator_out = 'integrator' + ext_suffix
-integrator_build = custom_target('integrator',
-    output: integrator_out,
-    input: integrator_sources,
-    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'integrator'],
+simulator_out = 'simulator' + ext_suffix
+simulator_build = custom_target('simulator',
+    output: simulator_out,
+    input: simulator_sources,
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'simulator'],
     env: fc_env,
     install: true,
     install_dir: module_install_dir

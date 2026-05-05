@@ -7,8 +7,8 @@ def test_top_level_public_api():
     import tstrippy
 
     expected = {
-        "integrator",
-        "potentials",
+        "simulator",
+        "gravity",
         "mathutils",
         "io",
         "code",
@@ -30,8 +30,12 @@ def test_top_level_module_types():
     assert isinstance(tstrippy.code.sampling, types.ModuleType)
     assert isinstance(tstrippy.code.orbits, types.ModuleType)
 
-    assert hasattr(tstrippy.integrator, "leapfrogtofinalpositions")
-    assert hasattr(tstrippy.potentials, "plummer")
+    assert hasattr(tstrippy.simulator, "leapfrogtofinalpositions")
+    assert hasattr(tstrippy.simulator, "setintegratormethod")
+    assert hasattr(tstrippy.simulator, "runsimulation")
+    assert hasattr(tstrippy.simulator, "initwritesnapshot")
+    assert hasattr(tstrippy.simulator, "writesnapshot")
+    assert hasattr(tstrippy.gravity, "plummer")
     assert hasattr(tstrippy.mathutils, "linear_interp_scalar")
 
 

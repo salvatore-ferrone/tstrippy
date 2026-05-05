@@ -1,7 +1,7 @@
 MODULE hostperturber
     ! so FAR, we can either have constant mass, or a double exponential mass evolution
     
-    use potentials, only : plummer
+    use gravity, only : plummer
     use mathutils, only : linear_interp_scalar
 
     IMPLICIT NONE

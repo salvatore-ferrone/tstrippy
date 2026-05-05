@@ -17,6 +17,7 @@ MODULE simulator
                           grav_evaluategravityforces                        => evaluategravityforces,                       &
                           grav_evaluategravitypotential                     => evaluategravitypotential,                    &
                           grav_gravity_g                                    => GRAVITY_G,                                   &
+                          grav_gravity_finalized                            => GRAVITY_FINALIZED,                           &
                           pot_nbody_plummers                                => NBODYPLUMMERS
     use perturbers, ONLY: pert_init          => perturberinitialization, &
                           pert_deallocate    => perturberdeallocation,   &
@@ -40,6 +41,7 @@ MODULE simulator
     PRIVATE 
     ! DECLARE SUBROUTINES
     PUBLIC :: setgravityconstant, cleargravitycomponents, addgravitycomponent, finalizegravity
+    PUBLIC :: finalizesimulator, evaluatepotentials
     PUBLIC :: setstaticgalaxy, setintegrationparameters, setinitialkinematics
     PUBLIC :: setdebugaccelerations, setdebugbarorientation, setbackwardorbit
     PUBLIC :: inithostkinematics, inithostmass, inithostradius
@@ -66,7 +68,6 @@ MODULE simulator
     LOGICAL, PUBLIC :: DOGALACTICBAR = .FALSE.
     LOGICAL, PUBLIC :: DOBACKWARDORBIT = .FALSE.
     ! Variables to keep track of the physics that has been set
-    LOGICAL, PUBLIC :: GALAXYISSET = .FALSE.
     LOGICAL, PUBLIC :: INITIALKINEMATICSSET = .FALSE.
     LOGICAL, PUBLIC :: INTEGRATIONPARAMETERSSET = .FALSE.
     ! DECIDE IF WE WILL BE SAVING WHOLE ORBITS OR SNAPSHOTS
@@ -80,9 +81,6 @@ MODULE simulator
     ! DECLARE MODULE WIDE VARIABLES
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
     REAL*8,DIMENSION(:),ALLOCATABLE,PUBLIC :: xf,yf,zf,vxf,vyf,vzf,tesc,nbodyparams
-    procedure(), pointer,public :: staticgravitationalforce
-    procedure(), pointer,public :: staticgravitationalpotential
-    REAL*8, PRIVATE :: G = -1d0 ! set negative to catch bugs when not set
     REAL*8, PUBLIC :: currenttime,dt
     INTEGER, PUBLIC :: ntimesteps,ntimepoints,nparticles,nwriteskip
     INTEGER, PUBLIC :: INTEGRATIONMETHOD = 0 ! 0=leapfrog, 1=forest_ruth
@@ -101,15 +99,10 @@ MODULE simulator
     SUBROUTINE setgravityconstant(Gin)
         REAL*8, INTENT(IN) :: Gin
         CALL grav_setgravityconstant(Gin)
-        G = grav_gravity_g
     END SUBROUTINE setgravityconstant
 
     SUBROUTINE cleargravitycomponents()
         CALL grav_cleargravity()
-        GALAXYISSET = .FALSE.
-        G = -1.0D0
-        NULLIFY(staticgravitationalforce)
-        NULLIFY(staticgravitationalpotential)
     END SUBROUTINE cleargravitycomponents
 
     SUBROUTINE addgravitycomponent(modelname, params)
@@ -120,14 +113,6 @@ MODULE simulator
 
     SUBROUTINE finalizegravity()
         CALL grav_finalizegravity()
-        IF (.NOT. ASSOCIATED(staticgravitationalforce)) THEN
-            staticgravitationalforce => grav_evaluategravityforces
-        END IF
-        IF (.NOT. ASSOCIATED(staticgravitationalpotential)) THEN
-            staticgravitationalpotential => grav_evaluategravitypotential
-        END IF
-        G = grav_gravity_g
-        GALAXYISSET = .TRUE.
     END SUBROUTINE finalizegravity
 
     SUBROUTINE setstaticgalaxy(milkywaypotentialname,mwparams)
@@ -207,10 +192,11 @@ MODULE simulator
     END SUBROUTINE finalizecompositebasisexpansion
 
     SUBROUTINE assert_gravitational_constant_initialized()
-        if (G <= 0 ) then
-            print*, "the gravitational constant was not set"
+        if (.NOT. grav_gravity_finalized) then
+            print*, "E300: gravity not finalized before integration"
+            print*, "      call finalizegravity() or finalizesimulator() first"
             stop
-        END IF 
+        END IF
     END SUBROUTINE assert_gravitational_constant_initialized
 
     SUBROUTINE setinitialkinematics(N,x,y,z,vx,vy,vz)
@@ -273,8 +259,9 @@ MODULE simulator
     SUBROUTINE runsimulation()
         ! Unified run entrypoint (first refactor slice).
         ! Consumes configured module state and updates final phase-space arrays.
-        IF (.NOT. GALAXYISSET) THEN
-            PRINT*, "E302: gravitational field not initialized before runsimulation"
+        IF (.NOT. grav_gravity_finalized) THEN
+            PRINT*, "E302: gravitational field not finalized before runsimulation"
+            PRINT*, "      call finalizegravity() or finalizesimulator() first"
             STOP
         END IF
         IF (.NOT. INITIALKINEMATICSSET) THEN
@@ -536,7 +523,6 @@ MODULE simulator
         REAL*8, DIMENSION(NP,nstep+1), INTENT(OUT) :: xt,yt,zt,vxt,vyt,vzt
 
         REAL*8, DIMENSION(NP) :: ax,ay,az
-        REAL*8, DIMENSION(NP) :: phi
         ! get the intermediate positions and velocities
         REAL*8, DIMENSION(NP) :: xtmp, ytmp, ztmp
         
@@ -576,7 +562,7 @@ MODULE simulator
         ! hit everything once to initialize the accelerations
         ! this is also necessary to initialize the host index
         currenttime = timestamps(1)
-        call HIT(nparticles,xf,yf,zf,ax,ay,az,phi)        
+        call HIT(nparticles,xf,yf,zf,ax,ay,az)
 
         ! check if anyone is unbound 
         if (DOHOSTPERTURBER) then
@@ -599,7 +585,7 @@ MODULE simulator
             ztmp = zt(:,i) + 0.5*dt*vzt(:, i)
             ! compute the accelerations at the initial time
             currenttime = (timestamps(i+1) + timestamps(i)) / 2.0
-            call HIT(NP,xtmp,ytmp,ztmp,ax,ay,az,phi)
+            call HIT(NP,xtmp,ytmp,ztmp,ax,ay,az)
             ! update the velocities a full step 
             vxt(:,i+1) = vxt(:,i) + ax*dt
             vyt(:,i+1) = vyt(:,i) + ay*dt
@@ -635,7 +621,7 @@ MODULE simulator
 
     SUBROUTINE leapfrogtofinalpositions()
         ! take the current positions and integrate until the end
-        REAL*8, DIMENSION(nparticles) :: ax,ay,az,phi
+        REAL*8, DIMENSION(nparticles) :: ax,ay,az
         ! REAL*8, DIMENSION(nparticles) :: xtemp,ytemp,ztemp 
         REAL*8 :: TESCTHRESHOLD = -999.0
         INTEGER :: i
@@ -654,7 +640,7 @@ MODULE simulator
         ! hit everything once to initialize the accelerations
         ! this is also necessary to initialize the host index
         currenttime = timestamps(1)
-        call HIT(nparticles,xf,yf,zf,ax,ay,az,phi)
+        call HIT(nparticles,xf,yf,zf,ax,ay,az)
         
         ! evaluate the potential at the initial positions
         if (DOHOSTPERTURBER) then
@@ -684,7 +670,7 @@ MODULE simulator
             zf = zf + 0.5 * dt * vzf
             currenttime = (timestamps(i+1) + timestamps(i)) / 2.0
             ! compute the accelerations at the initial time
-            call HIT(nparticles,xf,yf,zf,ax,ay,az,phi)
+            call HIT(nparticles,xf,yf,zf,ax,ay,az)
             ! update the velocities a full step 
             vxf = vxf + ax*dt
             vyf = vyf + ay*dt
@@ -729,7 +715,6 @@ MODULE simulator
         REAL*8, DIMENSION(NP,nstep+1), INTENT(OUT) :: xt,yt,zt,vxt,vyt,vzt
         ! initialize the accelerations
         REAL*8, DIMENSION(NP) :: axf,ayf,azf
-        REAL*8, DIMENSION(NP) :: phi
         REAL*8 :: TESCTHRESHOLD = -999.0
         INTEGER :: i
         integer, dimension(NP) :: indexes
@@ -770,7 +755,6 @@ MODULE simulator
         axf = 0.0
         ayf = 0.0
         azf = 0.0
-        phi = 0.0
         ! initialize the positions and velocities
         xt=0
         yt=0
@@ -788,7 +772,7 @@ MODULE simulator
         currenttime=timestamps(1)
         ! hit everything once to initialize the accelerations
         ! this is also necessary to initialize the host index
-        call HIT(nparticles,xf,yf,zf,axf,ayf,azf,phi)        
+        call HIT(nparticles,xf,yf,zf,axf,ayf,azf)
         
         if (DOHOSTPERTURBER) then
             ! measure the energy of the particles with respect to the host
@@ -803,7 +787,7 @@ MODULE simulator
 
 
         if (DEBUGACCELERATIONS) then
-            call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
+            call HIT(NP,xf,yf,zf,axf,ayf,azf)
             aSG(1,1) = axSG(1)
             aSG(2,1) = aySG(1)
             aSG(3,1) = azSG(1)
@@ -836,7 +820,7 @@ MODULE simulator
             zf = zf + c1*vzf*dt
             currenttime = currenttime + integration_sign*c1*dt
             ! kick
-            call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
+            call HIT(NP,xf,yf,zf,axf,ayf,azf)
             vxf = vxf + d1*axf*dt
             vyf = vyf + d1*ayf*dt
             vzf = vzf + d1*azf*dt
@@ -846,7 +830,7 @@ MODULE simulator
             zf = zf + c2*vzf*dt
             ! kick
             currenttime = currenttime + integration_sign*c2*dt
-            call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
+            call HIT(NP,xf,yf,zf,axf,ayf,azf)
             vxf = vxf + d2*axf*dt
             vyf = vyf + d2*ayf*dt
             vzf = vzf + d2*azf*dt
@@ -856,7 +840,7 @@ MODULE simulator
             zf = zf + c3*vzf*dt
             ! kick
             currenttime = currenttime + integration_sign*c3*dt
-            call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
+            call HIT(NP,xf,yf,zf,axf,ayf,azf)
             vxf = vxf + d3*axf*dt
             vyf = vyf + d3*ayf*dt
             vzf = vzf + d3*azf*dt
@@ -866,7 +850,7 @@ MODULE simulator
             zf = zf + c4*vzf*dt
             ! kick
             currenttime = currenttime + integration_sign*c4*dt
-            call HIT(NP,xf,yf,zf,axf,ayf,azf,phi)
+            call HIT(NP,xf,yf,zf,axf,ayf,azf)
             vxf = vxf + d4*axf*dt
             vyf = vyf + d4*ayf*dt
             vzf = vzf + d4*azf*dt
@@ -916,13 +900,13 @@ MODULE simulator
 
     end subroutine ruthforestintime
 
-    SUBROUTINE HIT(NP,x,y,z,ax,ay,az,phi)
-        ! compute the acceleration of the particles at a given position 
+    SUBROUTINE HIT(NP,x,y,z,ax,ay,az)
+        ! Compute the net force on NP particles. Force-only: does not evaluate
+        ! static gravity potential. Host/perturber/bar potentials are populated
+        ! as module-level side effects (needed for escape-energy bookkeeping).
         INTEGER, INTENT(IN) :: NP
         REAL*8, DIMENSION(NP), INTENT(IN) :: x,y,z
         REAL*8, DIMENSION(NP), INTENT(OUT) :: ax,ay,az
-        REAL*8, DIMENSION(NP), INTENT(OUT) :: phi
-        INTEGER :: i,j ! loop variables for summing over phiTensor
 
         ! reset the accelerations to zero
         axSG = 0.0
@@ -940,15 +924,12 @@ MODULE simulator
         axBAR=0.0
         ayBAR=0.0
         azBAR=0.0
-        phiSG=0.0
         phiHP=0.0
         phiP=0.0
         phiBAR=0.0
-        phiNBODY=0.0
-        
-        if (GALAXYISSET) then
-            call staticgravitationalforce(nparticles,x,y,z,axSG,aySG,azSG)
-            call staticgravitationalpotential(nparticles,x,y,z,phiSG)
+
+        if (grav_gravity_finalized) then
+            call grav_evaluategravityforces(NP,x,y,z,axSG,aySG,azSG)
         end if
 
         if (DOHOSTPERTURBER) then
@@ -995,15 +976,6 @@ MODULE simulator
         ay=aySG+ayHP+ayP+ayNBODY+ayBAR
         az=azSG+azHP+azP+azNBODY+azBAR
 
-        DO i=1,NP
-            DO j=i,NP
-                phiNBODY(i) = phiNBODY(i) + phiTensor(i,j)
-            END DO
-        END DO
-        
-        phi=phiSG+phiHP+phiP+phiBAR+phiNBODY
-        
-
     END SUBROUTINE HIT
 
     SUBROUTINE DEALLOCATE
@@ -1025,9 +997,6 @@ MODULE simulator
             deallocate(timestamps)
             INTEGRATIONPARAMETERSSET = .FALSE.
         end if 
-        IF (GALAXYISSET) then
-            GALAXYISSET = .FALSE.
-        END IF
         CALL cleargravitycomponents()
         
         if (DOHOSTPERTURBER) then
@@ -1075,6 +1044,63 @@ MODULE simulator
             DEBUGBARORIENTATION=.FALSE.
         end if
     END SUBROUTINE DEALLOCATE
+
+    SUBROUTINE finalizesimulator()
+        ! Commit step for simulator configuration.
+        ! Idempotently finalizes the gravity module if it has components but
+        ! is not yet finalized. Hard error if no gravity components are registered.
+        IF (.NOT. grav_gravity_finalized) THEN
+            CALL grav_finalizegravity()
+        END IF
+    END SUBROUTINE finalizesimulator
+
+    SUBROUTINE evaluatepotentials(NP, x, y, z, phi)
+        ! Evaluate the total gravitational potential from all active physics modules.
+        ! Intended for snapshot-time output, diagnostic checks, and escape-energy
+        ! bookkeeping. Not called during integration substeps.
+        ! NOTE: host/perturber/bar potential evaluation recomputes forces as a
+        ! side effect (those modules compute force+potential together).
+        INTEGER, INTENT(IN) :: NP
+        REAL*8, DIMENSION(NP), INTENT(IN) :: x, y, z
+        REAL*8, DIMENSION(NP), INTENT(OUT) :: phi
+        INTEGER :: i, j
+
+        phiSG = 0.0
+        phiHP = 0.0
+        phiP  = 0.0
+        phiBAR = 0.0
+        phiNBODY = 0.0
+
+        if (grav_gravity_finalized) then
+            call grav_evaluategravitypotential(NP, x, y, z, phiSG)
+        end if
+
+        if (DOHOSTPERTURBER) then
+            CALL host_find_time_idx(currenttime)
+            call host_compute_force(NP, x, y, z, axHP, ayHP, azHP, phiHP)
+        end if
+
+        if (DOPERTURBERS) then
+            call pert_find_time_idx(currenttime)
+            call pert_compute_force(NP, x, y, z, axP, ayP, azP, phiP)
+        end if
+
+        if (DONBODY) then
+            call pot_nbody_plummers(nbodyparams, NP, x, y, z, axNBODY, ayNBODY, azNBODY, phiTensor)
+            DO i = 1, NP
+                DO j = i, NP
+                    phiNBODY(i) = phiNBODY(i) + phiTensor(i, j)
+                END DO
+            END DO
+        end if
+
+        if (DOGALACTICBAR) then
+            CALL bar_update(currenttime)
+            call bar_force_eval(NP, x, y, z, axBAR, ayBAR, azBAR, phiBAR)
+        end if
+
+        phi = phiSG + phiHP + phiP + phiBAR + phiNBODY
+    END SUBROUTINE evaluatepotentials
 
 
 END MODULE simulator

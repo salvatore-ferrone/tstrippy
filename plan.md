@@ -86,7 +86,13 @@ These are now implementation constraints for the refactor.
 ### Units and module architecture
 
 - Default external unit convention is fixed to `(kpc, km/s, Msun)`.
-- Provide explicit unit override call (`setunits(...)`) for non-default workflows.
+- G is stored as explicit module state in the gravity module (`GRAVITY_G`).
+- Default value: `G = 4.30091727e-6 kpc (km/s)^2 Msun^-1` (named constant, set at module initialization).
+- Override: `setgravityconstant(G)` called before `addgravitycomponent`; hard error to change after `finalizegravity`.
+- User-facing `addgravitycomponent` params do **not** include G; G is injected from `GRAVITY_G` at evaluation time.
+- `simulator.f90` never handles G directly; it calls gravity evaluators that already embed the correct G.
+- No unit conversion layer is needed in Python; all Fortran output is already in the chosen unit system.
+- `setunits(...)` is deferred; for non-standard units the user calls `setgravityconstant(G_in_their_units)`.
 - Promote gravity subsystem to stateful lifecycle architecture (currently `potentials.f90`, target `gravity.f90`).
 - Gravity v1 scope remains force + potential; `density/vcirc/vesc` planned later.
 
@@ -105,8 +111,9 @@ All evaluation routines take arrays. Scalar (single-particle) input is not suppo
 
 #### Lifecycle
 
-- `cleargravity` — full state reset
-- `addgravitycomponent(model_name, ...)` — register one component; invalid `model_name` fails immediately
+- `cleargravity` — full state reset; resets `GRAVITY_G` to default
+- `setgravityconstant(G)` — optional override of G before any `addgravitycomponent`; hard error after `finalizegravity`
+- `addgravitycomponent(model_name, ...)` — register one component; G comes from module state, not from user params; invalid `model_name` fails immediately
 - `finalizegravity` — validates and freezes all models; builds heavy tables only for components that need them (BFE/table path); analytic-only finalize is a flag flip only
 - `finalizegravity` is always required even for analytic-only configurations
 - After `finalizegravity`, any mutating call is a hard error until `cleargravity`

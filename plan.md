@@ -146,6 +146,31 @@ All evaluation routines take arrays. Scalar (single-particle) input is not suppo
 - Use explicit family names: `spherical_harmonic` and `disk_bessel`
 - Avoid using `axisymmetric` as the primary user-facing family name
 
+#### Naming refactor contract (must-do)
+
+- Public API must not use `axisymmetric*` naming once the rename slice lands.
+- `axisymmetric` can remain only in private/internal comments where mathematically useful.
+- Public names must communicate solver family directly:
+  - `spherical_harmonic` for Legendre/spherical-harmonic expansion
+  - `disk_bessel` for cylindrical/Bessel-table expansion
+- Rename policy is direct replacement, not long-lived aliasing.
+
+#### Public rename map (locked for implementation)
+
+- `initaxisymmetricbasisexpansion` -> `initsphericalharmonicbasis`
+- `clearaxisymmetricbasisexpansion` -> `clearsphericalharmonicbasis`
+- `axisymmetricbasisexpansion_eval` -> `sphericalharmonicbasis_eval`
+- `axisymmetricbasisexpansion_eval_component` -> `sphericalharmonicbasis_eval_component`
+- `initaxisymmetriccompositebasisexpansion` -> `initcompositegravity`
+- `clearaxisymmetriccompositebasisexpansion` -> `clearcompositegravity`
+- `finalizeaxisymmetriccompositebasisexpansion` -> `finalizecompositegravity`
+- `axisymmetriccompositebasispotential` -> `evaluatecompositegravity`
+- `axisymmetriccompositebasispotential_dispatch` -> `evaluatecompositegravity_dispatch`
+- `addcompositeexponentialoblate` -> `addcompositesphericalharmonicexponentialoblate`
+- `addcompositeibata2024halo` -> `addcompositesphericalharmonicibata2024halo`
+- `addcompositebesselcomponent` -> `addcompositediskbesselcomponent`
+- `addcompositebesselexponentialdisk` -> `addcompositediskbesselexponentialdisk`
+
 #### State inspector
 
 - `printgravitystate` — prints all module state to stdout; v1 only, no getter-style array returns yet
@@ -280,9 +305,48 @@ These points were verified by reading `potentials.f90`, `integrator.f90`, and by
 - [x] Verified the focused gravity suite passes (`24 passed`)
 - [x] Updated package-structure expectations away from removed combined gravity entrypoints
 
+### Phase 2d: Unified Gravity Component Surface ✅
+- [x] Extended `addgravitycomponent` model support to the locked canonical list:
+  - `plummer`, `hernquist`, `miyamotonagai`, `longmuralibar`
+  - `allensantillianhalo`, `pouliasis2017pii`
+  - `exponential_oblate_halo`, `ibata2024halo`, `exponential_disk_bessel`
+- [x] Routed `evaluategravityforces` and `evaluategravitypotential` through the expanded model-kind dispatch
+- [x] Implemented analytic-only auto-finalize on first evaluate call
+- [x] Kept non-analytic pre-finalize behavior as warning + no-op (no hard `STOP`)
+- [x] Updated gravity tests to reflect the agreed lifecycle semantics
+- [x] Verified full suite passes (`30 passed`)
+
+### Phase 2e: Naming Refactor And Family Separation (Next Session Priority)
+
+**Goal:** remove ambiguous `axisymmetric` public naming, align public API to `spherical_harmonic` and `disk_bessel`, and keep the state-driven component flow clear.
+
+#### 2e.1: Public naming migration
+
+- [ ] Apply the full rename map in `gravity.f90`
+- [ ] Remove `axisymmetric*` names from public exports and Python-visible wrappers
+- [ ] Keep only family-explicit public names (`spherical_harmonic*`, `disk_bessel*`, `compositegravity*`)
+
+#### 2e.2: Family-state separation cleanup
+
+- [ ] Split naming and comments so spherical-harmonic state and disk-bessel state are clearly distinct
+- [ ] Ensure no spherical-harmonic terminology appears in disk-bessel setup/evaluation entrypoints
+- [ ] Ensure no disk-bessel terminology appears in spherical-harmonic setup/evaluation entrypoints
+
+#### 2e.3: Component API consistency
+
+- [ ] Keep user entrypoint centered on `addgravitycomponent` with canonical model names
+- [ ] Keep direct evaluator direction consistent with family naming
+- [ ] Preserve warning + no-op error mode (no hard `STOP` in Python-exposed control paths)
+
+#### 2e.4: Test and documentation updates for rename
+
+- [ ] Update tests and package-structure checks to new names
+- [ ] Update docs and notebooks to remove `axisymmetric` public API references
+- [ ] Verify build + full test suite after rename slice
+
 ## Active Roadmap
 
-### Phase 3: Simulator Refactor Around Gravity State (Top Priority)
+### Phase 3: Simulator Refactor Around Gravity State ✅
 
 **Goal:** Make `simulator.f90` consume the new stateful `gravity.f90` API directly, without reviving model-dispatch wrappers or duplicating gravity state.
 
@@ -330,13 +394,13 @@ These points were verified by reading `potentials.f90`, `integrator.f90`, and by
 
 #### 3.6: Acceptance criteria for Phase 3
 
-- [ ] `HIT` is force-only
-- [ ] A separate simulator potential-evaluation path exists
-- [ ] Simulator does not duplicate gravity finalized state through `GALAXYISSET`
-- [ ] `finalizesimulator()` exists and safely forwards to gravity finalization
-- [ ] `setstaticgalaxy` remains as a hidden one-component wrapper only
-- [ ] Simulator gravity-facing API is intentionally aligned with gravity naming/behavior
-- [ ] Full intended gravity models can be added through the lifecycle API
+- [x] `HIT` is force-only
+- [x] A separate simulator potential-evaluation path exists
+- [x] Simulator does not duplicate gravity finalized state through `GALAXYISSET`
+- [x] `finalizesimulator()` exists and safely forwards to gravity finalization
+- [x] `setstaticgalaxy` remains as a hidden one-component wrapper only
+- [x] Simulator gravity-facing API is intentionally aligned with gravity naming/behavior
+- [x] Full intended gravity models can be added through the lifecycle API
 
 ---
 

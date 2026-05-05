@@ -2,14 +2,14 @@ MODULE simulator
     ! this integrator needs to contain the current positions
     ! it needs to be able to apply any force that I want at any time
     ! it needs to be able to integrate the positions and velocities
-    use gravity, ONLY: pot_clear_basis                                   => clearaxisymmetricbasisexpansion,             &
-                          pot_init_basis                                    => initaxisymmetricbasisexpansion,              &
-                          pot_clear_axisymmetric_composite_basis_expansion  => clearaxisymmetriccompositebasisexpansion,    &
-                          pot_init_axisymmetric_composite_basis_expansion   => initaxisymmetriccompositebasisexpansion,     &
-                          pot_add_composite_expponential_oblate_halo        => addcompositeexponentialoblate,               &
-                          pot_add_composite_ibata2024_halo                  => addcompositeibata2024halo,                   &
-                          pot_add_composite_bessel_exponential_disk         => addcompositebesselexponentialdisk,           &
-                          pot_finalize_axisymmetric_composite               => finalizeaxisymmetriccompositebasisexpansion, &
+    use gravity, ONLY: pot_clear_basis                                   => clearsphericalharmonicbasis,                 &
+                          pot_init_basis                                    => initsphericalharmonicbasis,                  &
+                          pot_clear_composite_gravity                       => clearcompositegravity,                       &
+                          pot_init_composite_gravity                        => initcompositegravity,                        &
+                          pot_add_composite_sphericalharmonic_exponential_oblate => addcompositesphericalharmonicexponentialoblate, &
+                          pot_add_composite_sphericalharmonic_ibata2024_halo     => addcompositesphericalharmonicibata2024halo,     &
+                          pot_add_composite_disk_bessel_exponential_disk         => addcompositediskbesselexponentialdisk,           &
+                          pot_finalize_composite_gravity                    => finalizecompositegravity,                    &
                           grav_cleargravity                                 => cleargravity,                                &
                           grav_setgravityconstant                           => setgravityconstant,                          &
                           grav_addgravitycomponent                          => addgravitycomponent,                         &
@@ -55,12 +55,11 @@ MODULE simulator
     PUBLIC :: initwritestream, writestream
     PUBLIC :: initwritesnapshot, writesnapshot
     PUBLIC :: deallocate
-    PUBLIC :: clearaxisymmetricbasisexpansion, initaxisymmetricbasisexpansion
-    PUBLIC :: clearaxisymmetriccompositebasisexpansion, initaxisymmetriccompositebasisexpansion
-    PUBLIC :: clearcompositebasisexpansion, initcompositebasisexpansion
-    PUBLIC :: addcompositeexponentialoblatehalo, addcompositeibata2024halo
-    PUBLIC :: addcompositebesselexponentialdisk
-    PUBLIC :: finalizeaxisymmetriccompositebasisexpansion, finalizecompositebasisexpansion
+    PUBLIC :: clearsphericalharmonicbasis, initsphericalharmonicbasis
+    PUBLIC :: clearcompositegravity, initcompositegravity
+    PUBLIC :: addcompositesphericalharmonicexponentialoblate, addcompositesphericalharmonicibata2024halo
+    PUBLIC :: addcompositediskbesselexponentialdisk
+    PUBLIC :: finalizecompositegravity
     ! DECIDE WHICH PHYSICS TO INCLUDE
     LOGICAL, PUBLIC :: DONBODY = .FALSE.
     LOGICAL, PUBLIC :: DOPERTURBERS = .FALSE.
@@ -132,64 +131,47 @@ MODULE simulator
     END SUBROUTINE setstaticgalaxy
 
     ! SUBROUTINES FOR MANUALLY SETTING THE BASIS EXPANSION PARAMS
-    SUBROUTINE clearaxisymmetricbasisexpansion()
+    SUBROUTINE clearsphericalharmonicbasis()
         CALL pot_clear_basis()
-    END SUBROUTINE clearaxisymmetricbasisexpansion
+    END SUBROUTINE clearsphericalharmonicbasis
 
-    SUBROUTINE initaxisymmetricbasisexpansion(lmax, nr, r_grid)
+    SUBROUTINE initsphericalharmonicbasis(lmax, nr, r_grid)
         INTEGER, INTENT(IN) :: lmax, nr
         REAL*8, DIMENSION(nr), INTENT(IN) :: r_grid
         CALL pot_init_basis(lmax, nr, r_grid)
-    END SUBROUTINE initaxisymmetricbasisexpansion    
+    END SUBROUTINE initsphericalharmonicbasis
 
-    SUBROUTINE clearaxisymmetriccompositebasisexpansion()
-        CALL pot_clear_axisymmetric_composite_basis_expansion()
-    END SUBROUTINE clearaxisymmetriccompositebasisexpansion
+    SUBROUTINE clearcompositegravity()
+        CALL pot_clear_composite_gravity()
+    END SUBROUTINE clearcompositegravity
 
-    SUBROUTINE clearcompositebasisexpansion()
-        ! Backward-compatible alias.
-        CALL clearaxisymmetriccompositebasisexpansion()
-    END SUBROUTINE clearcompositebasisexpansion
-
-    SUBROUTINE initaxisymmetriccompositebasisexpansion(lmax, nr, r_grid, ncomp)
+    SUBROUTINE initcompositegravity(lmax, nr, r_grid, ncomp)
         INTEGER, INTENT(IN) :: lmax, nr, ncomp
         REAL*8, DIMENSION(nr), INTENT(IN) :: r_grid
-        CALL pot_init_axisymmetric_composite_basis_expansion(lmax, nr, r_grid, ncomp)
-    END SUBROUTINE initaxisymmetriccompositebasisexpansion
+        CALL pot_init_composite_gravity(lmax, nr, r_grid, ncomp)
+    END SUBROUTINE initcompositegravity
 
-    SUBROUTINE initcompositebasisexpansion(lmax, nr, r_grid, ncomp)
-        ! Backward-compatible alias.
-        INTEGER, INTENT(IN) :: lmax, nr, ncomp
-        REAL*8, DIMENSION(nr), INTENT(IN) :: r_grid
-        CALL initaxisymmetriccompositebasisexpansion(lmax, nr, r_grid, ncomp)
-    END SUBROUTINE initcompositebasisexpansion
-
-    SUBROUTINE addcompositeexponentialoblatehalo(component_index, rho0, s0, q)
+    SUBROUTINE addcompositesphericalharmonicexponentialoblate(component_index, rho0, s0, q)
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN) :: rho0, s0, q
-        CALL pot_add_composite_expponential_oblate_halo(component_index, rho0, s0, q)
-    END SUBROUTINE addcompositeexponentialoblatehalo
+        CALL pot_add_composite_sphericalharmonic_exponential_oblate(component_index, rho0, s0, q)
+    END SUBROUTINE addcompositesphericalharmonicexponentialoblate
 
-    SUBROUTINE addcompositeibata2024halo(component_index, rho0, r0, rt, q, gamma, beta)
+    SUBROUTINE addcompositesphericalharmonicibata2024halo(component_index, rho0, r0, rt, q, gamma, beta)
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN) :: rho0, r0, rt, q, gamma, beta
-        CALL pot_add_composite_ibata2024_halo(component_index, rho0, r0, rt, q, gamma, beta)
-    END SUBROUTINE addcompositeibata2024halo
+        CALL pot_add_composite_sphericalharmonic_ibata2024_halo(component_index, rho0, r0, rt, q, gamma, beta)
+    END SUBROUTINE addcompositesphericalharmonicibata2024halo
 
-    SUBROUTINE addcompositebesselexponentialdisk(component_index, sigma0, hR, hZ)
+    SUBROUTINE addcompositediskbesselexponentialdisk(component_index, sigma0, hR, hZ)
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN) :: sigma0, hR, hZ
-        CALL pot_add_composite_bessel_exponential_disk(component_index, sigma0, hR, hZ)
-    END SUBROUTINE addcompositebesselexponentialdisk
+        CALL pot_add_composite_disk_bessel_exponential_disk(component_index, sigma0, hR, hZ)
+    END SUBROUTINE addcompositediskbesselexponentialdisk
 
-    SUBROUTINE finalizeaxisymmetriccompositebasisexpansion()
-        CALL pot_finalize_axisymmetric_composite()
-    END SUBROUTINE finalizeaxisymmetriccompositebasisexpansion
-
-    SUBROUTINE finalizecompositebasisexpansion()
-        ! Backward-compatible alias.
-        CALL finalizeaxisymmetriccompositebasisexpansion()
-    END SUBROUTINE finalizecompositebasisexpansion
+    SUBROUTINE finalizecompositegravity()
+        CALL pot_finalize_composite_gravity()
+    END SUBROUTINE finalizecompositegravity
 
     SUBROUTINE assert_gravitational_constant_initialized()
         if (.NOT. grav_gravity_finalized) then

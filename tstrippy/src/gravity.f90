@@ -112,8 +112,8 @@ MODULE gravity
     PRIVATE :: project_ibata2024halo
     PRIVATE :: compute_phi_tables_from_rho
     PRIVATE :: compute_phi_tables_from_rho_component
-    PRIVATE :: axisymmetricbasisexpansion_eval
-    PRIVATE :: axisymmetricbasisexpansion_eval_component
+    PRIVATE :: sphericalharmonicbasis_eval
+    PRIVATE :: sphericalharmonicbasis_eval_component
     PRIVATE :: bessel_eval_component
     PRIVATE :: exponential_disk_bessel_eval_component
     PRIVATE :: build_exponential_disk_table
@@ -799,7 +799,7 @@ MODULE gravity
     ! =======================================================================
     ! =======================================================================
 
-    SUBROUTINE initaxisymmetricbasisexpansion(lmax, nr, r_grid)
+    SUBROUTINE initsphericalharmonicbasis(lmax, nr, r_grid)
         ! Allocate basis-expansion storage and store the radial grid.
         ! Does NOT project any density or compute potential tables.
         ! Call a density subroutine (e.g. exponential_oblate_halo) afterwards
@@ -808,7 +808,7 @@ MODULE gravity
         INTEGER, INTENT(IN) :: lmax, nr
         REAL*8, INTENT(IN), DIMENSION(nr) :: r_grid
 
-        CALL clearaxisymmetricbasisexpansion()
+        CALL clearsphericalharmonicbasis()
 
         ALLOCATE(BASIS_R_GRID(nr))
         ALLOCATE(BASIS_RHO_L_GRID(0:lmax, nr))
@@ -826,9 +826,9 @@ MODULE gravity
 
         BASIS_GRID_SET              = .TRUE.
         BASIS_EXPANSION_INITIALIZED = .FALSE.
-    END SUBROUTINE initaxisymmetricbasisexpansion
+    END SUBROUTINE initsphericalharmonicbasis
 
-    SUBROUTINE clearaxisymmetricbasisexpansion()
+    SUBROUTINE clearsphericalharmonicbasis()
         IMPLICIT NONE
 
         IF (ALLOCATED(BASIS_R_GRID))          DEALLOCATE(BASIS_R_GRID)
@@ -841,11 +841,11 @@ MODULE gravity
         BASIS_LMAX = -1
         BASIS_NR   = -1
         BASIS_G    = -1.0D0
-    END SUBROUTINE clearaxisymmetricbasisexpansion
+    END SUBROUTINE clearsphericalharmonicbasis
 
     SUBROUTINE default_init_basis_expansion()
         ! Auto-initialize with sensible defaults when the user has not called
-        ! initaxisymmetricbasisexpansion explicitly.
+        ! initsphericalharmonicbasis explicitly.
         ! Grid: 100 log-spaced points from 1e-4 to 1e3; lmax = 20.
         IMPLICIT NONE
         INTEGER, PARAMETER :: default_lmax = 20
@@ -862,7 +862,7 @@ MODULE gravity
         DO i = 1, default_nr
             r_grid(i) = EXP(log_rmin + (i-1) * dlog_r)
         END DO
-        CALL initaxisymmetricbasisexpansion(default_lmax, default_nr, r_grid)
+        CALL initsphericalharmonicbasis(default_lmax, default_nr, r_grid)
     END SUBROUTINE default_init_basis_expansion    
 
     SUBROUTINE compute_phi_tables_from_rho()
@@ -916,7 +916,7 @@ MODULE gravity
         DEALLOCATE(I_less, I_greater)
     END SUBROUTINE compute_phi_tables_from_rho
 
-    SUBROUTINE axisymmetricbasisexpansion_eval(N, x, y, z, ax, ay, az, phi_out)
+    SUBROUTINE sphericalharmonicbasis_eval(N, x, y, z, ax, ay, az, phi_out)
         ! Evaluate accelerations and potential for all N particles by
         ! interpolating the pre-computed l-mode tables and summing over modes.
         ! Cartesian force: a_i = -d_i phi, chain rule via (r, mu=z/r).
@@ -977,7 +977,7 @@ MODULE gravity
             ay(i) = -dphi_dr_v * y(i)/r_safe + dphi_dmu_v * z(i)*y(i)/r_safe**3
             az(i) = -dphi_dr_v * z(i)/r_safe - dphi_dmu_v * R_cyl_sq/r_safe**3
         END DO
-    END SUBROUTINE axisymmetricbasisexpansion_eval
+    END SUBROUTINE sphericalharmonicbasis_eval
 
     SUBROUTINE compute_phi_tables_from_rho_component(r_grid, rho_l_grid, phi_l_grid, dphi_l_dr_grid)
         IMPLICIT NONE
@@ -1028,7 +1028,7 @@ MODULE gravity
         DEALLOCATE(I_less, I_greater)
     END SUBROUTINE compute_phi_tables_from_rho_component
 
-    SUBROUTINE axisymmetricbasisexpansion_eval_component(N, x, y, z, r_grid, phi_l_grid, dphi_l_dr_grid, ax, ay, az, phi_out)
+    SUBROUTINE sphericalharmonicbasis_eval_component(N, x, y, z, r_grid, phi_l_grid, dphi_l_dr_grid, ax, ay, az, phi_out)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
@@ -1088,7 +1088,7 @@ MODULE gravity
         END DO
 
         DEALLOCATE(p, dp_dmu)
-    END SUBROUTINE axisymmetricbasisexpansion_eval_component
+    END SUBROUTINE sphericalharmonicbasis_eval_component
 
     ! =======================================================================
     ! =======================================================================
@@ -1451,7 +1451,7 @@ MODULE gravity
             BASIS_EXPANSION_INITIALIZED = .TRUE.
         END IF
 
-        CALL axisymmetricbasisexpansion_eval(N, x, y, z, ax, ay, az, phi)
+        CALL sphericalharmonicbasis_eval(N, x, y, z, ax, ay, az, phi)
     END SUBROUTINE exponential_oblate_halo
 
     SUBROUTINE project_ibata2024halo(rho0, r0, rt, q, gamma, beta)
@@ -1524,7 +1524,7 @@ MODULE gravity
             BASIS_EXPANSION_INITIALIZED = .TRUE.
         END IF
 
-        CALL axisymmetricbasisexpansion_eval(N, x, y, z, ax, ay, az, phi)
+        CALL sphericalharmonicbasis_eval(N, x, y, z, ax, ay, az, phi)
     END SUBROUTINE ibata2024halo
 
     ! =======================================================================
@@ -1536,7 +1536,7 @@ MODULE gravity
     ! =======================================================================
     ! =======================================================================
 
-    SUBROUTINE clearaxisymmetriccompositebasisexpansion()
+    SUBROUTINE clearcompositegravity()
         IMPLICIT NONE
 
         IF (ALLOCATED(COMPOSITE_KIND))            DEALLOCATE(COMPOSITE_KIND)
@@ -1558,14 +1558,14 @@ MODULE gravity
         COMPOSITE_NCOMP = 0
         COMPOSITE_LMAX = -1
         COMPOSITE_NR = -1
-    END SUBROUTINE clearaxisymmetriccompositebasisexpansion
+    END SUBROUTINE clearcompositegravity
 
-    SUBROUTINE initaxisymmetriccompositebasisexpansion(lmax, nr, r_grid, ncomp)
+    SUBROUTINE initcompositegravity(lmax, nr, r_grid, ncomp)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: lmax, nr, ncomp
         REAL*8, INTENT(IN), DIMENSION(nr) :: r_grid
 
-        CALL clearaxisymmetriccompositebasisexpansion()
+        CALL clearcompositegravity()
 
         ALLOCATE(COMPOSITE_KIND(ncomp), COMPOSITE_READY(ncomp))
         ALLOCATE(COMPOSITE_BESSEL_NPARAMS(ncomp))
@@ -1599,9 +1599,9 @@ MODULE gravity
         COMPOSITE_R_GRID = r_grid
         COMPOSITE_BASIS_GRID_SET = .TRUE.
         COMPOSITE_BASIS_FINALIZED = .FALSE.
-    END SUBROUTINE initaxisymmetriccompositebasisexpansion
+    END SUBROUTINE initcompositegravity
 
-    SUBROUTINE addcompositeexponentialoblate(component_index, rho0, s0, q)
+    SUBROUTINE addcompositesphericalharmonicexponentialoblate(component_index, rho0, s0, q)
         ! Legendre basis path: preferred for spherical or near-spherical components.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: component_index
@@ -1610,8 +1610,14 @@ MODULE gravity
         REAL*8, ALLOCATABLE :: mu_q(:), w_q(:), p(:)
         REAL*8 :: mu, rho_val, eta, factor
 
-        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initaxisymmetriccompositebasisexpansion must be called before addcompositeexponentialoblate"
-        IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) STOP "invalid composite component_index"
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) THEN
+            WRITE(*,'(A)') "WARNING: addcompositesphericalharmonicexponentialoblate: call initcompositegravity first"
+            RETURN
+        END IF
+        IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) THEN
+            WRITE(*,'(A)') "WARNING: addcompositesphericalharmonicexponentialoblate: invalid component_index"
+            RETURN
+        END IF
 
         n_mu = MAX(4 * (COMPOSITE_LMAX + 1), 40)
         ALLOCATE(mu_q(n_mu), w_q(n_mu), p(0:COMPOSITE_LMAX))
@@ -1639,9 +1645,9 @@ MODULE gravity
         COMPOSITE_KIND(component_index) = BFE_KIND_LEGENDRE
         COMPOSITE_READY(component_index) = .TRUE.
         COMPOSITE_BASIS_FINALIZED = .FALSE.
-    END SUBROUTINE addcompositeexponentialoblate
+    END SUBROUTINE addcompositesphericalharmonicexponentialoblate
 
-    SUBROUTINE addcompositeibata2024halo(component_index, rho0, r0, rt, q, gamma, beta)
+    SUBROUTINE addcompositesphericalharmonicibata2024halo(component_index, rho0, r0, rt, q, gamma, beta)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN) :: rho0, r0, rt, q, gamma, beta
@@ -1650,8 +1656,14 @@ MODULE gravity
         REAL*8 :: mu, rho_val, eta, factor, s, x
         REAL*8, PARAMETER :: s_floor = 1.0D-12
 
-        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initaxisymmetriccompositebasisexpansion must be called before addcompositeibata2024"
-        IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) STOP "invalid composite component_index"
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) THEN
+            WRITE(*,'(A)') "WARNING: addcompositesphericalharmonicibata2024halo: call initcompositegravity first"
+            RETURN
+        END IF
+        IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) THEN
+            WRITE(*,'(A)') "WARNING: addcompositesphericalharmonicibata2024halo: invalid component_index"
+            RETURN
+        END IF
 
         n_mu = MAX(4 * (COMPOSITE_LMAX + 1), 40)
         ALLOCATE(mu_q(n_mu), w_q(n_mu), p(0:COMPOSITE_LMAX))
@@ -1681,9 +1693,9 @@ MODULE gravity
         COMPOSITE_KIND(component_index) = BFE_KIND_LEGENDRE
         COMPOSITE_READY(component_index) = .TRUE.
         COMPOSITE_BASIS_FINALIZED = .FALSE.
-    END SUBROUTINE addcompositeibata2024halo
+    END SUBROUTINE addcompositesphericalharmonicibata2024halo
 
-    SUBROUTINE addcompositebesselcomponent(component_index, params, nparams)
+    SUBROUTINE addcompositediskbesselcomponent(component_index, params, nparams)
         ! Generic Bessel component registration.
         ! params is evaluator-specific and interpreted by the selected
         ! Bessel application evaluator.
@@ -1692,10 +1704,22 @@ MODULE gravity
         INTEGER, INTENT(IN) :: nparams
         REAL*8, INTENT(IN), DIMENSION(nparams) :: params
 
-        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initaxisymmetriccompositebasisexpansion must be called before addcompositebesselcomponent"
-        IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) STOP "invalid composite component_index"
-        IF (nparams < 1) STOP "nparams must be >= 1 in addcompositebesselcomponent"
-        IF (nparams > COMPOSITE_BESSEL_MAX_PARAMS) STOP "nparams exceeds COMPOSITE_BESSEL_MAX_PARAMS"
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) THEN
+            WRITE(*,'(A)') "WARNING: addcompositediskbesselcomponent: call initcompositegravity first"
+            RETURN
+        END IF
+        IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) THEN
+            WRITE(*,'(A)') "WARNING: addcompositediskbesselcomponent: invalid component_index"
+            RETURN
+        END IF
+        IF (nparams < 1) THEN
+            WRITE(*,'(A)') "WARNING: addcompositediskbesselcomponent: nparams must be >= 1"
+            RETURN
+        END IF
+        IF (nparams > COMPOSITE_BESSEL_MAX_PARAMS) THEN
+            WRITE(*,'(A)') "WARNING: addcompositediskbesselcomponent: nparams exceeds COMPOSITE_BESSEL_MAX_PARAMS"
+            RETURN
+        END IF
 
         COMPOSITE_BESSEL_PARAMS(:, component_index) = 0.0D0
         COMPOSITE_BESSEL_PARAMS(1:nparams, component_index) = params(1:nparams)
@@ -1703,9 +1727,9 @@ MODULE gravity
         COMPOSITE_KIND(component_index) = BFE_KIND_BESSEL_DISK
         COMPOSITE_READY(component_index) = .TRUE.
         COMPOSITE_BASIS_FINALIZED = .FALSE.
-    END SUBROUTINE addcompositebesselcomponent
+    END SUBROUTINE addcompositediskbesselcomponent
 
-    SUBROUTINE addcompositebesselexponentialdisk(component_index, sigma0, hR, hZ)
+    SUBROUTINE addcompositediskbesselexponentialdisk(component_index, sigma0, hR, hZ)
         ! Register and precompute an exponential-disk component using the
         ! tabulated cylindrical force representation (BFE_KIND_DISK_TABLE).
         ! The one-time Bessel/Hankel quadrature is performed here at setup time;
@@ -1715,9 +1739,18 @@ MODULE gravity
         REAL*8, INTENT(IN) :: sigma0, hR, hZ
         REAL*8, DIMENSION(4) :: params_disk
 
-        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initaxisymmetriccompositebasisexpansion must be called before addcompositebesselexponentialdisk"
-        IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) STOP "invalid composite component_index"
-        IF (hR <= 0.0D0 .OR. hZ <= 0.0D0) STOP "hR and hZ must be positive"
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) THEN
+            WRITE(*,'(A)') "WARNING: addcompositediskbesselexponentialdisk: call initcompositegravity first"
+            RETURN
+        END IF
+        IF (component_index < 1 .OR. component_index > COMPOSITE_NCOMP) THEN
+            WRITE(*,'(A)') "WARNING: addcompositediskbesselexponentialdisk: invalid component_index"
+            RETURN
+        END IF
+        IF (hR <= 0.0D0 .OR. hZ <= 0.0D0) THEN
+            WRITE(*,'(A)') "WARNING: addcompositediskbesselexponentialdisk: hR and hZ must be positive"
+            RETURN
+        END IF
 
         ! Retain raw params for the reference direct-quadrature path.
         params_disk(1) = sigma0
@@ -1733,20 +1766,26 @@ MODULE gravity
         COMPOSITE_KIND(component_index) = BFE_KIND_DISK_TABLE
         COMPOSITE_READY(component_index) = .TRUE.
         COMPOSITE_BASIS_FINALIZED = .FALSE.
-    END SUBROUTINE addcompositebesselexponentialdisk
+    END SUBROUTINE addcompositediskbesselexponentialdisk
 
-    SUBROUTINE finalizeaxisymmetriccompositebasisexpansion()
+    SUBROUTINE finalizecompositegravity()
         IMPLICIT NONE
         INTEGER :: i
 
-        IF (.NOT. COMPOSITE_BASIS_GRID_SET) STOP "initaxisymmetriccompositebasisexpansion must be called before finalizeaxisymmetriccompositebasisexpansion"
+        IF (.NOT. COMPOSITE_BASIS_GRID_SET) THEN
+            WRITE(*,'(A)') "WARNING: finalizecompositegravity: call initcompositegravity first"
+            RETURN
+        END IF
         DO i = 1, COMPOSITE_NCOMP
-            IF (.NOT. COMPOSITE_READY(i)) STOP "all composite components must be configured before finalizeaxisymmetriccompositebasisexpansion"
+            IF (.NOT. COMPOSITE_READY(i)) THEN
+                WRITE(*,'(A,I0)') "WARNING: finalizecompositegravity: component not ready: ", i
+                RETURN
+            END IF
         END DO
         COMPOSITE_BASIS_FINALIZED = .TRUE.
-    END SUBROUTINE finalizeaxisymmetriccompositebasisexpansion
+    END SUBROUTINE finalizecompositegravity
 
-    SUBROUTINE axisymmetriccompositebasispotential_dispatch(params, N, x, y, z, ax, ay, az, phi)
+    SUBROUTINE evaluatecompositegravity_dispatch(params, N, x, y, z, ax, ay, az, phi)
         ! Compatibility bridge for simulator's generic params-based pointer API.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
@@ -1763,10 +1802,10 @@ MODULE gravity
             RETURN
         END IF
 
-        CALL axisymmetriccompositebasispotential(N, x, y, z, ax, ay, az, phi)
-    END SUBROUTINE axisymmetriccompositebasispotential_dispatch
+        CALL evaluatecompositegravity(N, x, y, z, ax, ay, az, phi)
+    END SUBROUTINE evaluatecompositegravity_dispatch
 
-    SUBROUTINE axisymmetriccompositebasispotential(N, x, y, z, ax, ay, az, phi)
+    SUBROUTINE evaluatecompositegravity(N, x, y, z, ax, ay, az, phi)
         ! Evaluate all configured composite basis components and sum their forces.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
@@ -1780,7 +1819,10 @@ MODULE gravity
         az = 0.0D0
         phi = 0.0D0
 
-        IF (.NOT. COMPOSITE_BASIS_FINALIZED) STOP "finalizeaxisymmetriccompositebasisexpansion must be called before axisymmetriccompositebasispotential"
+        IF (.NOT. COMPOSITE_BASIS_FINALIZED) THEN
+            WRITE(*,'(A)') "WARNING: evaluatecompositegravity: call finalizecompositegravity first"
+            RETURN
+        END IF
 
         ALLOCATE(ax_comp(N), ay_comp(N), az_comp(N), phi_comp(N))
         DO i = 1, COMPOSITE_NCOMP
@@ -1791,19 +1833,23 @@ MODULE gravity
 
             SELECT CASE (COMPOSITE_KIND(i))
             CASE (BFE_KIND_LEGENDRE)
-                CALL axisymmetricbasisexpansion_eval_component(N, x, y, z, COMPOSITE_R_GRID, &
+                CALL sphericalharmonicbasis_eval_component(N, x, y, z, COMPOSITE_R_GRID, &
                     COMPOSITE_PHI_L_GRID(:,:,i), COMPOSITE_DPHI_L_DR_GRID(:,:,i), &
                     ax_comp, ay_comp, az_comp, phi_comp)
             CASE (BFE_KIND_BESSEL_DISK)
                 nparams_bessel = COMPOSITE_BESSEL_NPARAMS(i)
-                IF (nparams_bessel < 1) STOP "invalid bessel parameter count in axisymmetriccompositebasispotential"
+                IF (nparams_bessel < 1) THEN
+                    WRITE(*,'(A,I0)') "WARNING: evaluatecompositegravity: invalid disk_bessel parameter count in component ", i
+                    CYCLE
+                END IF
                 CALL bessel_eval_component(exponential_disk_bessel_eval_component, &
                     COMPOSITE_BESSEL_PARAMS(1:nparams_bessel, i), N, &
                     x, y, z, ax_comp, ay_comp, az_comp, phi_comp)
             CASE (BFE_KIND_DISK_TABLE)
                 CALL disk_table_eval_component(i, N, x, y, z, ax_comp, ay_comp, az_comp, phi_comp)
             CASE DEFAULT
-                STOP "unknown component kind in axisymmetriccompositebasispotential"
+                WRITE(*,'(A,I0)') "WARNING: evaluatecompositegravity: unknown component kind in component ", i
+                CYCLE
             END SELECT
 
             ax = ax + ax_comp
@@ -1812,7 +1858,7 @@ MODULE gravity
             phi = phi + phi_comp
         END DO
         DEALLOCATE(ax_comp, ay_comp, az_comp, phi_comp)
-    END SUBROUTINE axisymmetriccompositebasispotential
+    END SUBROUTINE evaluatecompositegravity
 
     SUBROUTINE bessel_eval_component(component_evaluator, params, N, x, y, z, ax, ay, az, phi)
         ! Generic Bessel-component dispatcher.

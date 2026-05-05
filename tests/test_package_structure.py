@@ -36,6 +36,13 @@ def test_top_level_module_types():
     assert hasattr(tstrippy.simulator, "initwritesnapshot")
     assert hasattr(tstrippy.simulator, "writesnapshot")
     assert hasattr(tstrippy.gravity, "plummer")
+    assert hasattr(tstrippy.gravity, "cleargravity")
+    assert hasattr(tstrippy.gravity, "setgravityconstant")
+    assert hasattr(tstrippy.gravity, "addgravitycomponent")
+    assert hasattr(tstrippy.gravity, "finalizegravity")
+    assert hasattr(tstrippy.gravity, "evaluategravityforces")
+    assert hasattr(tstrippy.gravity, "evaluategravitypotential")
+    assert hasattr(tstrippy.gravity, "printgravitystate")
     assert hasattr(tstrippy.mathutils, "linear_interp_scalar")
 
 

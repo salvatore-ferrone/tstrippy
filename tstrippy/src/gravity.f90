@@ -64,6 +64,26 @@ MODULE gravity
     REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_DPHI_DZ    ! (nR, nZ, ncomp), z>=0
     REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: COMPOSITE_DISK_TABLE_D2PHI_DRDZ ! (nR, nZ, ncomp), z>=0
 
+    ! -----------------------------------------------------------------------
+    ! Gravity lifecycle module state (unified API)
+    ! -----------------------------------------------------------------------
+    REAL*8,  PARAMETER, PUBLIC :: GRAVITY_G_DEFAULT = 4.30091727D-6  ! kpc (km/s)^2 / Msun
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_MAX_NCOMP  = 16
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_MAX_PARAMS = 16
+
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_NONE         = 0
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_PLUMMER       = 10
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_HERNQUIST     = 11
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_MIYAMOTONAGAI = 12
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_LONGMURALIBAR = 13
+
+    REAL*8,  PUBLIC :: GRAVITY_G            = GRAVITY_G_DEFAULT
+    LOGICAL, PUBLIC :: GRAVITY_G_IS_DEFAULT = .TRUE.
+    LOGICAL, PUBLIC :: GRAVITY_FINALIZED    = .FALSE.
+    INTEGER, PUBLIC :: GRAVITY_NCOMP        = 0
+    INTEGER, DIMENSION(GRAVITY_MAX_NCOMP),                    PUBLIC :: GRAVITY_KIND   = 0
+    REAL*8,  DIMENSION(GRAVITY_MAX_PARAMS, GRAVITY_MAX_NCOMP), PUBLIC :: GRAVITY_PARAMS = 0.0D0
+
     ! Private internal routines (not exposed to Python/caller)
     PRIVATE :: default_init_basis_expansion
     PRIVATE :: project_exponential_oblate_halo
@@ -78,6 +98,197 @@ MODULE gravity
     PRIVATE :: disk_table_eval_component
 
     CONTAINS
+
+    ! =======================================================================
+    ! Gravity lifecycle API
+    ! =======================================================================
+
+    SUBROUTINE cleargravity()
+        IMPLICIT NONE
+        GRAVITY_G            = GRAVITY_G_DEFAULT
+        GRAVITY_G_IS_DEFAULT = .TRUE.
+        GRAVITY_FINALIZED    = .FALSE.
+        GRAVITY_NCOMP        = 0
+        GRAVITY_KIND         = GRAVITY_KIND_NONE
+        GRAVITY_PARAMS       = 0.0D0
+    END SUBROUTINE cleargravity
+
+    SUBROUTINE setgravityconstant(G)
+        IMPLICIT NONE
+        REAL*8, INTENT(IN) :: G
+        IF (GRAVITY_FINALIZED) STOP "setgravityconstant: cannot change G after finalizegravity; call cleargravity first"
+        IF (G <= 0.0D0) STOP "setgravityconstant: G must be positive"
+        GRAVITY_G            = G
+        GRAVITY_G_IS_DEFAULT = .FALSE.
+    END SUBROUTINE setgravityconstant
+
+    SUBROUTINE addgravitycomponent(model_name, params, nparams)
+        IMPLICIT NONE
+        CHARACTER(LEN=*), INTENT(IN) :: model_name
+        INTEGER, INTENT(IN) :: nparams
+        REAL*8, INTENT(IN), DIMENSION(nparams) :: params
+        INTEGER :: kind_code, required_params
+
+        IF (GRAVITY_FINALIZED) &
+            STOP "addgravitycomponent: cannot add components after finalizegravity; call cleargravity first"
+        IF (GRAVITY_NCOMP >= GRAVITY_MAX_NCOMP) &
+            STOP "addgravitycomponent: maximum number of components reached"
+
+        SELECT CASE (TRIM(model_name))
+        CASE ("plummer")
+            kind_code = GRAVITY_KIND_PLUMMER
+            required_params = 2  ! M, a
+        CASE ("hernquist")
+            kind_code = GRAVITY_KIND_HERNQUIST
+            required_params = 2  ! M, a
+        CASE ("miyamotonagai")
+            kind_code = GRAVITY_KIND_MIYAMOTONAGAI
+            required_params = 3  ! M, a, b
+        CASE ("longmuralibar")
+            kind_code = GRAVITY_KIND_LONGMURALIBAR
+            required_params = 4  ! M, abar, bbar, cbar
+        CASE DEFAULT
+            STOP "addgravitycomponent: unknown model_name (must be lowercase)"
+        END SELECT
+
+        IF (nparams /= required_params) &
+            STOP "addgravitycomponent: wrong number of parameters for model"
+
+        GRAVITY_NCOMP = GRAVITY_NCOMP + 1
+        GRAVITY_KIND(GRAVITY_NCOMP) = kind_code
+        GRAVITY_PARAMS(1:nparams, GRAVITY_NCOMP) = params(1:nparams)
+    END SUBROUTINE addgravitycomponent
+
+    SUBROUTINE finalizegravity()
+        IMPLICIT NONE
+        INTEGER :: i
+
+        IF (GRAVITY_NCOMP < 1) &
+            STOP "finalizegravity: no components registered; call addgravitycomponent first"
+        DO i = 1, GRAVITY_NCOMP
+            IF (GRAVITY_KIND(i) == GRAVITY_KIND_NONE) &
+                STOP "finalizegravity: component slot is uninitialized"
+        END DO
+
+        IF (GRAVITY_G_IS_DEFAULT) THEN
+            WRITE(*,'(A,ES14.8,A)') "finalizegravity: Default G = ", GRAVITY_G, &
+                " kpc (km/s)^2 / Msun"
+        ELSE
+            WRITE(*,'(A,ES14.8,A)') "finalizegravity: G = ", GRAVITY_G, &
+                " kpc (km/s)^2 / Msun (user override)"
+        END IF
+
+        GRAVITY_FINALIZED = .TRUE.
+    END SUBROUTINE finalizegravity
+
+    SUBROUTINE evaluategravityforces(N, x, y, z, ax, ay, az)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az
+        REAL*8, DIMENSION(N) :: ax_c, ay_c, az_c, phi_c
+        REAL*8, DIMENSION(3) :: p3
+        REAL*8, DIMENSION(4) :: p4
+        REAL*8, DIMENSION(5) :: p5
+        INTEGER :: i
+
+        IF (.NOT. GRAVITY_FINALIZED) STOP "evaluategravityforces: call finalizegravity first"
+
+        ax = 0.0D0;  ay = 0.0D0;  az = 0.0D0
+
+        DO i = 1, GRAVITY_NCOMP
+            ax_c = 0.0D0;  ay_c = 0.0D0;  az_c = 0.0D0;  phi_c = 0.0D0
+            SELECT CASE (GRAVITY_KIND(i))
+            CASE (GRAVITY_KIND_PLUMMER)
+                p3 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
+                CALL plummer(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+            CASE (GRAVITY_KIND_HERNQUIST)
+                p3 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
+                CALL hernquist(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+            CASE (GRAVITY_KIND_MIYAMOTONAGAI)
+                p4 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
+                CALL miyamotonagai(p4, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+            CASE (GRAVITY_KIND_LONGMURALIBAR)
+                p5 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), &
+                      GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i)]
+                CALL longmuralibar(p5, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+            CASE DEFAULT
+                STOP "evaluategravityforces: unknown component kind"
+            END SELECT
+            ax = ax + ax_c
+            ay = ay + ay_c
+            az = az + az_c
+        END DO
+    END SUBROUTINE evaluategravityforces
+
+    SUBROUTINE evaluategravitypotential(N, x, y, z, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi
+        REAL*8, DIMENSION(N) :: ax_c, ay_c, az_c, phi_c
+        REAL*8, DIMENSION(3) :: p3
+        REAL*8, DIMENSION(4) :: p4
+        REAL*8, DIMENSION(5) :: p5
+        INTEGER :: i
+
+        IF (.NOT. GRAVITY_FINALIZED) STOP "evaluategravitypotential: call finalizegravity first"
+
+        phi = 0.0D0
+
+        DO i = 1, GRAVITY_NCOMP
+            ax_c = 0.0D0;  ay_c = 0.0D0;  az_c = 0.0D0;  phi_c = 0.0D0
+            SELECT CASE (GRAVITY_KIND(i))
+            CASE (GRAVITY_KIND_PLUMMER)
+                p3 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
+                CALL plummer(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+            CASE (GRAVITY_KIND_HERNQUIST)
+                p3 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
+                CALL hernquist(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+            CASE (GRAVITY_KIND_MIYAMOTONAGAI)
+                p4 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
+                CALL miyamotonagai(p4, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+            CASE (GRAVITY_KIND_LONGMURALIBAR)
+                p5 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), &
+                      GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i)]
+                CALL longmuralibar(p5, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+            CASE DEFAULT
+                STOP "evaluategravitypotential: unknown component kind"
+            END SELECT
+            phi = phi + phi_c
+        END DO
+    END SUBROUTINE evaluategravitypotential
+
+    SUBROUTINE printgravitystate()
+        IMPLICIT NONE
+        INTEGER :: i
+        CHARACTER(LEN=32) :: kind_name
+
+        WRITE(*,'(A)') "=== gravity module state ==="
+        WRITE(*,'(A,L1)')    "  GRAVITY_FINALIZED    : ", GRAVITY_FINALIZED
+        WRITE(*,'(A,I0)')    "  GRAVITY_NCOMP        : ", GRAVITY_NCOMP
+        IF (GRAVITY_G_IS_DEFAULT) THEN
+            WRITE(*,'(A,ES14.8,A)') "  GRAVITY_G            : ", GRAVITY_G, " (default)"
+        ELSE
+            WRITE(*,'(A,ES14.8,A)') "  GRAVITY_G            : ", GRAVITY_G, " (user override)"
+        END IF
+        DO i = 1, GRAVITY_NCOMP
+            SELECT CASE (GRAVITY_KIND(i))
+            CASE (GRAVITY_KIND_PLUMMER);        kind_name = "plummer"
+            CASE (GRAVITY_KIND_HERNQUIST);      kind_name = "hernquist"
+            CASE (GRAVITY_KIND_MIYAMOTONAGAI);  kind_name = "miyamotonagai"
+            CASE (GRAVITY_KIND_LONGMURALIBAR);  kind_name = "longmuralibar"
+            CASE DEFAULT;                        kind_name = "unknown"
+            END SELECT
+            WRITE(*,'(A,I0,A,A)') "  component ", i, ": ", TRIM(kind_name)
+        END DO
+        WRITE(*,'(A)') "==========================="
+    END SUBROUTINE printgravitystate
+
+    ! =======================================================================
+    ! Legacy composite BFE API (preserved for backward compatibility)
+    ! =======================================================================
+
     SUBROUTINE initaxisymmetricbasisexpansion(G, lmax, nr, r_grid)
         ! Allocate basis-expansion storage and store the radial grid.
         ! Does NOT project any density or compute potential tables.

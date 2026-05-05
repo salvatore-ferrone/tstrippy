@@ -159,6 +159,7 @@ All evaluation routines take arrays. Scalar (single-particle) input is not suppo
 
 - `initaxisymmetricbasisexpansion` -> `initsphericalharmonicbasis`
 - `clearaxisymmetricbasisexpansion` -> `clearsphericalharmonicbasis`
+- `default_init_basis_expansion` -> `defaultinitsphericalharmonicbasis`
 - `axisymmetricbasisexpansion_eval` -> `sphericalharmonicbasis_eval`
 - `axisymmetricbasisexpansion_eval_component` -> `sphericalharmonicbasis_eval_component`
 - `initaxisymmetriccompositebasisexpansion` -> `initcompositegravity`
@@ -260,6 +261,23 @@ These points were verified by reading `potentials.f90`, `integrator.f90`, and by
 - The composite basis state lives in `potentials.f90`, but the integrator will ignore it unless the extra dispatch registration step is also performed.
 - That split responsibility is the source of the current redundancy.
 
+### 5. Gravity non-analytic component state is currently shared, not per-component
+
+- `evaluategravityforces` and `evaluategravitypotential` loop over components, but Legendre density models (`exponential_oblate_halo`, `ibata2024halo`) rely on module-global `BASIS_*` storage.
+- After first initialization, later Legendre components can reuse stale projected tables, so per-component parameters can bleed across component evaluations.
+- This blocks correct mixed multi-component use of more than one Legendre density component under `addgravitycomponent`.
+
+### 6. Composite and lifecycle APIs are still parallel control surfaces
+
+- `addgravitycomponent` supports analytic + Legendre-density + direct disk-Bessel paths through `GRAVITY_KIND`.
+- `initcompositegravity` / `evaluatecompositegravity` manage an independent `COMPOSITE_*` state with no direct binding into `GRAVITY_KIND` lifecycle dispatch.
+- This creates ambiguity for mixed analytic + BFE composites and requires an explicit unification decision.
+
+### 7. Immediate naming-consistency cleanup required
+
+- `default_init_basis_expansion` has been renamed to `defaultinitsphericalharmonicbasis`.
+- Call sites and private declarations must remain synchronized during refactor slices to avoid stale symbol paths.
+
 ## Completed Work
 
 ### Phase 0: Basis-Expansion Foundation ✅
@@ -343,6 +361,42 @@ These points were verified by reading `potentials.f90`, `integrator.f90`, and by
 - [ ] Update tests and package-structure checks to new names
 - [ ] Update docs and notebooks to remove `axisymmetric` public API references
 - [ ] Verify build + full test suite after rename slice
+
+### Phase 2f: Force/Potential API Divorce For Family Evaluators (Next)
+
+**Goal:** enforce force-only and potential-only internal evaluator paths so user-facing lifecycle calls never compute unnecessary quantities.
+
+#### 2f.1: Spherical-harmonic evaluator split
+
+- [ ] Replace combined `sphericalharmonicbasis_eval(N, x, y, z, ax, ay, az, phi_out)` with:
+  - `sphericalharmonicbasisforce(N, x, y, z, ax, ay, az)`
+  - `sphericalharmonicbasispotential(N, x, y, z, phi_out)`
+- [ ] Replace combined per-component evaluator with:
+  - `sphericalharmonicbasisforce_component(...)`
+  - `sphericalharmonicbasispotential_component(...)`
+- [ ] Keep shared interpolation kernels private so force/potential implementations remain numerically consistent.
+
+#### 2f.2: Gravity lifecycle evaluator split completion
+
+- [ ] Ensure `evaluategravityforces` never computes potential temporaries for any component kind.
+- [ ] Ensure `evaluategravitypotential` never computes force temporaries for any component kind.
+- [ ] Introduce per-component lifecycle outputs:
+  - `evaluategravityforcecomponents(N, x, y, z, force_tensor)`
+  - `evaluategravitypotentialcomponents(N, x, y, z, phi_tensor)`
+
+#### 2f.3: Component-state correctness for non-analytic models
+
+- [ ] Move Legendre table state used by lifecycle components from shared `BASIS_*` storage to per-component storage keyed by component index.
+- [ ] Keep composite-only `COMPOSITE_*` state separate unless/until full lifecycle/composite unification is explicitly selected.
+- [ ] Validate that multiple Legendre density components with different parameters produce distinct contributions.
+
+#### 2f.4: Composite compatibility decision slice (analytic + BFE)
+
+- [ ] Decide and document one canonical mixed-composite path:
+  - Option A: unify through `addgravitycomponent` only
+  - Option B: keep `initcompositegravity` path and add explicit analytic-component registration there
+- [ ] Eliminate ambiguous dual-path behavior for mixed analytic + BFE workflows.
+- [ ] Add tests that cover analytic-only, BFE-only, and mixed analytic+BFE composition semantics.
 
 ## Active Roadmap
 

@@ -22,6 +22,11 @@ Prefer linking to these docs in PR notes and chat summaries instead of duplicati
 4. Quick import check:
    - `python -c "import tstrippy; print(tstrippy.integrator, tstrippy.potentials, tstrippy.mathutils)"`
 
+If shell activation is uncertain (for example after a fresh terminal/session restore), run through conda explicitly:
+- Build: `conda run -n tstrippy ./build.sh`
+- Tests: `conda run -n tstrippy pytest tests/ -q`
+- Quick import check: `conda run -n tstrippy python -c "import tstrippy; print(tstrippy.integrator, tstrippy.potentials, tstrippy.mathutils)"`
+
 Notes:
 - Keep Python within the supported range in [pyproject.toml](pyproject.toml): >=3.9,<3.12.
 - Ensure `gfortran` and `f2py` resolve from the active conda env (not system fallback).

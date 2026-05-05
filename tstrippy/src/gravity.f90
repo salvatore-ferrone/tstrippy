@@ -107,7 +107,7 @@ MODULE gravity
 
     ! Private internal routines (not exposed to Python/caller)
     ! NOTE: No backward compatibility aliases. Use canonical names only.
-    PRIVATE :: default_init_basis_expansion
+    PRIVATE :: defaultinitsphericalharmonicbasis
     PRIVATE :: project_exponential_oblate_halo
     PRIVATE :: project_ibata2024halo
     PRIVATE :: compute_phi_tables_from_rho
@@ -843,7 +843,7 @@ MODULE gravity
         BASIS_G    = -1.0D0
     END SUBROUTINE clearsphericalharmonicbasis
 
-    SUBROUTINE default_init_basis_expansion()
+    SUBROUTINE defaultinitsphericalharmonicbasis()
         ! Auto-initialize with sensible defaults when the user has not called
         ! initsphericalharmonicbasis explicitly.
         ! Grid: 100 log-spaced points from 1e-4 to 1e3; lmax = 20.
@@ -863,7 +863,7 @@ MODULE gravity
             r_grid(i) = EXP(log_rmin + (i-1) * dlog_r)
         END DO
         CALL initsphericalharmonicbasis(default_lmax, default_nr, r_grid)
-    END SUBROUTINE default_init_basis_expansion    
+    END SUBROUTINE defaultinitsphericalharmonicbasis
 
     SUBROUTINE compute_phi_tables_from_rho()
         ! Build potential tables BASIS_PHI_L_GRID and BASIS_DPHI_L_DR_GRID from
@@ -1444,7 +1444,7 @@ MODULE gravity
 
         IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
             IF (.NOT. BASIS_GRID_SET) THEN
-                CALL default_init_basis_expansion()
+                CALL defaultinitsphericalharmonicbasis()
             END IF
             CALL project_exponential_oblate_halo(rho0, s0, q)
             CALL compute_phi_tables_from_rho()
@@ -1517,7 +1517,7 @@ MODULE gravity
 
         IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
             IF (.NOT. BASIS_GRID_SET) THEN
-                CALL default_init_basis_expansion()
+                CALL defaultinitsphericalharmonicbasis()
             END IF
             CALL project_ibata2024halo(rho0, r0, rt, q, gamma, beta)
             CALL compute_phi_tables_from_rho()

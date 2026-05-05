@@ -73,6 +73,9 @@ Execution expectations:
    - `build/`, `builddir/`, `temp.*`, `lib.macosx-*`, `src.macosx-*`
 2. Prefer minimal diffs in Fortran files and preserve public entry-point names unless refactor requires rename.
 3. After Fortran changes, always rebuild before concluding behavior is correct.
+4. F2PY safety policy: do not use hard `STOP` in Python-exposed Fortran control paths.
+   - Reason: `STOP` can terminate the extension call and leave Python waiting for a response.
+   - Use warning + no-op (or status return) for invalid state/config/model/parameter flows.
 
 ## When In Doubt
 If behavior conflicts with assumptions here, use project docs as source of truth and update this file with concise corrections.

@@ -112,11 +112,11 @@ All evaluation routines take arrays. Scalar (single-particle) input is not suppo
 #### Lifecycle
 
 - `cleargravity` — full state reset; resets `GRAVITY_G` to default
-- `setgravityconstant(G)` — optional override of G before any `addgravitycomponent`; hard error after `finalizegravity`
+- `setgravityconstant(G)` — optional override of G before any `addgravitycomponent`; after `finalizegravity`, emit warning and no-op
 - `addgravitycomponent(model_name, ...)` — register one component; G comes from module state, not from user params; invalid `model_name` fails immediately
-- `finalizegravity` — validates and freezes all models; builds heavy tables only for components that need them (BFE/table path); analytic-only finalize is a flag flip only
-- `finalizegravity` is always required even for analytic-only configurations
-- After `finalizegravity`, any mutating call is a hard error until `cleargravity`
+- `finalizegravity` — validates and freezes all models; builds heavy tables only for components that need them (BFE/table path)
+- `finalizegravity` is required for BFE/table configurations; analytic-only configurations may auto-finalize once on first evaluation
+- After `finalizegravity`, mutating calls emit warnings and no-op until `cleargravity`
 
 #### Component identity
 
@@ -127,7 +127,24 @@ All evaluation routines take arrays. Scalar (single-particle) input is not suppo
 
 - `setsphericalbfedefaults(lmax, nr, r_grid)` — spherical-harmonic BFE settings; analytic and cylindrical components ignore this
 - `setcylindricalbfedefaults(nr, nz, nk)` — cylindrical/Bessel-table BFE settings; analytic and spherical components ignore this
-- Per-component override deferred to a later version
+- Per-component override is supported in the direction of the API design; defaults remain the simple path
+
+#### Canonical model names for addgravitycomponent
+
+- `plummer`
+- `hernquist`
+- `miyamotonagai`
+- `longmuralibar`
+- `allensantillianhalo`
+- `pouliasis2017pii`
+- `exponential_oblate_halo`
+- `ibata2024halo`
+- `exponential_disk_bessel`
+
+#### Method-family naming (documentation and API)
+
+- Use explicit family names: `spherical_harmonic` and `disk_bessel`
+- Avoid using `axisymmetric` as the primary user-facing family name
 
 #### State inspector
 
@@ -156,7 +173,9 @@ Design rule:
 
 ### Error handling and compatibility
 
-- Strict finalize/config errors with informative messages; code-tagged errors are acceptable.
+- F2PY safety rule: no hard `STOP` in Python-exposed control paths. Python can hang if Fortran aborts.
+- Prefer warning + no-op behavior for invalid state/config/model/parameter flows.
+- Informative warning messages remain required; code-tagged warnings are acceptable.
 - Backward compatibility is not a requirement for this refactor pass.
 
 ### Parallelization policy (locked)

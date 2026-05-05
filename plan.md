@@ -90,6 +90,48 @@ These are now implementation constraints for the refactor.
 - Promote gravity subsystem to stateful lifecycle architecture (currently `potentials.f90`, target `gravity.f90`).
 - Gravity v1 scope remains force + potential; `density/vcirc/vesc` planned later.
 
+### Gravity module API (locked 2026-05-05)
+
+#### Public evaluator names
+
+Four explicit routines — no overloading:
+
+- `evaluategravityforces(N, x, y, z, ax, ay, az)` — net force, Cartesian
+- `evaluategravityforcecomponents(N, x, y, z, ax, ay, az_tensor)` — per-component forces, shape `(NP, 3, NCOMP)`
+- `evaluategravitypotential(N, x, y, z, phi)` — net potential, Cartesian
+- `evaluategravitypotentialcomponents(N, x, y, z, phi_tensor)` — per-component potential, shape `(NP, NCOMP)`
+
+All evaluation routines take arrays. Scalar (single-particle) input is not supported; caller wraps in length-1 array.
+
+#### Lifecycle
+
+- `cleargravity` — full state reset
+- `addgravitycomponent(model_name, ...)` — register one component; invalid `model_name` fails immediately
+- `finalizegravity` — validates and freezes all models; builds heavy tables only for components that need them (BFE/table path); analytic-only finalize is a flag flip only
+- `finalizegravity` is always required even for analytic-only configurations
+- After `finalizegravity`, any mutating call is a hard error until `cleargravity`
+
+#### Component identity
+
+- Components are identified only by integer order of addition (0-indexed internally)
+- No user labels; no string-keyed components
+
+#### Independent BFE configuration
+
+- `setsphericalbfedefaults(lmax, nr, r_grid)` — spherical-harmonic BFE settings; analytic and cylindrical components ignore this
+- `setcylindricalbfedefaults(nr, nz, nk)` — cylindrical/Bessel-table BFE settings; analytic and spherical components ignore this
+- Per-component override deferred to a later version
+
+#### State inspector
+
+- `printgravitystate` — prints all module state to stdout; v1 only, no getter-style array returns yet
+- Backend details (table sizes, BFE orders, component kinds) are hidden from normal use but visible via `printgravitystate`
+
+#### Coordinate scope
+
+- All public evaluation is Cartesian only in v1
+- Cylindrical or spherical coordinates remain internal implementation details where useful
+
 ### Bessel-table defaults (initial locked defaults)
 
 These defaults are intended to be robust for v1 and overrideable by advanced users:

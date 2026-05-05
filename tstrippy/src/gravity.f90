@@ -717,21 +717,6 @@ MODULE gravity
         phi = -GRAVITY_G*M / (r + a)
     END SUBROUTINE hernquistpotential
 
-    SUBROUTINE hernquist(params, N, x, y, z, ax, ay, az, phi)
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(2) :: params
-        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
-        REAL*8, DIMENSION(N,3) :: force
-
-        CALL hernquistforce(params, N, x, y, z, force)
-        CALL hernquistpotential(params, N, x, y, z, phi)
-        ax = force(:,1)
-        ay = force(:,2)
-        az = force(:,3)
-    END SUBROUTINE hernquist
-
     SUBROUTINE plummerforce(params, N, x, y, z, force)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
@@ -810,21 +795,6 @@ MODULE gravity
         phi = (GRAVITY_G*M / (2.0D0*abar)) * LOG((x-abar+Tminus)/(x+abar+Tplus))
     END SUBROUTINE longmuralibarpotential
 
-    SUBROUTINE longmuralibar(params, N, x, y, z, ax, ay, az, phi)
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(4) :: params
-        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
-        REAL*8, DIMENSION(N,3) :: force
-
-        CALL longmuralibarforce(params, N, x, y, z, force)
-        CALL longmuralibarpotential(params, N, x, y, z, phi)
-        ax = force(:,1)
-        ay = force(:,2)
-        az = force(:,3)
-    END SUBROUTINE longmuralibar
-
     SUBROUTINE allensantillianhaloforce(params, N, x, y, z, force)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
@@ -888,21 +858,6 @@ MODULE gravity
         phi = MERGE(-GRAVITY_G*Mtot/r, phi, outside_cutoff)
     END SUBROUTINE allensantillianhalopotential
 
-    SUBROUTINE allensantillianhalo(params, N, x, y, z, ax, ay, az, phi)
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(4) :: params
-        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
-        REAL*8, DIMENSION(N,3) :: force
-
-        CALL allensantillianhaloforce(params, N, x, y, z, force)
-        CALL allensantillianhalopotential(params, N, x, y, z, phi)
-        ax = force(:,1)
-        ay = force(:,2)
-        az = force(:,3)
-    END SUBROUTINE allensantillianhalo
-
     SUBROUTINE miyamotonagaiforce(params, N, x, y, z, force)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
@@ -941,21 +896,6 @@ MODULE gravity
         zmod = a + SQRT(z*z + b*b)
         phi = -GRAVITY_G*M / SQRT(R*R + zmod*zmod)
     END SUBROUTINE miyamotonagaipotential
-
-    SUBROUTINE miyamotonagai(params, N, x, y, z, ax, ay, az, phi)
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(3) :: params
-        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
-        REAL*8, DIMENSION(N,3) :: force
-
-        CALL miyamotonagaiforce(params, N, x, y, z, force)
-        CALL miyamotonagaipotential(params, N, x, y, z, phi)
-        ax = force(:,1)
-        ay = force(:,2)
-        az = force(:,3)
-    END SUBROUTINE miyamotonagai
 
     SUBROUTINE pouliasis2017piiforce(params, N, x, y, z, force)
         IMPLICIT NONE
@@ -996,21 +936,6 @@ MODULE gravity
         CALL miyamotonagaipotential(thickdisk, N, x, y, z, phi_d2)
         phi = phi_h + phi_d1 + phi_d2
     END SUBROUTINE pouliasis2017piipotential
-
-    SUBROUTINE pouliasis2017pii(params, N, x, y, z, ax, ay, az, phi)
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(10) :: params
-        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
-        REAL*8, DIMENSION(N,3) :: force
-
-        CALL pouliasis2017piiforce(params, N, x, y, z, force)
-        CALL pouliasis2017piipotential(params, N, x, y, z, phi)
-        ax = force(:,1)
-        ay = force(:,2)
-        az = force(:,3)
-    END SUBROUTINE pouliasis2017pii
 
     SUBROUTINE NBODYPLUMMERS(params,N,x,y,z,ax,ay,az,phiTensor)
         ! Computeres the inter gravitational forces between N particles

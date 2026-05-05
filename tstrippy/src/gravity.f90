@@ -752,40 +752,6 @@ MODULE gravity
         CALL initaxisymmetricbasisexpansion(default_lmax, default_nr, r_grid)
     END SUBROUTINE default_init_basis_expansion    
 
-    SUBROUTINE project_exponential_oblate_halo(rho0, s0, q)
-        ! Project rho(r,mu) = rho0*exp(-r/s0*sqrt(1-(1-1/q^2)*mu^2)) onto
-        ! Legendre modes using Gauss-Legendre quadrature in mu.
-        ! Fills BASIS_RHO_L_GRID for even l only.
-        IMPLICIT NONE
-        REAL*8, INTENT(IN) :: rho0, s0, q
-        INTEGER :: n_mu, i_r, l, k
-        REAL*8, ALLOCATABLE :: mu_q(:), w_q(:), p(:)
-        REAL*8 :: mu, rho_val, eta, factor
-        REAL*8, PARAMETER :: pi_proj = 3.14159265358979323846D0
-
-        n_mu = MAX(4 * (BASIS_LMAX + 1), 40)
-        ALLOCATE(mu_q(n_mu), w_q(n_mu), p(0:BASIS_LMAX))
-        CALL gauss_legendre_nodes_weights(n_mu, mu_q, w_q)
-
-        ! eta = 1 - 1/q^2  so the density reads exp(-r/s0 * sqrt(1 - eta*mu^2))
-        eta = 1.0D0 - 1.0D0 / (q * q)
-
-        BASIS_RHO_L_GRID = 0.0D0
-        DO i_r = 1, BASIS_NR
-            DO k = 1, n_mu
-                mu = mu_q(k)
-                rho_val = rho0 * EXP(-BASIS_R_GRID(i_r) / s0 * SQRT(MAX(1.0D0 - eta*mu*mu, 0.0D0)))
-                CALL legendre_p_all_axisymmetric(BASIS_LMAX, mu, p)
-                DO l = 0, BASIS_LMAX, 2
-                    factor = (2*l + 1) * 0.5D0 * w_q(k)
-                    BASIS_RHO_L_GRID(l, i_r) = BASIS_RHO_L_GRID(l, i_r) + factor * rho_val * p(l)
-                END DO
-            END DO
-        END DO
-
-        DEALLOCATE(mu_q, w_q, p)
-    END SUBROUTINE project_exponential_oblate_halo
-
     SUBROUTINE compute_phi_tables_from_rho()
         ! Build potential tables BASIS_PHI_L_GRID and BASIS_DPHI_L_DR_GRID from
         ! the projected density coefficients BASIS_RHO_L_GRID via the Green's
@@ -1012,8 +978,12 @@ MODULE gravity
     END SUBROUTINE axisymmetricbasisexpansion_eval_component
 
     ! =======================================================================
+    ! =======================================================================
+    ! =======================================================================
     ! BESSEL/TABLE INFRASTRUCTURE
     ! Disk-table construction via Bessel/Hankel quadrature and table evaluation
+    ! =======================================================================
+    ! =======================================================================
     ! =======================================================================
 
     SUBROUTINE exponential_disk_bessel_eval_component(params, N, x, y, z, ax, ay, az, phi)
@@ -1297,10 +1267,48 @@ MODULE gravity
     END SUBROUTINE disk_table_eval_component
 
     ! =======================================================================
+    ! =======================================================================
+    ! =======================================================================
     ! DENSITY-ONLY POTENTIALS (Legendre-based)
     ! Models defined via density profiles, evaluated with Legendre expansion
     ! =======================================================================
+    ! =======================================================================
+    ! =======================================================================
 
+    SUBROUTINE project_exponential_oblate_halo(rho0, s0, q)
+        ! Project rho(r,mu) = rho0*exp(-r/s0*sqrt(1-(1-1/q^2)*mu^2)) onto
+        ! Legendre modes using Gauss-Legendre quadrature in mu.
+        ! Fills BASIS_RHO_L_GRID for even l only.
+        IMPLICIT NONE
+        REAL*8, INTENT(IN) :: rho0, s0, q
+        INTEGER :: n_mu, i_r, l, k
+        REAL*8, ALLOCATABLE :: mu_q(:), w_q(:), p(:)
+        REAL*8 :: mu, rho_val, eta, factor
+        REAL*8, PARAMETER :: pi_proj = 3.14159265358979323846D0
+
+        n_mu = MAX(4 * (BASIS_LMAX + 1), 40)
+        ALLOCATE(mu_q(n_mu), w_q(n_mu), p(0:BASIS_LMAX))
+        CALL gauss_legendre_nodes_weights(n_mu, mu_q, w_q)
+
+        ! eta = 1 - 1/q^2  so the density reads exp(-r/s0 * sqrt(1 - eta*mu^2))
+        eta = 1.0D0 - 1.0D0 / (q * q)
+
+        BASIS_RHO_L_GRID = 0.0D0
+        DO i_r = 1, BASIS_NR
+            DO k = 1, n_mu
+                mu = mu_q(k)
+                rho_val = rho0 * EXP(-BASIS_R_GRID(i_r) / s0 * SQRT(MAX(1.0D0 - eta*mu*mu, 0.0D0)))
+                CALL legendre_p_all_axisymmetric(BASIS_LMAX, mu, p)
+                DO l = 0, BASIS_LMAX, 2
+                    factor = (2*l + 1) * 0.5D0 * w_q(k)
+                    BASIS_RHO_L_GRID(l, i_r) = BASIS_RHO_L_GRID(l, i_r) + factor * rho_val * p(l)
+                END DO
+            END DO
+        END DO
+
+        DEALLOCATE(mu_q, w_q, p)
+    END SUBROUTINE project_exponential_oblate_halo
+    
     SUBROUTINE exponential_oblate_halo(params, N, x, y, z, ax, ay, az, phi)
         ! Axisymmetric exponential oblate halo:
         !   rho(R,z) = rho0 * exp(-1/s0 * sqrt(R^2 + z^2/q^2))
@@ -1406,10 +1414,13 @@ MODULE gravity
         CALL axisymmetricbasisexpansion_eval(N, x, y, z, ax, ay, az, phi)
     END SUBROUTINE ibata2024halo
 
-
+    ! =======================================================================
+    ! =======================================================================
     ! =======================================================================
     ! BFE (COMPOSITE BASIS INFRASTRUCTURE)
     ! Multi-component basis expansion setup, component addition, and evaluation
+    ! =======================================================================
+    ! =======================================================================
     ! =======================================================================
 
     SUBROUTINE clearaxisymmetriccompositebasisexpansion()

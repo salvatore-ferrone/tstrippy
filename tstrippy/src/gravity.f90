@@ -112,13 +112,16 @@ MODULE gravity
     PRIVATE :: project_ibata2024halo
     PRIVATE :: compute_phi_tables_from_rho
     PRIVATE :: compute_phi_tables_from_rho_component
-    PRIVATE :: sphericalharmonicbasis_eval
-    PRIVATE :: sphericalharmonicbasis_eval_component
+    PRIVATE :: sphericalharmonicbasisforce
+    PRIVATE :: sphericalharmonicbasispotential
+    PRIVATE :: sphericalharmonicbasisforce_component
+    PRIVATE :: sphericalharmonicbasispotential_component
     PRIVATE :: bessel_eval_component
     PRIVATE :: exponential_disk_bessel_eval_component
     PRIVATE :: build_exponential_disk_table
     PRIVATE :: disk_table_eval_component
     PRIVATE :: gravity_components_are_analytic
+
 
     CONTAINS
 
@@ -315,14 +318,30 @@ MODULE gravity
                 CALL pouliasis2017piiforce(p10, N, x, y, z, force_c)
             CASE (GRAVITY_KIND_EXPONENTIAL_OBLATE_HALO)
                 p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
-                CALL exponential_oblate_halo(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                    IF (.NOT. BASIS_GRID_SET) THEN
+                        CALL defaultinitsphericalharmonicbasis()
+                    END IF
+                    CALL project_exponential_oblate_halo(p3(1), p3(2), p3(3))
+                    CALL compute_phi_tables_from_rho()
+                    BASIS_EXPANSION_INITIALIZED = .TRUE.
+                END IF
+                CALL sphericalharmonicbasisforce(N, x, y, z, ax_c, ay_c, az_c)
                 force_c(:,1) = ax_c
                 force_c(:,2) = ay_c
                 force_c(:,3) = az_c
             CASE (GRAVITY_KIND_IBATA2024HALO)
                 p6 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i), &
                       GRAVITY_PARAMS(4,i), GRAVITY_PARAMS(5,i), GRAVITY_PARAMS(6,i)]
-                CALL ibata2024halo(p6, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                    IF (.NOT. BASIS_GRID_SET) THEN
+                        CALL defaultinitsphericalharmonicbasis()
+                    END IF
+                    CALL project_ibata2024halo(p6(1), p6(2), p6(3), p6(4), p6(5), p6(6))
+                    CALL compute_phi_tables_from_rho()
+                    BASIS_EXPANSION_INITIALIZED = .TRUE.
+                END IF
+                CALL sphericalharmonicbasisforce(N, x, y, z, ax_c, ay_c, az_c)
                 force_c(:,1) = ax_c
                 force_c(:,2) = ay_c
                 force_c(:,3) = az_c
@@ -402,11 +421,27 @@ MODULE gravity
                 CALL pouliasis2017piipotential(p10, N, x, y, z, phi_c)
             CASE (GRAVITY_KIND_EXPONENTIAL_OBLATE_HALO)
                 p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
-                CALL exponential_oblate_halo(p3, N, x, y, z, ax_tmp, ay_tmp, az_tmp, phi_c)
+                IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                    IF (.NOT. BASIS_GRID_SET) THEN
+                        CALL defaultinitsphericalharmonicbasis()
+                    END IF
+                    CALL project_exponential_oblate_halo(p3(1), p3(2), p3(3))
+                    CALL compute_phi_tables_from_rho()
+                    BASIS_EXPANSION_INITIALIZED = .TRUE.
+                END IF
+                CALL sphericalharmonicbasispotential(N, x, y, z, phi_c)
             CASE (GRAVITY_KIND_IBATA2024HALO)
                 p6 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i), &
                       GRAVITY_PARAMS(4,i), GRAVITY_PARAMS(5,i), GRAVITY_PARAMS(6,i)]
-                CALL ibata2024halo(p6, N, x, y, z, ax_tmp, ay_tmp, az_tmp, phi_c)
+                IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                    IF (.NOT. BASIS_GRID_SET) THEN
+                        CALL defaultinitsphericalharmonicbasis()
+                    END IF
+                    CALL project_ibata2024halo(p6(1), p6(2), p6(3), p6(4), p6(5), p6(6))
+                    CALL compute_phi_tables_from_rho()
+                    BASIS_EXPANSION_INITIALIZED = .TRUE.
+                END IF
+                CALL sphericalharmonicbasispotential(N, x, y, z, phi_c)
             CASE (GRAVITY_KIND_EXPONENTIAL_DISK_BESSEL)
                 p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
                 CALL exponential_disk_bessel_eval_component(p3, N, x, y, z, ax_tmp, ay_tmp, az_tmp, phi_c)
@@ -916,69 +951,6 @@ MODULE gravity
         DEALLOCATE(I_less, I_greater)
     END SUBROUTINE compute_phi_tables_from_rho
 
-    SUBROUTINE sphericalharmonicbasis_eval(N, x, y, z, ax, ay, az, phi_out)
-        ! Evaluate accelerations and potential for all N particles by
-        ! interpolating the pre-computed l-mode tables and summing over modes.
-        ! Cartesian force: a_i = -d_i phi, chain rule via (r, mu=z/r).
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi_out
-        INTEGER :: i, l, jlo, jhi, jmid
-        REAL*8  :: r, r_safe, mu, R_cyl_sq
-        REAL*8  :: alpha_r, phi_l_r, dphi_l_dr_r
-        REAL*8  :: phi_v, dphi_dr_v, dphi_dmu_v
-        REAL*8  :: p(0:BASIS_LMAX), dp_dmu(0:BASIS_LMAX)
-        REAL*8, PARAMETER :: eps_r = 1.0D-30
-
-        DO i = 1, N
-            r      = SQRT(x(i)**2 + y(i)**2 + z(i)**2)
-            r_safe = MAX(r, eps_r)
-            mu     = z(i) / r_safe
-            R_cyl_sq = x(i)**2 + y(i)**2
-
-            ! Binary search for bracketing index in r_grid
-            IF (r_safe <= BASIS_R_GRID(1)) THEN
-                jlo = 1;  alpha_r = 0.0D0
-            ELSE IF (r_safe >= BASIS_R_GRID(BASIS_NR)) THEN
-                jlo = BASIS_NR - 1;  alpha_r = 1.0D0
-            ELSE
-                jlo = 1;  jhi = BASIS_NR
-                DO WHILE (jhi - jlo > 1)
-                    jmid = (jlo + jhi) / 2
-                    IF (BASIS_R_GRID(jmid) <= r_safe) THEN
-                        jlo = jmid
-                    ELSE
-                        jhi = jmid
-                    END IF
-                END DO
-                ! Log-r interpolation weight (accurate on log-spaced grids)
-                alpha_r = LOG(r_safe / BASIS_R_GRID(jlo)) / &
-                          LOG(BASIS_R_GRID(jlo+1) / BASIS_R_GRID(jlo))
-            END IF
-
-            CALL legendre_axisymmetric_basis(BASIS_LMAX, mu, p, dp_dmu)
-
-            phi_v = 0.0D0;  dphi_dr_v = 0.0D0;  dphi_dmu_v = 0.0D0
-            DO l = 0, BASIS_LMAX, 2
-                phi_l_r     = linear_interp_scalar(BASIS_PHI_L_GRID(l,jlo),     BASIS_PHI_L_GRID(l,jlo+1),     alpha_r)
-                dphi_l_dr_r = linear_interp_scalar(BASIS_DPHI_L_DR_GRID(l,jlo), BASIS_DPHI_L_DR_GRID(l,jlo+1), alpha_r)
-                phi_v      = phi_v      + phi_l_r     * p(l)
-                dphi_dr_v  = dphi_dr_v  + dphi_l_dr_r * p(l)
-                dphi_dmu_v = dphi_dmu_v + phi_l_r     * dp_dmu(l)
-            END DO
-
-            phi_out(i) = phi_v
-            ! a = -grad(phi).  With phi(r,mu), mu=z/r:
-            !   d_phi/dx = phi_r*(x/r) - phi_mu*(z*x/r^3)
-            !   d_phi/dy = phi_r*(y/r) - phi_mu*(z*y/r^3)
-            !   d_phi/dz = phi_r*(z/r) + phi_mu*(R^2/r^3)
-            ax(i) = -dphi_dr_v * x(i)/r_safe + dphi_dmu_v * z(i)*x(i)/r_safe**3
-            ay(i) = -dphi_dr_v * y(i)/r_safe + dphi_dmu_v * z(i)*y(i)/r_safe**3
-            az(i) = -dphi_dr_v * z(i)/r_safe - dphi_dmu_v * R_cyl_sq/r_safe**3
-        END DO
-    END SUBROUTINE sphericalharmonicbasis_eval
-
     SUBROUTINE compute_phi_tables_from_rho_component(r_grid, rho_l_grid, phi_l_grid, dphi_l_dr_grid)
         IMPLICIT NONE
         REAL*8, INTENT(IN), DIMENSION(:) :: r_grid
@@ -1028,17 +1000,129 @@ MODULE gravity
         DEALLOCATE(I_less, I_greater)
     END SUBROUTINE compute_phi_tables_from_rho_component
 
-    SUBROUTINE sphericalharmonicbasis_eval_component(N, x, y, z, r_grid, phi_l_grid, dphi_l_dr_grid, ax, ay, az, phi_out)
+    SUBROUTINE sphericalharmonicbasisforce(N, x, y, z, ax, ay, az)
+        ! Evaluate accelerations for all N particles from the pre-computed
+        ! spherical-harmonic tables.
+        ! Cartesian force: a_i = -d_i phi, chain rule via (r, mu=z/r).
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az
+        INTEGER :: i, l, jlo, jhi, jmid
+        REAL*8  :: r, r_safe, mu, R_cyl_sq
+        REAL*8  :: alpha_r, phi_l_r, dphi_l_dr_r
+        REAL*8  :: dphi_dr_v, dphi_dmu_v
+        REAL*8  :: p(0:BASIS_LMAX), dp_dmu(0:BASIS_LMAX)
+        REAL*8, PARAMETER :: eps_r = 1.0D-30
+
+        DO i = 1, N
+            r      = SQRT(x(i)**2 + y(i)**2 + z(i)**2)
+            r_safe = MAX(r, eps_r)
+            mu     = z(i) / r_safe
+            R_cyl_sq = x(i)**2 + y(i)**2
+
+            ! Binary search for bracketing index in r_grid
+            IF (r_safe <= BASIS_R_GRID(1)) THEN
+                jlo = 1;  alpha_r = 0.0D0
+            ELSE IF (r_safe >= BASIS_R_GRID(BASIS_NR)) THEN
+                jlo = BASIS_NR - 1;  alpha_r = 1.0D0
+            ELSE
+                jlo = 1;  jhi = BASIS_NR
+                DO WHILE (jhi - jlo > 1)
+                    jmid = (jlo + jhi) / 2
+                    IF (BASIS_R_GRID(jmid) <= r_safe) THEN
+                        jlo = jmid
+                    ELSE
+                        jhi = jmid
+                    END IF
+                END DO
+                ! Log-r interpolation weight (accurate on log-spaced grids)
+                alpha_r = LOG(r_safe / BASIS_R_GRID(jlo)) / &
+                          LOG(BASIS_R_GRID(jlo+1) / BASIS_R_GRID(jlo))
+            END IF
+
+            CALL legendre_axisymmetric_basis(BASIS_LMAX, mu, p, dp_dmu)
+
+            dphi_dr_v = 0.0D0;  dphi_dmu_v = 0.0D0
+            DO l = 0, BASIS_LMAX, 2
+                phi_l_r     = linear_interp_scalar(BASIS_PHI_L_GRID(l,jlo),     BASIS_PHI_L_GRID(l,jlo+1),     alpha_r)
+                dphi_l_dr_r = linear_interp_scalar(BASIS_DPHI_L_DR_GRID(l,jlo), BASIS_DPHI_L_DR_GRID(l,jlo+1), alpha_r)
+                dphi_dr_v  = dphi_dr_v  + dphi_l_dr_r * p(l)
+                dphi_dmu_v = dphi_dmu_v + phi_l_r     * dp_dmu(l)
+            END DO
+
+            ! a = -grad(phi).  With phi(r,mu), mu=z/r:
+            !   d_phi/dx = phi_r*(x/r) - phi_mu*(z*x/r^3)
+            !   d_phi/dy = phi_r*(y/r) - phi_mu*(z*y/r^3)
+            !   d_phi/dz = phi_r*(z/r) + phi_mu*(R^2/r^3)
+            ax(i) = -dphi_dr_v * x(i)/r_safe + dphi_dmu_v * z(i)*x(i)/r_safe**3
+            ay(i) = -dphi_dr_v * y(i)/r_safe + dphi_dmu_v * z(i)*y(i)/r_safe**3
+            az(i) = -dphi_dr_v * z(i)/r_safe - dphi_dmu_v * R_cyl_sq/r_safe**3
+        END DO
+    END SUBROUTINE sphericalharmonicbasisforce
+
+    SUBROUTINE sphericalharmonicbasispotential(N, x, y, z, phi_out)
+        ! Evaluate potential for all N particles from the pre-computed
+        ! spherical-harmonic tables.
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi_out
+        INTEGER :: i, l, jlo, jhi, jmid
+        REAL*8  :: r, r_safe, mu
+        REAL*8  :: alpha_r, phi_l_r
+        REAL*8  :: phi_v
+        REAL*8  :: p(0:BASIS_LMAX), dp_dummy(0:BASIS_LMAX)
+        REAL*8, PARAMETER :: eps_r = 1.0D-30
+
+        DO i = 1, N
+            r      = SQRT(x(i)**2 + y(i)**2 + z(i)**2)
+            r_safe = MAX(r, eps_r)
+            mu     = z(i) / r_safe
+
+            IF (r_safe <= BASIS_R_GRID(1)) THEN
+                jlo = 1;  alpha_r = 0.0D0
+            ELSE IF (r_safe >= BASIS_R_GRID(BASIS_NR)) THEN
+                jlo = BASIS_NR - 1;  alpha_r = 1.0D0
+            ELSE
+                jlo = 1;  jhi = BASIS_NR
+                DO WHILE (jhi - jlo > 1)
+                    jmid = (jlo + jhi) / 2
+                    IF (BASIS_R_GRID(jmid) <= r_safe) THEN
+                        jlo = jmid
+                    ELSE
+                        jhi = jmid
+                    END IF
+                END DO
+                alpha_r = LOG(r_safe / BASIS_R_GRID(jlo)) / &
+                          LOG(BASIS_R_GRID(jlo+1) / BASIS_R_GRID(jlo))
+            END IF
+
+            CALL legendre_axisymmetric_basis(BASIS_LMAX, mu, p, dp_dummy)
+
+            phi_v = 0.0D0
+            DO l = 0, BASIS_LMAX, 2
+                phi_l_r = linear_interp_scalar(BASIS_PHI_L_GRID(l,jlo), BASIS_PHI_L_GRID(l,jlo+1), alpha_r)
+                phi_v = phi_v + phi_l_r * p(l)
+            END DO
+
+            phi_out(i) = phi_v
+        END DO
+    END SUBROUTINE sphericalharmonicbasispotential
+
+
+
+    SUBROUTINE sphericalharmonicbasisforce_component(N, x, y, z, r_grid, phi_l_grid, dphi_l_dr_grid, ax, ay, az)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(IN),  DIMENSION(:) :: r_grid
         REAL*8, INTENT(IN),  DIMENSION(:,:) :: phi_l_grid, dphi_l_dr_grid
-        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi_out
+        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az
         INTEGER :: i, l, jlo, jhi, jmid, l_lo, l_hi, nr
         REAL*8  :: r, r_safe, mu, R_cyl_sq
         REAL*8  :: alpha_r, phi_l_r, dphi_l_dr_r
-        REAL*8  :: phi_v, dphi_dr_v, dphi_dmu_v
+        REAL*8  :: dphi_dr_v, dphi_dmu_v
         REAL*8, ALLOCATABLE :: p(:), dp_dmu(:)
         REAL*8, PARAMETER :: eps_r = 1.0D-30
 
@@ -1072,23 +1156,76 @@ MODULE gravity
 
             CALL legendre_axisymmetric_basis(l_hi, mu, p, dp_dmu)
 
-            phi_v = 0.0D0;  dphi_dr_v = 0.0D0;  dphi_dmu_v = 0.0D0
+            dphi_dr_v = 0.0D0;  dphi_dmu_v = 0.0D0
             DO l = l_lo, l_hi, 2
                 phi_l_r     = linear_interp_scalar(phi_l_grid(l,jlo),     phi_l_grid(l,jlo+1),     alpha_r)
                 dphi_l_dr_r = linear_interp_scalar(dphi_l_dr_grid(l,jlo), dphi_l_dr_grid(l,jlo+1), alpha_r)
-                phi_v      = phi_v      + phi_l_r     * p(l)
                 dphi_dr_v  = dphi_dr_v  + dphi_l_dr_r * p(l)
                 dphi_dmu_v = dphi_dmu_v + phi_l_r     * dp_dmu(l)
             END DO
 
-            phi_out(i) = phi_v
             ax(i) = -dphi_dr_v * x(i)/r_safe + dphi_dmu_v * z(i)*x(i)/r_safe**3
             ay(i) = -dphi_dr_v * y(i)/r_safe + dphi_dmu_v * z(i)*y(i)/r_safe**3
             az(i) = -dphi_dr_v * z(i)/r_safe - dphi_dmu_v * R_cyl_sq/r_safe**3
         END DO
 
         DEALLOCATE(p, dp_dmu)
-    END SUBROUTINE sphericalharmonicbasis_eval_component
+    END SUBROUTINE sphericalharmonicbasisforce_component
+
+    SUBROUTINE sphericalharmonicbasispotential_component(N, x, y, z, r_grid, phi_l_grid, phi_out)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN),  DIMENSION(:) :: r_grid
+        REAL*8, INTENT(IN),  DIMENSION(:,:) :: phi_l_grid
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi_out
+        INTEGER :: i, l, jlo, jhi, jmid, l_lo, l_hi, nr
+        REAL*8  :: r, r_safe, mu
+        REAL*8  :: alpha_r, phi_l_r
+        REAL*8  :: phi_v
+        REAL*8, ALLOCATABLE :: p(:), dp_dummy(:)
+        REAL*8, PARAMETER :: eps_r = 1.0D-30
+
+        nr = SIZE(r_grid)
+        l_lo = LBOUND(phi_l_grid, 1)
+        l_hi = UBOUND(phi_l_grid, 1)
+        ALLOCATE(p(l_lo:l_hi), dp_dummy(l_lo:l_hi))
+
+        DO i = 1, N
+            r      = SQRT(x(i)**2 + y(i)**2 + z(i)**2)
+            r_safe = MAX(r, eps_r)
+            mu     = z(i) / r_safe
+
+            IF (r_safe <= r_grid(1)) THEN
+                jlo = 1;  alpha_r = 0.0D0
+            ELSE IF (r_safe >= r_grid(nr)) THEN
+                jlo = nr - 1;  alpha_r = 1.0D0
+            ELSE
+                jlo = 1;  jhi = nr
+                DO WHILE (jhi - jlo > 1)
+                    jmid = (jlo + jhi) / 2
+                    IF (r_grid(jmid) <= r_safe) THEN
+                        jlo = jmid
+                    ELSE
+                        jhi = jmid
+                    END IF
+                END DO
+                alpha_r = LOG(r_safe / r_grid(jlo)) / LOG(r_grid(jlo+1) / r_grid(jlo))
+            END IF
+
+            CALL legendre_axisymmetric_basis(l_hi, mu, p, dp_dummy)
+
+            phi_v = 0.0D0
+            DO l = l_lo, l_hi, 2
+                phi_l_r = linear_interp_scalar(phi_l_grid(l,jlo), phi_l_grid(l,jlo+1), alpha_r)
+                phi_v = phi_v + phi_l_r * p(l)
+            END DO
+
+            phi_out(i) = phi_v
+        END DO
+
+        DEALLOCATE(p, dp_dummy)
+    END SUBROUTINE sphericalharmonicbasispotential_component
 
     ! =======================================================================
     ! =======================================================================
@@ -1451,7 +1588,8 @@ MODULE gravity
             BASIS_EXPANSION_INITIALIZED = .TRUE.
         END IF
 
-        CALL sphericalharmonicbasis_eval(N, x, y, z, ax, ay, az, phi)
+        CALL sphericalharmonicbasisforce(N, x, y, z, ax, ay, az)
+        CALL sphericalharmonicbasispotential(N, x, y, z, phi)
     END SUBROUTINE exponential_oblate_halo
 
     SUBROUTINE project_ibata2024halo(rho0, r0, rt, q, gamma, beta)
@@ -1524,7 +1662,8 @@ MODULE gravity
             BASIS_EXPANSION_INITIALIZED = .TRUE.
         END IF
 
-        CALL sphericalharmonicbasis_eval(N, x, y, z, ax, ay, az, phi)
+        CALL sphericalharmonicbasisforce(N, x, y, z, ax, ay, az)
+        CALL sphericalharmonicbasispotential(N, x, y, z, phi)
     END SUBROUTINE ibata2024halo
 
     ! =======================================================================
@@ -1833,9 +1972,11 @@ MODULE gravity
 
             SELECT CASE (COMPOSITE_KIND(i))
             CASE (BFE_KIND_LEGENDRE)
-                CALL sphericalharmonicbasis_eval_component(N, x, y, z, COMPOSITE_R_GRID, &
+                CALL sphericalharmonicbasisforce_component(N, x, y, z, COMPOSITE_R_GRID, &
                     COMPOSITE_PHI_L_GRID(:,:,i), COMPOSITE_DPHI_L_DR_GRID(:,:,i), &
-                    ax_comp, ay_comp, az_comp, phi_comp)
+                    ax_comp, ay_comp, az_comp)
+                CALL sphericalharmonicbasispotential_component(N, x, y, z, COMPOSITE_R_GRID, &
+                    COMPOSITE_PHI_L_GRID(:,:,i), phi_comp)
             CASE (BFE_KIND_BESSEL_DISK)
                 nparams_bessel = COMPOSITE_BESSEL_NPARAMS(i)
                 IF (nparams_bessel < 1) THEN

@@ -1,6 +1,19 @@
 # TSTRIPPY Development Plan
 Date: 2026-05-05
 
+## Next Session Checklist
+
+1. Run environment-safe validation first:
+  - `conda run -n tstrippy ./build.sh`
+  - `conda run -n tstrippy pytest tests/ -q`
+2. Finish Phase 2f.2 by splitting remaining combined Bessel evaluation usage from force-only and potential-only lifecycle paths.
+3. Add spherical-harmonic-focused tests:
+  - force-only and potential-only parity checks
+  - multi-component lifecycle test that exposes/fixes shared `BASIS_*` state contamination
+4. Implement Phase 2f.3 per-component non-analytic table state for lifecycle components.
+5. Decide Phase 2f.4 canonical mixed analytic+BFE composition path (single user-facing path).
+6. After API stabilization, start documentation cleanup and notebook/API rename updates.
+
 ## Overview
 
 The exponential-disk Bessel effort has now crossed the key production threshold:
@@ -273,10 +286,10 @@ These points were verified by reading `potentials.f90`, `integrator.f90`, and by
 - `initcompositegravity` / `evaluatecompositegravity` manage an independent `COMPOSITE_*` state with no direct binding into `GRAVITY_KIND` lifecycle dispatch.
 - This creates ambiguity for mixed analytic + BFE composites and requires an explicit unification decision.
 
-### 7. Immediate naming-consistency cleanup required
+### 7. Naming-consistency cleanup (resolved)
 
-- `default_init_basis_expansion` has been renamed to `defaultinitsphericalharmonicbasis`.
-- Call sites and private declarations must remain synchronized during refactor slices to avoid stale symbol paths.
+- [x] `default_init_basis_expansion` renamed to `defaultinitsphericalharmonicbasis`.
+- [x] Call sites and private declarations synchronized.
 
 ## Completed Work
 
@@ -334,27 +347,27 @@ These points were verified by reading `potentials.f90`, `integrator.f90`, and by
 - [x] Updated gravity tests to reflect the agreed lifecycle semantics
 - [x] Verified full suite passes (`30 passed`)
 
-### Phase 2e: Naming Refactor And Family Separation (Next Session Priority)
+### Phase 2e: Naming Refactor And Family Separation (In Progress)
 
 **Goal:** remove ambiguous `axisymmetric` public naming, align public API to `spherical_harmonic` and `disk_bessel`, and keep the state-driven component flow clear.
 
 #### 2e.1: Public naming migration
 
-- [ ] Apply the full rename map in `gravity.f90`
-- [ ] Remove `axisymmetric*` names from public exports and Python-visible wrappers
-- [ ] Keep only family-explicit public names (`spherical_harmonic*`, `disk_bessel*`, `compositegravity*`)
+- [x] Apply the full rename map in `gravity.f90`
+- [x] Remove `axisymmetric*` names from public exports and Python-visible wrappers
+- [x] Keep only family-explicit public names (`spherical_harmonic*`, `disk_bessel*`, `compositegravity*`)
 
 #### 2e.2: Family-state separation cleanup
 
-- [ ] Split naming and comments so spherical-harmonic state and disk-bessel state are clearly distinct
+- [x] Split naming and comments so spherical-harmonic state and disk-bessel state are clearly distinct
 - [ ] Ensure no spherical-harmonic terminology appears in disk-bessel setup/evaluation entrypoints
 - [ ] Ensure no disk-bessel terminology appears in spherical-harmonic setup/evaluation entrypoints
 
 #### 2e.3: Component API consistency
 
-- [ ] Keep user entrypoint centered on `addgravitycomponent` with canonical model names
-- [ ] Keep direct evaluator direction consistent with family naming
-- [ ] Preserve warning + no-op error mode (no hard `STOP` in Python-exposed control paths)
+- [x] Keep user entrypoint centered on `addgravitycomponent` with canonical model names
+- [x] Keep direct evaluator direction consistent with family naming
+- [x] Preserve warning + no-op error mode (no hard `STOP` in Python-exposed control paths)
 
 #### 2e.4: Test and documentation updates for rename
 
@@ -368,13 +381,13 @@ These points were verified by reading `potentials.f90`, `integrator.f90`, and by
 
 #### 2f.1: Spherical-harmonic evaluator split
 
-- [ ] Replace combined `sphericalharmonicbasis_eval(N, x, y, z, ax, ay, az, phi_out)` with:
+- [x] Replace combined `sphericalharmonicbasis_eval(N, x, y, z, ax, ay, az, phi_out)` with:
   - `sphericalharmonicbasisforce(N, x, y, z, ax, ay, az)`
   - `sphericalharmonicbasispotential(N, x, y, z, phi_out)`
-- [ ] Replace combined per-component evaluator with:
+- [x] Replace combined per-component evaluator with:
   - `sphericalharmonicbasisforce_component(...)`
   - `sphericalharmonicbasispotential_component(...)`
-- [ ] Keep shared interpolation kernels private so force/potential implementations remain numerically consistent.
+- [x] Keep shared interpolation kernels private so force/potential implementations remain numerically consistent.
 
 #### 2f.2: Gravity lifecycle evaluator split completion
 

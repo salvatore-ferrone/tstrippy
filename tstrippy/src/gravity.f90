@@ -60,7 +60,6 @@ MODULE gravity
     INTEGER, PUBLIC :: COMPOSITE_NCOMP = 0
     INTEGER, PUBLIC :: COMPOSITE_LMAX = -1
     INTEGER, PUBLIC :: COMPOSITE_NR = -1
-    REAL*8, PUBLIC :: COMPOSITE_G = -1.0D0
 
     INTEGER, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_KIND
     LOGICAL, DIMENSION(:), ALLOCATABLE, PUBLIC :: COMPOSITE_READY
@@ -214,7 +213,7 @@ MODULE gravity
                 " kpc (km/s)^2 / Msun"
         ELSE
             WRITE(*,'(A,ES14.8,A)') "finalizegravity: G = ", GRAVITY_G, &
-                " kpc (km/s)^2 / Msun (user override)"
+                " User inputted value"
         END IF
 
         GRAVITY_FINALIZED = .TRUE.
@@ -226,9 +225,9 @@ MODULE gravity
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az
         REAL*8, DIMENSION(N) :: ax_c, ay_c, az_c, phi_c
+        REAL*8, DIMENSION(2) :: p2
         REAL*8, DIMENSION(3) :: p3
         REAL*8, DIMENSION(4) :: p4
-        REAL*8, DIMENSION(5) :: p5
         INTEGER :: i
 
         IF (.NOT. GRAVITY_FINALIZED) THEN
@@ -243,18 +242,18 @@ MODULE gravity
             ax_c = 0.0D0;  ay_c = 0.0D0;  az_c = 0.0D0;  phi_c = 0.0D0
             SELECT CASE (GRAVITY_KIND(i))
             CASE (GRAVITY_KIND_PLUMMER)
-                p3 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
-                CALL plummer(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                p2 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
+                CALL plummer(p2, N, x, y, z, ax_c, ay_c, az_c, phi_c)
             CASE (GRAVITY_KIND_HERNQUIST)
-                p3 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
-                CALL hernquist(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                p2 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
+                CALL hernquist(p2, N, x, y, z, ax_c, ay_c, az_c, phi_c)
             CASE (GRAVITY_KIND_MIYAMOTONAGAI)
-                p4 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
-                CALL miyamotonagai(p4, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
+                CALL miyamotonagai(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
             CASE (GRAVITY_KIND_LONGMURALIBAR)
-                p5 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), &
+                p4 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), &
                       GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i)]
-                CALL longmuralibar(p5, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                CALL longmuralibar(p4, N, x, y, z, ax_c, ay_c, az_c, phi_c)
             CASE DEFAULT
                 WRITE(*,'(A)') "WARNING: evaluategravityforces: unknown component kind"
             END SELECT
@@ -270,9 +269,9 @@ MODULE gravity
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: phi
         REAL*8, DIMENSION(N) :: ax_c, ay_c, az_c, phi_c
+        REAL*8, DIMENSION(2) :: p2
         REAL*8, DIMENSION(3) :: p3
         REAL*8, DIMENSION(4) :: p4
-        REAL*8, DIMENSION(5) :: p5
         INTEGER :: i
 
         IF (.NOT. GRAVITY_FINALIZED) THEN
@@ -287,18 +286,18 @@ MODULE gravity
             ax_c = 0.0D0;  ay_c = 0.0D0;  az_c = 0.0D0;  phi_c = 0.0D0
             SELECT CASE (GRAVITY_KIND(i))
             CASE (GRAVITY_KIND_PLUMMER)
-                p3 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
+                p2 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
                 CALL plummer(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
             CASE (GRAVITY_KIND_HERNQUIST)
-                p3 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
+                p2 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i)]
                 CALL hernquist(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
             CASE (GRAVITY_KIND_MIYAMOTONAGAI)
-                p4 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
-                CALL miyamotonagai(p4, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
+                CALL miyamotonagai(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
             CASE (GRAVITY_KIND_LONGMURALIBAR)
-                p5 = [GRAVITY_G, GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), &
+                p4 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), &
                       GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i)]
-                CALL longmuralibar(p5, N, x, y, z, ax_c, ay_c, az_c, phi_c)
+                CALL longmuralibar(p4, N, x, y, z, ax_c, ay_c, az_c, phi_c)
             CASE DEFAULT
                 WRITE(*,'(A)') "WARNING: evaluategravitypotential: unknown component kind"
             END SELECT
@@ -332,13 +331,12 @@ MODULE gravity
         WRITE(*,'(A)') "==========================="
     END SUBROUTINE printgravitystate
 
-    SUBROUTINE initaxisymmetricbasisexpansion(G, lmax, nr, r_grid)
+    SUBROUTINE initaxisymmetricbasisexpansion(lmax, nr, r_grid)
         ! Allocate basis-expansion storage and store the radial grid.
         ! Does NOT project any density or compute potential tables.
         ! Call a density subroutine (e.g. exponential_oblate_halo) afterwards
         ! to trigger projection and table construction.
         IMPLICIT NONE
-        REAL*8, INTENT(IN) :: G
         INTEGER, INTENT(IN) :: lmax, nr
         REAL*8, INTENT(IN), DIMENSION(nr) :: r_grid
 
@@ -353,7 +351,7 @@ MODULE gravity
         BASIS_PHI_L_GRID     = 0.0D0
         BASIS_DPHI_L_DR_GRID = 0.0D0
 
-        BASIS_G    = G
+        BASIS_G    = GRAVITY_G
         BASIS_LMAX = lmax
         BASIS_NR   = nr
         BASIS_R_GRID = r_grid
@@ -404,12 +402,10 @@ MODULE gravity
         COMPOSITE_NCOMP = 0
         COMPOSITE_LMAX = -1
         COMPOSITE_NR = -1
-        COMPOSITE_G = -1.0D0
     END SUBROUTINE clearaxisymmetriccompositebasisexpansion
 
-    SUBROUTINE initaxisymmetriccompositebasisexpansion(G, lmax, nr, r_grid, ncomp)
+    SUBROUTINE initaxisymmetriccompositebasisexpansion(lmax, nr, r_grid, ncomp)
         IMPLICIT NONE
-        REAL*8, INTENT(IN) :: G
         INTEGER, INTENT(IN) :: lmax, nr, ncomp
         REAL*8, INTENT(IN), DIMENSION(nr) :: r_grid
 
@@ -441,7 +437,6 @@ MODULE gravity
         COMPOSITE_DISK_TABLE_DPHI_DZ = 0.0D0
         COMPOSITE_DISK_TABLE_D2PHI_DRDZ = 0.0D0
 
-        COMPOSITE_G = G
         COMPOSITE_LMAX = lmax
         COMPOSITE_NR = nr
         COMPOSITE_NCOMP = ncomp
@@ -481,7 +476,7 @@ MODULE gravity
         END DO
         DEALLOCATE(mu_q, w_q, p)
 
-        CALL compute_phi_tables_from_rho_component(COMPOSITE_R_GRID, COMPOSITE_G, &
+        CALL compute_phi_tables_from_rho_component(COMPOSITE_R_GRID, &
             COMPOSITE_RHO_L_GRID(:,:,component_index), COMPOSITE_PHI_L_GRID(:,:,component_index), &
             COMPOSITE_DPHI_L_DR_GRID(:,:,component_index))
 
@@ -523,7 +518,7 @@ MODULE gravity
         END DO
         DEALLOCATE(mu_q, w_q, p)
 
-        CALL compute_phi_tables_from_rho_component(COMPOSITE_R_GRID, COMPOSITE_G, &
+        CALL compute_phi_tables_from_rho_component(COMPOSITE_R_GRID, &
             COMPOSITE_RHO_L_GRID(:,:,component_index), COMPOSITE_PHI_L_GRID(:,:,component_index), &
             COMPOSITE_DPHI_L_DR_GRID(:,:,component_index))
 
@@ -569,16 +564,15 @@ MODULE gravity
         IF (hR <= 0.0D0 .OR. hZ <= 0.0D0) STOP "hR and hZ must be positive"
 
         ! Retain raw params for the reference direct-quadrature path.
-        params_disk(1) = COMPOSITE_G
-        params_disk(2) = sigma0
-        params_disk(3) = hR
-        params_disk(4) = hZ
+        params_disk(1) = sigma0
+        params_disk(2) = hR
+        params_disk(3) = hZ
         COMPOSITE_BESSEL_PARAMS(:, component_index) = 0.0D0
         COMPOSITE_BESSEL_PARAMS(1:4, component_index) = params_disk
         COMPOSITE_BESSEL_NPARAMS(component_index) = 4
 
         ! Build the 2D cylindrical table (expensive offline step).
-        CALL build_exponential_disk_table(component_index, COMPOSITE_G, sigma0, hR, hZ)
+        CALL build_exponential_disk_table(component_index, sigma0, hR, hZ)
 
         COMPOSITE_KIND(component_index) = BFE_KIND_DISK_TABLE
         COMPOSITE_READY(component_index) = .TRUE.
@@ -597,8 +591,7 @@ MODULE gravity
     END SUBROUTINE finalizeaxisymmetriccompositebasisexpansion
 
     SUBROUTINE axisymmetriccompositebasispotential_dispatch(params, N, x, y, z, ax, ay, az, phi)
-        ! Dispatch wrapper that preserves the standard potential signature
-        ! used by integrator procedure-pointer wiring.
+        ! Compatibility bridge for simulator's generic params-based pointer API.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(*) :: params
@@ -606,7 +599,14 @@ MODULE gravity
         REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
 
         ! Keep params consumed so compilers do not warn in this wrapper.
-        IF (params(1) /= params(1)) STOP "invalid NaN parameter in axisymmetriccompositebasispotential_dispatch"
+        IF (params(1) /= params(1)) THEN
+            ax = 0.0D0
+            ay = 0.0D0
+            az = 0.0D0
+            phi = 0.0D0
+            RETURN
+        END IF
+
         CALL axisymmetriccompositebasispotential(N, x, y, z, ax, ay, az, phi)
     END SUBROUTINE axisymmetriccompositebasispotential_dispatch
 
@@ -681,8 +681,7 @@ MODULE gravity
 
     SUBROUTINE hernquist(params,N,x,y,z,ax,ay,az,phi)
         ! Hernquist potential
-        ! params = [G, M, a]
-        ! G = gravitational constant
+        ! params = [M, a]
         ! M = mass
         ! a = scale length
         ! x,y,z = coordinates
@@ -691,28 +690,26 @@ MODULE gravity
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
-        REAL*8,INTENT(IN),dimension(3) :: params
+        REAL*8,INTENT(IN),dimension(2) :: params
         REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
         REAL*8, DIMENSION(N) :: r,amod
-        REAL*8 :: G,M,a
-        G = Params(1)
-        M = params(2)
-        a = params(3)
+        REAL*8 :: M,a
+        M = params(1)
+        a = params(2)
 
         r = sqrt(x*x + y*y + z*z)
-        amod = -G*M / (r + a)**2
+        amod = -GRAVITY_G*M / (r + a)**2
 
 
         ax = amod*x
         ay = amod*y
         az = amod*z
-        phi = -G*M / (r + a)
+        phi = -GRAVITY_G*M / (r + a)
     END SUBROUTINE hernquist
     
     SUBROUTINE plummer(params,N,x,y,z,ax,ay,az,phi)
         ! Plummer potential
-        ! params = [G, M, a]
-        ! G = gravitational constant
+        ! params = [M, a]
         ! M = mass
         ! b = scale length
         ! x,y,z = coordinates
@@ -721,47 +718,45 @@ MODULE gravity
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
-        REAL*8,INTENT(IN),dimension(3) :: params
+        REAL*8,INTENT(IN),dimension(2) :: params
         REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
         REAL*8, DIMENSION(N) :: r,amod
-        REAL*8 :: G,M,b
-        G = Params(1)
-        M = params(2) 
-        b = params(3)
+        REAL*8 :: M,b
+        M = params(1) 
+        b = params(2)
 
         r = sqrt(x*x + y*y + z*z)
-        amod = -G*M / (r*r + b*b)**1.5
+        amod = -GRAVITY_G*M / (r*r + b*b)**1.5
         
         ax = amod*x
         ay = amod*y
         az = amod*z
-        phi = -G*M / (r*r + b*b)**0.5
+        phi = -GRAVITY_G*M / (r*r + b*b)**0.5
     END SUBROUTINE plummer
     
     SUBROUTINE longmuralibar(params,N,x,y,z,ax,ay,az,phi)
         IMPLICIT NONE 
         INTEGER, INTENT(IN) :: N
         REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
-        REAL*8,INTENT(IN),DIMENSION(5) :: params
+        REAL*8,INTENT(IN),DIMENSION(4) :: params
         REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
         
-        REAL*8 :: G,M,abar,bbar,cbar
+        REAL*8 :: M,abar,bbar,cbar
         REAL*8,DIMENSION(N) :: Tplus,Tminus
-        
-        G=params(1)
-        M=params(2)
-        abar=params(3)
-        bbar=params(4)
-        cbar=params(5)
+
+        M=params(1)
+        abar=params(2)
+        bbar=params(3)
+        cbar=params(4)
 
         Tplus=sqrt((abar+x)**2.+y*y+(bbar+sqrt(cbar*cbar+z*z))**2.)
         Tminus=sqrt((abar-x)**2.+y*y+(bbar+sqrt(cbar*cbar+z*z))**2.)
-        phi=(G*M/2./abar)*log((x-abar+Tminus)/(x+abar+Tplus))
+        phi=(GRAVITY_G*M/2./abar)*log((x-abar+Tminus)/(x+abar+Tplus))
 
 
-        ax=-2.*G*M*x/((Tplus*Tminus)*(Tplus+Tminus))
-        ay=-G*M*y/((2.*Tplus*Tminus)*(y*y+(bbar+sqrt(z*z+cbar*cbar))**2.))*(Tplus+Tminus-4*x*x/(Tplus+Tminus))
-        az=-G*M*z/((2.*Tplus*Tminus)*(y*y+(bbar+sqrt(z*z+cbar*cbar))**2.))*(Tplus+Tminus-4*x*x/(Tplus+Tminus))*&
+        ax=-2.*GRAVITY_G*M*x/((Tplus*Tminus)*(Tplus+Tminus))
+        ay=-GRAVITY_G*M*y/((2.*Tplus*Tminus)*(y*y+(bbar+sqrt(z*z+cbar*cbar))**2.))*(Tplus+Tminus-4*x*x/(Tplus+Tminus))
+        az=-GRAVITY_G*M*z/((2.*Tplus*Tminus)*(y*y+(bbar+sqrt(z*z+cbar*cbar))**2.))*(Tplus+Tminus-4*x*x/(Tplus+Tminus))*&
         ((bbar+sqrt(z*z+cbar*cbar))/sqrt(z*z+cbar*cbar))
 
 
@@ -771,21 +766,20 @@ MODULE gravity
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
-        REAL*8,INTENT(IN),dimension(5) :: params
+        REAL*8,INTENT(IN),dimension(4) :: params
         REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
         REAL*8, DIMENSION(N) :: term1
-        REAL*8:: G,M,scale_length,exp,cutoffradius, Mtot
+        REAL*8:: M,scale_length,exp,cutoffradius, Mtot
         REAL*8, DIMENSION(N) :: r,amod,d
         REAL*8:: term2,dcut
         LOGICAL, DIMENSION(N) :: outside_cutoff, at_zero
 
         REAL*8, DIMENSION(N) :: d_exp_minus_1, d_exp_minus_3
 
-        G = params(1) ! gravitational constant
-        M = params(2) ! mass parameter NOT total mass 
-        scale_length = params(3) ! size parameter
-        exp = params(4) ! exponential profile  (intended to be: 2.02)
-        cutoffradius = params(5) ! cutoff radius (intended to be: 100 kpc)
+        M = params(1) ! mass parameter NOT total mass 
+        scale_length = params(2) ! size parameter
+        exp = params(3) ! exponential profile  (intended to be: 2.02)
+        cutoffradius = params(4) ! cutoff radius (intended to be: 100 kpc)
 
         ! make dimensionless distance
         r = sqrt(x*x + y*y + z*z)
@@ -796,22 +790,22 @@ MODULE gravity
         d_exp_minus_3 = d**(exp-3)
         
         Mtot = M * dcut**exp / (1 + dcut**(exp-1)) 
-        amod = -(G*M/scale_length**3) * (d_exp_minus_3 / (1 + d_exp_minus_1))
+        amod = -(GRAVITY_G*M/scale_length**3) * (d_exp_minus_3 / (1 + d_exp_minus_1))
         
         term1 = 1 + d_exp_minus_1
         term2 = 1 + dcut**(exp-1)
 
-        phi = G*m/(scale_length*(exp-1)) * &
+        phi = GRAVITY_G*m/(scale_length*(exp-1)) * &
             log(term1/term2)  &
-            - G*Mtot/cutoffradius
+            - GRAVITY_G*Mtot/cutoffradius
 
         ! Create masks for special cases
         outside_cutoff = (r > cutoffradius)
         at_zero = (r == 0)
         ! Handle special cases using MERGE instead of WHERE
         ! For points outside cutoff radius
-        amod = MERGE(-(G*Mtot/r**3), amod, outside_cutoff)
-        phi = MERGE(-G*Mtot/r, phi, outside_cutoff)
+        amod = MERGE(-(GRAVITY_G*Mtot/r**3), amod, outside_cutoff)
+        phi = MERGE(-GRAVITY_G*Mtot/r, phi, outside_cutoff)
 
         ! For points at r=0 (prevent division by zero)
         amod = MERGE(0.0d0, amod, at_zero)
@@ -824,24 +818,23 @@ MODULE gravity
 
     SUBROUTINE miyamotonagai(params,N,x,y,z,ax,ay,az,phi)
         IMPLICIT NONE
-        REAL*8,INTENT(IN), DIMENSION(4) :: params
+        REAL*8,INTENT(IN), DIMENSION(3) :: params
         INTEGER, INTENT(IN) :: N
         REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
         REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
         REAL*8, DIMENSION(N) :: R,amod,zmod
-        REAL*8 :: G,M,a,b
-        G = params(1) ! gravitational constant
-        M = params(2) ! disk mass
-        a = params(3) ! disk length
-        b = params(4) ! disk height (thus, for galaxies a>b)
+        REAL*8 :: M,a,b
+        M = params(1) ! disk mass
+        a = params(2) ! disk length
+        b = params(3) ! disk height (thus, for galaxies a>b)
     
         R = sqrt(x*x + y*y)
         zmod =  a+(z*z + b*b)**0.5
-        amod = -G*M / (R*R + zmod*zmod)**1.5
+        amod = -GRAVITY_G*M / (R*R + zmod*zmod)**1.5
         ax=amod*x
         ay=amod*y
         az=amod*z*zmod/(sqrt(z*z+b*b))
-        phi = -G*M / (R*R + zmod*zmod)**0.5
+        phi = -GRAVITY_G*M / (R*R + zmod*zmod)**0.5
     END SUBROUTINE miyamotonagai
 
     SUBROUTINE pouliasis2017pii(params,N,x,y,z,ax,ay,az,phi)
@@ -850,17 +843,17 @@ MODULE gravity
         INTEGER, INTENT(IN) :: N
         REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
         REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
-        REAL*8, INTENT(IN),DIMENSION(11) :: params
-        REAL*8, DIMENSION(4) :: thindisk,thickdisk
-        REAL*8, DIMENSION(5) :: halo
+        REAL*8, INTENT(IN),DIMENSION(10) :: params
+        REAL*8, DIMENSION(3) :: thindisk,thickdisk
+        REAL*8, DIMENSION(4) :: halo
         REAL*8, DIMENSION(N) :: axH,ayH,azH,axD1,ayD1,azD1,axD2,ayD2,azD2
         REAL*8, DIMENSION(N) :: phiD1,phiD2,phiH
         ! HERE IS THE ORDER OF THE PARAMETERS
-        ! params = [1, 2halo, 3halo, 4xp, 5utoffradius, 6disk1, 7calelength, 8caleheight, 9disk2, 10alelength, 11aleheight]        
-        ! params = [G, Mhalo, ahalo, exp, cutoffradius, Mdisk1, scalelength, scaleheight, Mdisk2, scalelength, scaleheight]
-        halo = (/params(1),params(2),params(3),params(4),params(5)/)
-        thindisk = (/params(1),params(6),params(7),params(8)/)
-        thickdisk = (/params(1),params(9),params(10),params(11)/)
+        ! params = [2halo, 3halo, 4xp, 5utoffradius, 6disk1, 7calelength, 8caleheight, 9disk2, 10alelength, 11aleheight]        
+        ! params = [Mhalo, ahalo, exp, cutoffradius, Mdisk1, scalelength, scaleheight, Mdisk2, scalelength, scaleheight]
+        halo = (/params(1),params(2),params(3),params(4)/)
+        thindisk = (/params(5),params(6),params(7)/)
+        thickdisk = (/params(8),params(9),params(10)/)
         CALL allensantillianhalo(halo,N,x,y,z,axH,ayH,azH,phiH)
         CALL miyamotonagai(thindisk,N,x,y,z,axD1,ayD1,azD1,phiD1)
         CALL miyamotonagai(thickdisk,N,x,y,z,axD2,ayD2,azD2,phiD2)
@@ -910,11 +903,10 @@ MODULE gravity
         END DO
     END SUBROUTINE NBODYPLUMMERS   
     
-    SUBROUTINE pointmassconfiguration(G,NParticles,masses,xGC,yGC,zGC,N,x,y,z,ax,ay,az,phi)
+    SUBROUTINE pointmassconfiguration(NParticles,masses,xGC,yGC,zGC,N,x,y,z,ax,ay,az,phi)
         ! given a configuration of point masses,
         ! find the acceleration and potential at a given point
         IMPLICIT NONE 
-        REAL*8, INTENT(IN) :: G
         INTEGER, INTENT(IN) :: N,NParticles
         REAL*8, INTENT(IN),DIMENSION(N) :: x,y,z
         REAL*8, INTENT(OUT),DIMENSION(N) :: ax,ay,az
@@ -934,20 +926,19 @@ MODULE gravity
                 dz=zGC(j)-z(i)
                 dr=sqrt(dx*dx+dy*dy+dz*dz)
                 dr3=dr*dr*dr
-                ax(i)=ax(i)+G*masses(j)*dx/dr3
-                ay(i)=ay(i)+G*masses(j)*dy/dr3
-                az(i)=az(i)+G*masses(j)*dz/dr3
-                phi(i)=phi(i)-G*masses(j)/dr
+                ax(i)=ax(i)+GRAVITY_G*masses(j)*dx/dr3
+                ay(i)=ay(i)+GRAVITY_G*masses(j)*dy/dr3
+                az(i)=az(i)+GRAVITY_G*masses(j)*dz/dr3
+                phi(i)=phi(i)-GRAVITY_G*masses(j)/dr
             END DO
         END DO
     end SUBROUTINE pointmassconfiguration
 
-    SUBROUTINE default_init_basis_expansion(G)
+    SUBROUTINE default_init_basis_expansion()
         ! Auto-initialize with sensible defaults when the user has not called
         ! initaxisymmetricbasisexpansion explicitly.
         ! Grid: 100 log-spaced points from 1e-4 to 1e3; lmax = 20.
         IMPLICIT NONE
-        REAL*8, INTENT(IN) :: G
         INTEGER, PARAMETER :: default_lmax = 20
         INTEGER, PARAMETER :: default_nr   = 100
         REAL*8,  PARAMETER :: default_rmin = 1.0D-4
@@ -962,7 +953,7 @@ MODULE gravity
         DO i = 1, default_nr
             r_grid(i) = EXP(log_rmin + (i-1) * dlog_r)
         END DO
-        CALL initaxisymmetricbasisexpansion(G, default_lmax, default_nr, r_grid)
+        CALL initaxisymmetricbasisexpansion(default_lmax, default_nr, r_grid)
     END SUBROUTINE default_init_basis_expansion
 
     ! =======================================================================
@@ -1118,10 +1109,9 @@ MODULE gravity
         END DO
     END SUBROUTINE axisymmetricbasisexpansion_eval
 
-    SUBROUTINE compute_phi_tables_from_rho_component(r_grid, G, rho_l_grid, phi_l_grid, dphi_l_dr_grid)
+    SUBROUTINE compute_phi_tables_from_rho_component(r_grid, rho_l_grid, phi_l_grid, dphi_l_dr_grid)
         IMPLICIT NONE
         REAL*8, INTENT(IN), DIMENSION(:) :: r_grid
-        REAL*8, INTENT(IN) :: G
         REAL*8, INTENT(IN), DIMENSION(:,:) :: rho_l_grid
         REAL*8, INTENT(OUT), DIMENSION(:,:) :: phi_l_grid, dphi_l_dr_grid
         REAL*8, PARAMETER :: pi_phi = 3.14159265358979323846D0
@@ -1136,7 +1126,7 @@ MODULE gravity
         ALLOCATE(I_less(nr), I_greater(nr))
 
         DO l = l_lo, l_hi, 2
-            prefactor = -4.0D0 * pi_phi * G / DBLE(2*l + 1)
+            prefactor = -4.0D0 * pi_phi * GRAVITY_G / DBLE(2*l + 1)
 
             I_less(1) = 0.0D0
             DO i = 2, nr
@@ -1253,18 +1243,17 @@ MODULE gravity
         REAL*8, PARAMETER :: eps = 1.0D-16
         INTEGER :: i, j
         REAL*8 :: R, absz, signz, aR, A
-        REAL*8 :: G, sigma0, hR, hZ
+        REAL*8 :: sigma0, hR, hZ
         REAL*8 :: sum_phi, sum_ar, sum_az
         REAL*8 :: kernel, j0, j1
         REAL*8 :: kval, t, mu
         REAL*8, DIMENSION(nk) :: k_grid, quad_w, base_kernel, mu_q, w_q
 
-        G = params(1)
-        sigma0 = params(2)
-        hR = params(3)
-        hZ = params(4)
+        sigma0 = params(1)
+        hR = params(2)
+        hZ = params(3)
 
-        A = 2.0D0 * pi * G * sigma0 * hR * hR
+        A = 2.0D0 * pi * GRAVITY_G * sigma0 * hR * hR
 
         ! Integrate k in [0, +inf) via t in [0,1):
         !   k = t/(1-t),   dk = dt/(1-t)^2
@@ -1320,7 +1309,7 @@ MODULE gravity
         END DO
     END SUBROUTINE exponential_disk_bessel_eval_component
 
-    SUBROUTINE build_exponential_disk_table(component_index, G, sigma0, hR, hZ)
+    SUBROUTINE build_exponential_disk_table(component_index, sigma0, hR, hZ)
         ! Build a precomputed 2D (R, z>=0) potential table and derivative tables
         ! for conservative bicubic interpolation:
         !   Phi, dPhi/dR, dPhi/dz, d2Phi/(dR dz)
@@ -1331,7 +1320,7 @@ MODULE gravity
         ! Quadrature nodes: nk=512 (higher accuracy acceptable for offline build).
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: component_index
-        REAL*8, INTENT(IN) :: G, sigma0, hR, hZ
+        REAL*8, INTENT(IN) :: sigma0, hR, hZ
         INTEGER, PARAMETER :: nk = 512
         REAL*8, PARAMETER :: pi = 3.14159265358979323846D0
         INTEGER :: iR, iZ, j
@@ -1341,7 +1330,7 @@ MODULE gravity
         REAL*8 :: kval, t, mu
         REAL*8, DIMENSION(nk) :: k_grid, quad_w, base_kernel, mu_q, w_q
 
-        A = 2.0D0 * pi * G * sigma0 * hR * hR
+        A = 2.0D0 * pi * GRAVITY_G * sigma0 * hR * hR
 
         logR_min = LOG(1.0D-3 * hR)
         logR_max = LOG(2.0D2 * hR)
@@ -1524,7 +1513,7 @@ MODULE gravity
     SUBROUTINE exponential_oblate_halo(params, N, x, y, z, ax, ay, az, phi)
         ! Axisymmetric exponential oblate halo:
         !   rho(R,z) = rho0 * exp(-1/s0 * sqrt(R^2 + z^2/q^2))
-        ! params = [G, rho0, s0, q]
+        ! params = [rho0, s0, q]
         !
         ! On first call (or after clear): if no grid has been set up, auto-
         ! initializes with defaults (lmax=20, 100 log-spaced points 1e-4..1e3).
@@ -1535,16 +1524,15 @@ MODULE gravity
         REAL*8, INTENT(IN),  DIMENSION(4) :: params
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
-        REAL*8 :: G, rho0, s0, q
+        REAL*8 :: rho0, s0, q
 
-        G    = params(1)
-        rho0 = params(2)
-        s0   = params(3)
-        q    = params(4)
+        rho0 = params(1)
+        s0   = params(2)
+        q    = params(3)
 
         IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
             IF (.NOT. BASIS_GRID_SET) THEN
-                CALL default_init_basis_expansion(G)
+                CALL default_init_basis_expansion()
             END IF
             CALL project_exponential_oblate_halo(rho0, s0, q)
             CALL compute_phi_tables_from_rho()
@@ -1598,7 +1586,7 @@ MODULE gravity
         ! rho(s) = rho0 * (s/r0)^(-gamma) * (1 + s/r0)^(gamma-beta) * exp(-(s/rt)^2)
         ! s = sqrt(R^2 + z^2/q^2), R^2 = x^2 + y^2
         !
-        ! params = [G, rho0, r0, rt, q, gamma, beta]
+        ! params = [rho0, r0, rt, q, gamma, beta]
         !
         ! Same initialization logic as exponential_oblate_halo.
         IMPLICIT NONE
@@ -1606,19 +1594,18 @@ MODULE gravity
         REAL*8, INTENT(IN),  DIMENSION(7) :: params
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
-        REAL*8 :: G, rho0, r0, rt, q, gamma, beta
+        REAL*8 :: rho0, r0, rt, q, gamma, beta
 
-        G     = params(1)
-        rho0  = params(2)
-        r0    = params(3)
-        rt    = params(4)
-        q     = params(5)
-        gamma = params(6)
-        beta  = params(7)
+        rho0  = params(1)
+        r0    = params(2)
+        rt    = params(3)
+        q     = params(4)
+        gamma = params(5)
+        beta  = params(6)
 
         IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
             IF (.NOT. BASIS_GRID_SET) THEN
-                CALL default_init_basis_expansion(G)
+                CALL default_init_basis_expansion()
             END IF
             CALL project_ibata2024halo(rho0, r0, rt, q, gamma, beta)
             CALL compute_phi_tables_from_rho()

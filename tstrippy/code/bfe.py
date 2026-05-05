@@ -126,7 +126,8 @@ def init_basis_tables(potential_fn, params, G, lmax, nr, rmin, rmax):
 
     r_grid = np.logspace(np.log10(rmin), np.log10(rmax), nr)
     tstrippy.potentials.clearaxisymmetricbasisexpansion()
-    tstrippy.potentials.initaxisymmetricbasisexpansion(G, int(lmax), r_grid)
+    tstrippy.potentials.setgravityconstant(float(G))
+    tstrippy.potentials.initaxisymmetricbasisexpansion(int(lmax), r_grid)
 
     x0 = np.array([1.0], dtype=float)
     y0 = np.array([0.0], dtype=float)

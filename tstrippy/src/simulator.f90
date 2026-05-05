@@ -140,11 +140,10 @@ MODULE simulator
         CALL pot_clear_basis()
     END SUBROUTINE clearaxisymmetricbasisexpansion
 
-    SUBROUTINE initaxisymmetricbasisexpansion(G_in, lmax, nr, r_grid)
-        REAL*8, INTENT(IN) :: G_in
+    SUBROUTINE initaxisymmetricbasisexpansion(lmax, nr, r_grid)
         INTEGER, INTENT(IN) :: lmax, nr
         REAL*8, DIMENSION(nr), INTENT(IN) :: r_grid
-        CALL pot_init_basis(G_in, lmax, nr, r_grid)
+        CALL pot_init_basis(lmax, nr, r_grid)
     END SUBROUTINE initaxisymmetricbasisexpansion    
 
     SUBROUTINE clearaxisymmetriccompositebasisexpansion()
@@ -156,19 +155,17 @@ MODULE simulator
         CALL clearaxisymmetriccompositebasisexpansion()
     END SUBROUTINE clearcompositebasisexpansion
 
-    SUBROUTINE initaxisymmetriccompositebasisexpansion(G_in, lmax, nr, r_grid, ncomp)
-        REAL*8, INTENT(IN) :: G_in
+    SUBROUTINE initaxisymmetriccompositebasisexpansion(lmax, nr, r_grid, ncomp)
         INTEGER, INTENT(IN) :: lmax, nr, ncomp
         REAL*8, DIMENSION(nr), INTENT(IN) :: r_grid
-        CALL pot_init_axisymmetric_composite_basis_expansion(G_in, lmax, nr, r_grid, ncomp)
+        CALL pot_init_axisymmetric_composite_basis_expansion(lmax, nr, r_grid, ncomp)
     END SUBROUTINE initaxisymmetriccompositebasisexpansion
 
-    SUBROUTINE initcompositebasisexpansion(G_in, lmax, nr, r_grid, ncomp)
+    SUBROUTINE initcompositebasisexpansion(lmax, nr, r_grid, ncomp)
         ! Backward-compatible alias.
-        REAL*8, INTENT(IN) :: G_in
         INTEGER, INTENT(IN) :: lmax, nr, ncomp
         REAL*8, DIMENSION(nr), INTENT(IN) :: r_grid
-        CALL initaxisymmetriccompositebasisexpansion(G_in, lmax, nr, r_grid, ncomp)
+        CALL initaxisymmetriccompositebasisexpansion(lmax, nr, r_grid, ncomp)
     END SUBROUTINE initcompositebasisexpansion
 
     SUBROUTINE addcompositeexponentialoblatehalo(component_index, rho0, s0, q)

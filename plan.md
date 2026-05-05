@@ -245,139 +245,133 @@ These points were verified by reading `potentials.f90`, `integrator.f90`, and by
 - [x] Added mixed-derivative table support for bicubic patches
 - [x] Verified compile + smoke benchmarks for the new path
 
+### Phase 2b: Gravity Module Lifecycle Refactor ✅
+- [x] Promoted `gravity.f90` to the canonical stateful static-gravity module
+- [x] Implemented lifecycle entry points: `cleargravity`, `setgravityconstant`, `addgravitycomponent`, `finalizegravity`
+- [x] Split public gravity evaluation into explicit force and potential paths:
+  - `evaluategravityforces`
+  - `evaluategravitypotential`
+- [x] Removed legacy combined analytic entrypoints as the public direction for gravity usage
+- [x] Established module-owned `GRAVITY_G` so user-facing component params no longer carry `G`
+- [x] Verified build success after the gravity refactor
+
+### Phase 2c: Gravity Test Harness ✅
+- [x] Added focused lifecycle tests in `tests/test_gravity.py`
+- [x] Covered clear/reset, G override, valid/invalid component registration, finalize behavior, force evaluation, and potential evaluation
+- [x] Verified the focused gravity suite passes (`24 passed`)
+- [x] Updated package-structure expectations away from removed combined gravity entrypoints
+
 ## Active Roadmap
 
-### Phase 3: Simplify The Composite API Around Finalize (Top Priority)
+### Phase 3: Simulator Refactor Around Gravity State (Top Priority)
 
-**Goal:** Make the composite workflow shorter, clearer, and less error-prone for real users.
+**Goal:** Make `simulator.f90` consume the new stateful `gravity.f90` API directly, without reviving model-dispatch wrappers or duplicating gravity state.
 
-#### 3.1: Remove mandatory Legendre-style init for disk-only usage
+#### 3.1: Lock the simulator/gravity ownership boundary
 
-- A user configuring only disk/tabulated components should not need to provide `lmax`
-- A user configuring only disk/tabulated components should not need to provide a Legendre radial grid
-- Disk components should either:
-  - auto-initialize their own `(R,z)` table geometry from physical scale lengths, or
-  - accept an optional disk-specific grid override API
+- `gravity` owns the static galaxy field
+- `hostperturber`, `perturbers`, and `galacticbar` keep owning their own state
+- `simulator` assembles contributions from all physics modules
+- `simulator` should not maintain duplicated truth for whether gravity is configured; it should query gravity/module state directly
+- `setstaticgalaxy` remains only as an internal convenience wrapper and is not part of the preferred documented API
 
-`initaxisymmetriccompositebasisexpansion()` should remain only for cases that truly need shared Legendre radial infrastructure.
+#### 3.2: Split simulator assembly into force and potential paths
 
-#### 3.1b: Independent backend configuration
+- Keep the name `HIT`, but redefine it to mean force-only assembly
+- Add a separate simulator potential-evaluation routine for the cases that actually need potential output
+- Intermediate integrator substeps should call only `HIT`
+- Potential should be evaluated only for user-requested timestamps, diagnostics, escape-energy bookkeeping, or explicit output paths
 
-- Add clearly separated config paths for:
-  - spherical-harmonic BFE settings
-  - cylindrical/Bessel-table settings
-- Default paths should auto-fill backend defaults unless users opt into expert overrides.
+#### 3.3: Make simulator expose the gravity lifecycle directly
 
-#### 3.1c: Unified component registration
+- Simulator user-facing gravity calls should mirror gravity naming and semantics as closely as possible:
+  - `cleargravitycomponents`
+  - `setgravityconstant`
+  - `addgravitycomponent`
+  - `finalizegravity`
+- The user experience through `tstrippy.simulator` should be consistent with direct `tstrippy.gravity` usage
+- Extend gravity lifecycle support so named component addition covers the full intended model set, including preset-like models such as `pouliasis2017pii`
 
-- Introduce a unified component-add surface where users can register analytic or BFE-based components in one composite model.
-- Keep backend-specific details internal unless users explicitly request advanced control.
+#### 3.4: Introduce simulator finalization as the run handoff
 
-#### 3.2: Make finalize the real handoff point
+- Add `finalizesimulator()` as the main simulator commit step
+- `finalizesimulator()` should idempotently call `finalizegravity()` when needed
+- The intended simulator lifecycle becomes:
+  1. clear
+  2. set/init/add physics
+  3. finalize simulator
+  4. run
+- Simulator must refuse to run if the static gravity field is not finalized and no alternative valid force configuration exists
 
-- `finalizeaxisymmetriccompositebasisexpansion()` should do the expensive precompute needed for runtime evaluation
-- Finalize should also make the composite basis integrator-ready
-- After finalize, calling `setstaticgalaxy("composite_basis", [G])` should no longer be necessary
-- After finalize, mutating configuration calls must hard-error until a full `clear`.
+#### 3.5: Normalize the integrator entrypoints around shared assembly
 
-The intended user model is:
+- `leapfrogintime`, `leapfrogtofinalpositions`, and `ruthforestintime` should share the same force-assembly contract
+- Repeated setup logic should be reduced only after the new `HIT` and potential-evaluation split is stable
+- The future run-oriented API should be built on top of the same shared force/potential assembly routines instead of bypassing them
 
-1. define components
-2. finalize composite basis
-3. set initial conditions
-4. integrate
+#### 3.6: Acceptance criteria for Phase 3
 
-Not:
-
-1. define components
-2. finalize
-3. separately tell the integrator what was already finalized
-4. integrate
-
-#### 3.3: Integrator-side architectural change
-
-- The integrator must be able to recognize a finalized composite basis as an active static galaxy without the extra string-dispatch step
-- `setstaticgalaxy` should remain for analytic potentials and backward compatibility, but composite basis should no longer depend on it
-- The source of truth for composite readiness should be the finalized composite state, not duplicated string registration
-
-#### 3.4: Acceptance criteria for Phase 3
-
-- [ ] Disk-only composite setup does not require `lmax` or a Legendre radial grid
-- [ ] Finalize is sufficient to make the composite basis integrator-ready
-- [ ] Existing analytic potential workflows through `setstaticgalaxy` still work unchanged
-- [ ] Backward-compatible wrappers are preserved where practical, but the new preferred API is shorter and clearer
-- [ ] Single run-oriented API consumes module state (`nsteps`, `nparticles`) without redundant run args
-- [ ] Trajectory memory-budget behavior and `nskip` controls are implemented with deterministic defaults
-- [ ] `writesnapshot` naming replaces `writestream` in the new API surface
-- [ ] Composite API can register analytic and BFE components in one coherent flow
-- [ ] Spherical-BFE and cylindrical-BFE hyperparameters are independent and non-conflicting
-- [ ] Default BFE hyperparameters are available for simple use and overrideable for expert use
+- [ ] `HIT` is force-only
+- [ ] A separate simulator potential-evaluation path exists
+- [ ] Simulator does not duplicate gravity finalized state through `GALAXYISSET`
+- [ ] `finalizesimulator()` exists and safely forwards to gravity finalization
+- [ ] `setstaticgalaxy` remains as a hidden one-component wrapper only
+- [ ] Simulator gravity-facing API is intentionally aligned with gravity naming/behavior
+- [ ] Full intended gravity models can be added through the lifecycle API
 
 ---
 
-### Phase 4: Bessel Documentation + Orbit Sanity Checks
+### Phase 4: Simulator Test Harness And Integration Stabilization
 
-**Goal:** Package the Bessel-table workflow as reproducible documentation and enforce sanity checks for orbit use.
+**Goal:** Build the simulator test suite in slices while the API is being rewritten, so regressions are detected before touching all integration paths.
 
-#### 4.1: Orbit sanity diagnostics (Bessel table path)
+#### 4.1: First simulator tests
 
-- [ ] Add a reproducible conservation script/test for representative disk orbits
-- [ ] Add a bounded-error criterion for `dE/E` (max, std, and drift slope)
-- [ ] Add circular-orbit and eccentric-orbit sanity cases at multiple radii
-- [ ] Add a force/potential consistency check on the interpolation patch outputs
+- [ ] Add simulator lifecycle tests for:
+  - gravity clear/add/finalize forwarding
+  - hidden `setstaticgalaxy` wrapper behavior
+  - refusal to run when gravity is not finalized
+- [ ] Add a direct consistency test showing simulator static-force assembly matches gravity direct evaluation for a simple analytic model
 
-#### 4.2: Documentation updates
+#### 4.2: Assembly-layer tests before full run tests
 
-- [ ] Update `ARCHITECTURE.md` with the production table + Hermite interpolation design
-- [ ] Add/update a user-facing notebook demonstrating recommended setup and units
-- [ ] Document known unit pitfalls (`G=1` code units vs physical `G`) with examples
+- [ ] Test `HIT` as force-only assembly with static gravity only
+- [ ] Test combined assembly with host, perturbers, nbody, and bar enabled in isolation-friendly slices
+- [ ] Add separate potential-evaluation tests only where simulator physics actually needs potential output
 
-#### 4.3: Documentation sequencing (not all today)
+#### 4.3: Integrator tests after assembly is stable
 
-- [ ] Notebook-first learning path with increasing complexity:
-  - one-orbit integration
-  - catalog-scale orbit integration
-  - stream generation baseline
-  - barred-potential catalog workflows
-  - barred-potential stream workflows
-- [ ] Keep docs practical and copy-adaptable for user scripts
+- [ ] Add leapfrog smoke tests on the new assembly contract
+- [ ] Add Forest-Ruth smoke tests on the same contract
+- [ ] Compare short-time trajectory agreement where both integrators should match
+- [ ] Audit repeated initialization/output logic across integration entrypoints and consolidate only after tests exist
 
----
-
-### Phase 5: Composite Science Validation (Legendre + Bessel, including Ibata 2024)
-
-**Goal:** Validate mixed-component composite models beyond single-component disk checks.
-
-#### 5.1: Mixed-model validation targets
-
-- [ ] Build and validate a composite model combining Ibata 2024 halo + exponential disk table components
-- [ ] Compare orbit morphology and force cuts between mixed-component composite and reference expectations
-- [ ] Check robustness across flattening, scale radii, and component mass fraction sweeps
-- [ ] Confirm conservation diagnostics remain acceptable in mixed Legendre + Bessel runs
-
-#### 5.2: Notebook/test deliverables
-
-- [ ] Add a dedicated notebook or script for Ibata 2024 + disk composite checks
-- [ ] Add a lightweight regression test for mixed composite setup and force-evaluation sanity
-
-#### 5.3: Preset data packaging (release-aligned)
-
-- [ ] Package core potential preset parameters in read-only form
-  - pouliasis2017pii (current)
-  - pouliasis2017pi, ibata2024, mcmillan2017 (as implemented)
-- [ ] Keep bundled presets read-only to users (copy/modify outside package if needed)
-- [ ] Tie bundled-data updates to code releases (no separate data semver for now)
-
----
-
-## Integrator Stabilization (Background)
-
-These remain important, but the disk runtime replacement now has priority because current performance blocks practical use.
+#### 4.4: Background cleanup items carried forward
 
 - [ ] Linear interpolation for host perturber (replace nearest-time sampling)
 - [ ] Consistent time handling at integrator entry points
 - [ ] Out-of-range time handling policy
 - [ ] Full regression test suite (`T0` to `T4`)
+
+---
+
+### Phase 5: Composite And Bessel Follow-through
+
+**Goal:** Resume the composite/Bessel cleanup after simulator and gravity lifecycle integration is stable.
+
+#### 5.1: Composite API cleanup
+
+- [ ] Remove mandatory Legendre-style init for disk-only usage
+- [ ] Keep spherical-BFE and cylindrical/Bessel configuration independent
+- [ ] Preserve a unified component-registration surface across analytic + BFE components
+- [ ] Make finalize the true handoff for composite runtime readiness
+
+#### 5.2: Documentation and science validation
+
+- [ ] Update `ARCHITECTURE.md` to reflect the gravity/simulator lifecycle architecture
+- [ ] Add Bessel-table orbit sanity and conservation checks
+- [ ] Add mixed composite validation cases, including Ibata 2024 + exponential-disk combinations
+- [ ] Package preset parameter workflows in a user-facing, reproducible form
 
 ## Documentation And Testing Philosophy
 
@@ -397,12 +391,12 @@ Documentation style for near-term release:
 - simple-to-advanced progression
 - practical reproducible examples over abstract API catalogs
 
-## File Organization Notes For The Next Refactor
+## File Organization Notes For The Current Refactor
 
-- `tstrippy/src/gravity.f90` (target name; currently `potentials.f90`)
-  - owns stateful gravity model definitions and finalized disk runtime evaluators
-- `tstrippy/src/simulator.f90` (target name; currently `integrator.f90`)
-  - owns simulation state, integration lifecycle, and run execution
+- `tstrippy/src/gravity.f90`
+  - owns stateful static-gravity model definitions and finalized runtime evaluators
+- `tstrippy/src/simulator.f90`
+  - owns simulation state, integration lifecycle, and assembly across gravity + other physics modules
 - `tstrippy/src/mathutils.f90`
   - should hold only reusable numerical kernels needed by the offline builder or interpolation support
 - `docs/source/`
@@ -410,14 +404,9 @@ Documentation style for near-term release:
 
 ## Immediate Next Session Checklist
 
-- [ ] Start refactor in small, testable slices with verification after each change
-- [ ] Rename module files in staged steps: `integrator.f90` -> `simulator.f90`, `potentials.f90` -> `gravity.f90`
-- [ ] Implement strict lifecycle lock (`clear` -> `init/set` -> `finalize` -> `run`)
-- [ ] Introduce single run-oriented API with leapfrog default and optional Forest-Ruth selection
-- [ ] Implement trajectory memory budget and `trajectory_nskip` controls
-- [ ] Rename `writestream` surface API to `writesnapshot`
-- [ ] Implement independent configuration paths for spherical-BFE and cylindrical-BFE settings
-- [ ] Add unified composite component registration surface (analytic + BFE)
-- [ ] Add Bessel orbit conservation sanity harness and thresholds
-- [ ] Add mixed composite validation case: Ibata 2024 halo + exponential-disk table
-- [ ] Update user documentation with unit conventions and examples
+- [ ] Refactor `HIT` to be force-only while adding a separate simulator potential-evaluation routine
+- [ ] Remove duplicated simulator gravity-ready state and query gravity/module state directly
+- [ ] Add `finalizesimulator()` and make it safely forward to gravity finalization
+- [ ] Extend gravity lifecycle registration to the next required named models, starting with `pouliasis2017pii`
+- [ ] Add first simulator tests around lifecycle forwarding and static-force assembly consistency
+- [ ] Only after those tests pass, simplify repeated integration setup/output logic across leapfrog and Forest-Ruth

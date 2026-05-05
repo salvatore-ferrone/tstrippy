@@ -89,23 +89,27 @@ def test_addgravitycomponent_increments_ncomp():
 
 def test_addgravitycomponent_invalid_model_stops():
     g = tstrippy.gravity
-    with pytest.raises(Exception):
-        g.addgravitycomponent("bogusmodel", np.array([1.0, 2.0]))
+    g.addgravitycomponent("bogusmodel", np.array([1.0, 2.0]))
+    # Invalid model should NOT be added (ncomp unchanged)
+    assert g.gravity_ncomp == 0
 
 
 def test_addgravitycomponent_wrong_nparams_stops():
     g = tstrippy.gravity
-    with pytest.raises(Exception):
-        # plummer needs 2, we pass 3
-        g.addgravitycomponent("plummer", np.array([1e11, 2.0, 99.0]))
+    # plummer needs 2, we pass 3
+    g.addgravitycomponent("plummer", np.array([1e11, 2.0, 99.0]))
+    # Wrong nparams should NOT be added (ncomp unchanged)
+    assert g.gravity_ncomp == 0
 
 
 def test_addgravitycomponent_after_finalize_stops():
     g = tstrippy.gravity
     g.addgravitycomponent("plummer", np.array([1e11, 2.0]))
     g.finalizegravity()
-    with pytest.raises(Exception):
-        g.addgravitycomponent("hernquist", np.array([5e10, 1.5]))
+    ncomp_before = g.gravity_ncomp
+    g.addgravitycomponent("hernquist", np.array([5e10, 1.5]))
+    # Adding after finalize should NOT modify ncomp
+    assert g.gravity_ncomp == ncomp_before
 
 
 # ---------------------------------------------------------------------------
@@ -121,8 +125,9 @@ def test_finalizegravity_sets_flag():
 
 def test_finalizegravity_no_components_stops():
     g = tstrippy.gravity
-    with pytest.raises(Exception):
-        g.finalizegravity()
+    g.finalizegravity()
+    # Finalizing with no components should NOT set the finalized flag
+    assert not g.gravity_finalized
 
 
 # ---------------------------------------------------------------------------
@@ -144,8 +149,9 @@ def test_evaluategravityforces_before_finalize_stops():
     g = tstrippy.gravity
     g.addgravitycomponent("plummer", np.array([1e11, 2.0]))
     x = np.array([8.0]);  y = np.zeros(1);  z = np.zeros(1)
-    with pytest.raises(Exception):
-        g.evaluategravityforces(x, y, z)
+    ax, ay, az = g.evaluategravityforces(x, y, z)
+    # Before finalize, forces should be zero (not evaluated)
+    assert ax[0] == 0.0 and ay[0] == 0.0 and az[0] == 0.0
 
 
 def test_evaluategravityforces_direction_on_axis():
@@ -220,5 +226,6 @@ def test_evaluategravitypotential_before_finalize_stops():
     g = tstrippy.gravity
     g.addgravitycomponent("plummer", np.array([1e11, 2.0]))
     x = np.array([8.0]);  y = np.zeros(1);  z = np.zeros(1)
-    with pytest.raises(Exception):
-        g.evaluategravitypotential(x, y, z)
+    phi = g.evaluategravitypotential(x, y, z)
+    # Before finalize, potential should be zero (not evaluated)
+    assert phi[0] == 0.0

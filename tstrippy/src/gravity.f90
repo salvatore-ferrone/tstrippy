@@ -4,6 +4,23 @@ MODULE gravity
                          bessel_j0_scalar, bessel_j1_scalar
     IMPLICIT NONE
 
+    ! =========================================================================
+    ! ORGANIZATION
+    ! =========================================================================
+    ! This module provides gravitational potential and force evaluators
+    ! organized into logical sections:
+    !
+    ! 1. STATE SUBROUTINES — Lifecycle API (cleargravity, addgravitycomponent, etc.)
+    ! 2. ANALYTICAL POTENTIALS — Closed-form models (Plummer, Hernquist, etc.)
+    ! 3. DENSITY-ONLY POTENTIALS — Legendre expansion models (exponential halo, etc.)
+    ! 4. BFE INFRASTRUCTURE — Composite basis expansion setup and evaluation
+    ! 5. SPHERICAL HARMONICS — Legendre projection and evaluation primitives
+    ! 6. BESSEL/TABLE INFRASTRUCTURE — Disk table construction and evaluation
+    !
+    ! All public symbols are listed in module state or at section starts.
+    ! Private symbols are internal implementation details and marked PRIVATE.
+    ! =========================================================================
+
     ABSTRACT INTERFACE
         SUBROUTINE bessel_component_evaluator_interface(params, N, x, y, z, ax, ay, az, phi)
             REAL*8, INTENT(IN), DIMENSION(*) :: params
@@ -85,12 +102,13 @@ MODULE gravity
     REAL*8,  DIMENSION(GRAVITY_MAX_PARAMS, GRAVITY_MAX_NCOMP), PUBLIC :: GRAVITY_PARAMS = 0.0D0
 
     ! Private internal routines (not exposed to Python/caller)
+    ! NOTE: No backward compatibility aliases. Use canonical names only.
     PRIVATE :: default_init_basis_expansion
     PRIVATE :: project_exponential_oblate_halo
-    PRIVATE :: compute_phi_tables_from_rho
-    PRIVATE :: axisymmetricbasisexpansion_eval
     PRIVATE :: project_ibata2024halo
+    PRIVATE :: compute_phi_tables_from_rho
     PRIVATE :: compute_phi_tables_from_rho_component
+    PRIVATE :: axisymmetricbasisexpansion_eval
     PRIVATE :: axisymmetricbasisexpansion_eval_component
     PRIVATE :: bessel_eval_component
     PRIVATE :: exponential_disk_bessel_eval_component
@@ -100,7 +118,9 @@ MODULE gravity
     CONTAINS
 
     ! =======================================================================
-    ! Gravity lifecycle API
+    ! STATE SUBROUTINES (Lifecycle API)
+    ! cleargravity, setgravityconstant, addgravitycomponent, finalizegravity,
+    ! evaluategravityforces, evaluategravitypotential, printgravitystate
     ! =======================================================================
 
     SUBROUTINE cleargravity()
@@ -116,8 +136,14 @@ MODULE gravity
     SUBROUTINE setgravityconstant(G)
         IMPLICIT NONE
         REAL*8, INTENT(IN) :: G
-        IF (GRAVITY_FINALIZED) STOP "setgravityconstant: cannot change G after finalizegravity; call cleargravity first"
-        IF (G <= 0.0D0) STOP "setgravityconstant: G must be positive"
+        IF (GRAVITY_FINALIZED) THEN
+            WRITE(*,'(A)') "WARNING: setgravityconstant: cannot change G after finalizegravity"
+            RETURN
+        END IF
+        IF (G <= 0.0D0) THEN
+            WRITE(*,'(A)') "WARNING: setgravityconstant: G must be positive"
+            RETURN
+        END IF
         GRAVITY_G            = G
         GRAVITY_G_IS_DEFAULT = .FALSE.
     END SUBROUTINE setgravityconstant
@@ -129,11 +155,16 @@ MODULE gravity
         REAL*8, INTENT(IN), DIMENSION(nparams) :: params
         INTEGER :: kind_code, required_params
 
-        IF (GRAVITY_FINALIZED) &
-            STOP "addgravitycomponent: cannot add components after finalizegravity; call cleargravity first"
-        IF (GRAVITY_NCOMP >= GRAVITY_MAX_NCOMP) &
-            STOP "addgravitycomponent: maximum number of components reached"
+        IF (GRAVITY_FINALIZED) THEN
+            WRITE(*,'(A)') "WARNING: addgravitycomponent: cannot add components after finalizegravity"
+            RETURN
+        END IF
+        IF (GRAVITY_NCOMP >= GRAVITY_MAX_NCOMP) THEN
+            WRITE(*,'(A)') "WARNING: addgravitycomponent: maximum number of components reached"
+            RETURN
+        END IF
 
+        ! Map model name to internal kind code
         SELECT CASE (TRIM(model_name))
         CASE ("plummer")
             kind_code = GRAVITY_KIND_PLUMMER
@@ -148,11 +179,15 @@ MODULE gravity
             kind_code = GRAVITY_KIND_LONGMURALIBAR
             required_params = 4  ! M, abar, bbar, cbar
         CASE DEFAULT
-            STOP "addgravitycomponent: unknown model_name (must be lowercase)"
+            WRITE(*,'(A)') "WARNING: addgravitycomponent: unknown model_name (must be lowercase)"
+            RETURN
         END SELECT
 
-        IF (nparams /= required_params) &
-            STOP "addgravitycomponent: wrong number of parameters for model"
+        IF (nparams /= required_params) THEN
+            WRITE(*,'(A,I0,A,I0)') "WARNING: addgravitycomponent: expected", required_params, &
+                " parameters but got", nparams
+            RETURN
+        END IF
 
         GRAVITY_NCOMP = GRAVITY_NCOMP + 1
         GRAVITY_KIND(GRAVITY_NCOMP) = kind_code
@@ -163,11 +198,15 @@ MODULE gravity
         IMPLICIT NONE
         INTEGER :: i
 
-        IF (GRAVITY_NCOMP < 1) &
-            STOP "finalizegravity: no components registered; call addgravitycomponent first"
+        IF (GRAVITY_NCOMP < 1) THEN
+            WRITE(*,'(A)') "WARNING: finalizegravity: no components registered"
+            RETURN
+        END IF
         DO i = 1, GRAVITY_NCOMP
-            IF (GRAVITY_KIND(i) == GRAVITY_KIND_NONE) &
-                STOP "finalizegravity: component slot is uninitialized"
+            IF (GRAVITY_KIND(i) == GRAVITY_KIND_NONE) THEN
+                WRITE(*,'(A)') "WARNING: finalizegravity: component slot is uninitialized"
+                RETURN
+            END IF
         END DO
 
         IF (GRAVITY_G_IS_DEFAULT) THEN
@@ -192,7 +231,11 @@ MODULE gravity
         REAL*8, DIMENSION(5) :: p5
         INTEGER :: i
 
-        IF (.NOT. GRAVITY_FINALIZED) STOP "evaluategravityforces: call finalizegravity first"
+        IF (.NOT. GRAVITY_FINALIZED) THEN
+            WRITE(*,'(A)') "WARNING: evaluategravityforces: not finalized yet"
+            ax = 0.0D0;  ay = 0.0D0;  az = 0.0D0
+            RETURN
+        END IF
 
         ax = 0.0D0;  ay = 0.0D0;  az = 0.0D0
 
@@ -213,7 +256,7 @@ MODULE gravity
                       GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i)]
                 CALL longmuralibar(p5, N, x, y, z, ax_c, ay_c, az_c, phi_c)
             CASE DEFAULT
-                STOP "evaluategravityforces: unknown component kind"
+                WRITE(*,'(A)') "WARNING: evaluategravityforces: unknown component kind"
             END SELECT
             ax = ax + ax_c
             ay = ay + ay_c
@@ -232,7 +275,11 @@ MODULE gravity
         REAL*8, DIMENSION(5) :: p5
         INTEGER :: i
 
-        IF (.NOT. GRAVITY_FINALIZED) STOP "evaluategravitypotential: call finalizegravity first"
+        IF (.NOT. GRAVITY_FINALIZED) THEN
+            WRITE(*,'(A)') "WARNING: evaluategravitypotential: not finalized yet"
+            phi = 0.0D0
+            RETURN
+        END IF
 
         phi = 0.0D0
 
@@ -253,7 +300,7 @@ MODULE gravity
                       GRAVITY_PARAMS(3,i), GRAVITY_PARAMS(4,i)]
                 CALL longmuralibar(p5, N, x, y, z, ax_c, ay_c, az_c, phi_c)
             CASE DEFAULT
-                STOP "evaluategravitypotential: unknown component kind"
+                WRITE(*,'(A)') "WARNING: evaluategravitypotential: unknown component kind"
             END SELECT
             phi = phi + phi_c
         END DO
@@ -284,10 +331,6 @@ MODULE gravity
         END DO
         WRITE(*,'(A)') "==========================="
     END SUBROUTINE printgravitystate
-
-    ! =======================================================================
-    ! Legacy composite BFE API (preserved for backward compatibility)
-    ! =======================================================================
 
     SUBROUTINE initaxisymmetricbasisexpansion(G, lmax, nr, r_grid)
         ! Allocate basis-expansion storage and store the radial grid.
@@ -334,6 +377,11 @@ MODULE gravity
         BASIS_G    = -1.0D0
     END SUBROUTINE clearaxisymmetricbasisexpansion
 
+    ! =======================================================================
+    ! BFE (COMPOSITE BASIS INFRASTRUCTURE)
+    ! Multi-component basis expansion setup, component addition, and evaluation
+    ! =======================================================================
+
     SUBROUTINE clearaxisymmetriccompositebasisexpansion()
         IMPLICIT NONE
 
@@ -358,12 +406,6 @@ MODULE gravity
         COMPOSITE_NR = -1
         COMPOSITE_G = -1.0D0
     END SUBROUTINE clearaxisymmetriccompositebasisexpansion
-
-    SUBROUTINE clearcompositebasisexpansion()
-        ! Backward-compatible alias.
-        IMPLICIT NONE
-        CALL clearaxisymmetriccompositebasisexpansion()
-    END SUBROUTINE clearcompositebasisexpansion
 
     SUBROUTINE initaxisymmetriccompositebasisexpansion(G, lmax, nr, r_grid, ncomp)
         IMPLICIT NONE
@@ -407,16 +449,6 @@ MODULE gravity
         COMPOSITE_BASIS_GRID_SET = .TRUE.
         COMPOSITE_BASIS_FINALIZED = .FALSE.
     END SUBROUTINE initaxisymmetriccompositebasisexpansion
-
-    SUBROUTINE initcompositebasisexpansion(G, lmax, nr, r_grid, ncomp)
-        ! Backward-compatible alias.
-        IMPLICIT NONE
-        REAL*8, INTENT(IN) :: G
-        INTEGER, INTENT(IN) :: lmax, nr, ncomp
-        REAL*8, INTENT(IN), DIMENSION(nr) :: r_grid
-
-        CALL initaxisymmetriccompositebasisexpansion(G, lmax, nr, r_grid, ncomp)
-    END SUBROUTINE initcompositebasisexpansion
 
     SUBROUTINE addcompositeexponentialoblate(component_index, rho0, s0, q)
         ! Legendre basis path: preferred for spherical or near-spherical components.
@@ -564,12 +596,6 @@ MODULE gravity
         COMPOSITE_BASIS_FINALIZED = .TRUE.
     END SUBROUTINE finalizeaxisymmetriccompositebasisexpansion
 
-    SUBROUTINE finalizecompositebasisexpansion()
-        ! Backward-compatible alias.
-        IMPLICIT NONE
-        CALL finalizeaxisymmetriccompositebasisexpansion()
-    END SUBROUTINE finalizecompositebasisexpansion
-
     SUBROUTINE axisymmetriccompositebasispotential_dispatch(params, N, x, y, z, ax, ay, az, phi)
         ! Dispatch wrapper that preserves the standard potential signature
         ! used by integrator procedure-pointer wiring.
@@ -583,17 +609,6 @@ MODULE gravity
         IF (params(1) /= params(1)) STOP "invalid NaN parameter in axisymmetriccompositebasispotential_dispatch"
         CALL axisymmetriccompositebasispotential(N, x, y, z, ax, ay, az, phi)
     END SUBROUTINE axisymmetriccompositebasispotential_dispatch
-
-    SUBROUTINE compositebasispotential_dispatch(params, N, x, y, z, ax, ay, az, phi)
-        ! Backward-compatible alias.
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN), DIMENSION(*) :: params
-        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
-
-        CALL axisymmetriccompositebasispotential_dispatch(params, N, x, y, z, ax, ay, az, phi)
-    END SUBROUTINE compositebasispotential_dispatch
 
     SUBROUTINE axisymmetriccompositebasispotential(N, x, y, z, ax, ay, az, phi)
         ! Evaluate all configured composite basis components and sum their forces.
@@ -643,16 +658,6 @@ MODULE gravity
         DEALLOCATE(ax_comp, ay_comp, az_comp, phi_comp)
     END SUBROUTINE axisymmetriccompositebasispotential
 
-    SUBROUTINE compositebasispotential(N, x, y, z, ax, ay, az, phi)
-        ! Backward-compatible alias.
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
-
-        CALL axisymmetriccompositebasispotential(N, x, y, z, ax, ay, az, phi)
-    END SUBROUTINE compositebasispotential
-
     SUBROUTINE bessel_eval_component(component_evaluator, params, N, x, y, z, ax, ay, az, phi)
         ! Generic Bessel-component dispatcher.
         ! Method: Bessel/Hankel representation used to solve Poisson for
@@ -668,6 +673,11 @@ MODULE gravity
 
         CALL component_evaluator(params, N, x, y, z, ax, ay, az, phi)
     END SUBROUTINE bessel_eval_component
+
+    ! =======================================================================
+    ! ANALYTICAL POTENTIALS
+    ! Closed-form gravity models with direct evaluation
+    ! =======================================================================
 
     SUBROUTINE hernquist(params,N,x,y,z,ax,ay,az,phi)
         ! Hernquist potential
@@ -699,8 +709,6 @@ MODULE gravity
         phi = -G*M / (r + a)
     END SUBROUTINE hernquist
     
-    
-
     SUBROUTINE plummer(params,N,x,y,z,ax,ay,az,phi)
         ! Plummer potential
         ! params = [G, M, a]
@@ -759,7 +767,6 @@ MODULE gravity
 
     END SUBROUTINE longmuralibar
 
-
     SUBROUTINE allensantillianhalo(params,N,x,y,z,ax,ay,az,phi)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
@@ -815,34 +822,6 @@ MODULE gravity
 
     end SUBROUTINE allensantillianhalo
 
-
-    SUBROUTINE testallen(G,axhalo,Md_halo,N,x,y,z,ax,ay,az,phi)
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: N
-        REAL*8,INTENT(IN), DIMENSION(N) :: x,y,z
-        REAL*8,INTENT(OUT),DIMENSION(N) :: ax,ay,az,phi
-        REAL*8, DIMENSION(N) :: term1,term2
-        REAL*8:: G,Md_halo,axhalo
-        REAL*8, DIMENSION(N) :: r,Mhalo_r,amod,r3
-        
-        r = sqrt(x*x + y*y + z*z)
-        r3=r*r*r
-
-        Mhalo_r = Md_halo*(r/axhalo)**(2.02) ! the mass interior to r
-        Mhalo_r = Mhalo_r/(1 + (r/axhalo)**(1.02))
-        amod = -G*Mhalo_r/r3
-        ax=amod*x
-        ay=amod*y
-        az=amod*z
-
-        term1=-1.02/(1+(100./axhalo)**(1.02)) + log(1+(100./axhalo)**(1.02))
-        term2=-1.02/(1+(r/axhalo)**(1.02)) + log(1+(r/axhalo)**(1.02))
-        ! the equation derived from pouliasis et al 2017 and wrong allen santilian is weird
-        ! deriving the potential from allen and martos 1986 makes more sense
-        ! not clear to me from the articles why they have such a weird halo
-        phi = -(G*Mhalo_r/r) - G*Md_halo/1.02/axhalo*(term1-term2)
-    END SUBROUTINE testallen
-
     SUBROUTINE miyamotonagai(params,N,x,y,z,ax,ay,az,phi)
         IMPLICIT NONE
         REAL*8,INTENT(IN), DIMENSION(4) :: params
@@ -864,7 +843,6 @@ MODULE gravity
         az=amod*z*zmod/(sqrt(z*z+b*b))
         phi = -G*M / (R*R + zmod*zmod)**0.5
     END SUBROUTINE miyamotonagai
-
 
     SUBROUTINE pouliasis2017pii(params,N,x,y,z,ax,ay,az,phi)
         ! from pouliasis et al 2017
@@ -964,10 +942,6 @@ MODULE gravity
         END DO
     end SUBROUTINE pointmassconfiguration
 
-
-
-
-
     SUBROUTINE default_init_basis_expansion(G)
         ! Auto-initialize with sensible defaults when the user has not called
         ! initaxisymmetricbasisexpansion explicitly.
@@ -990,6 +964,11 @@ MODULE gravity
         END DO
         CALL initaxisymmetricbasisexpansion(G, default_lmax, default_nr, r_grid)
     END SUBROUTINE default_init_basis_expansion
+
+    ! =======================================================================
+    ! SPHERICAL HARMONICS INFRASTRUCTURE
+    ! Legendre polynomial basis, projection, and evaluation primitives
+    ! =======================================================================
 
     SUBROUTINE project_exponential_oblate_halo(rho0, s0, q)
         ! Project rho(r,mu) = rho0*exp(-r/s0*sqrt(1-(1-1/q^2)*mu^2)) onto
@@ -1250,6 +1229,11 @@ MODULE gravity
 
         DEALLOCATE(p, dp_dmu)
     END SUBROUTINE axisymmetricbasisexpansion_eval_component
+
+    ! =======================================================================
+    ! BESSEL/TABLE INFRASTRUCTURE
+    ! Disk-table construction via Bessel/Hankel quadrature and table evaluation
+    ! =======================================================================
 
     SUBROUTINE exponential_disk_bessel_eval_component(params, N, x, y, z, ax, ay, az, phi)
         ! Exponential-disk application of the generic Bessel/Poisson method.
@@ -1532,6 +1516,11 @@ MODULE gravity
         END DO
     END SUBROUTINE disk_table_eval_component
 
+    ! =======================================================================
+    ! DENSITY-ONLY POTENTIALS (Legendre-based)
+    ! Models defined via density profiles, evaluated with Legendre expansion
+    ! =======================================================================
+
     SUBROUTINE exponential_oblate_halo(params, N, x, y, z, ax, ay, az, phi)
         ! Axisymmetric exponential oblate halo:
         !   rho(R,z) = rho0 * exp(-1/s0 * sqrt(R^2 + z^2/q^2))
@@ -1564,7 +1553,6 @@ MODULE gravity
 
         CALL axisymmetricbasisexpansion_eval(N, x, y, z, ax, ay, az, phi)
     END SUBROUTINE exponential_oblate_halo
-
 
     SUBROUTINE project_ibata2024halo(rho0, r0, rt, q, gamma, beta)
         ! Project

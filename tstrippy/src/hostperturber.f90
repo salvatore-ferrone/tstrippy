@@ -195,11 +195,10 @@ MODULE hostperturber
         CALL updatehoststate(mytime)
     END SUBROUTINE findhosttimeindex
 
-    SUBROUTINE computeforcebyhosts(Nparticles,Gin,x,y,z,ax,ay,az,phi)
+    SUBROUTINE computeforcebyhosts(Nparticles,x,y,z,ax,ay,az,phi)
         ! compute the force on the particles due to the hosts
         ! the force is computed by summing over all hosts
         ! the force is computed in galactic coordinates
-        real*8, intent(in) :: Gin
         integer, intent(in) :: Nparticles
         real*8, intent(in), dimension(Nparticles) :: x,y,z
         real*8, intent(out), dimension(Nparticles) :: ax,ay,az,phi

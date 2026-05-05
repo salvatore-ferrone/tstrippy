@@ -73,7 +73,7 @@ MODULE perturbers
 
 
 
-    SUBROUTINE computeforcebyperturbers(Nparticles,Gin,x,y,z,ax,ay,az,phi)
+    SUBROUTINE computeforcebyperturbers(Nparticles,x,y,z,ax,ay,az,phi)
         ! compute the force on the particles due to the perturbers
         ! the force is computed by summing over all perturbers
         ! the force is computed in galactic coordinates
@@ -82,7 +82,6 @@ MODULE perturbers
         real*8, intent(out), dimension(Nparticles) :: ax,ay,az,phi
         REAL*8, dimension(2) :: params
         REAL*8, dimension(Nparticles,3) :: forceperturber
-        REAL*8, intent(in) :: Gin
         real*8,dimension(Nparticles) :: dx,dy,dz,axperturber,ayperturber,azperturber,phiperturber
         integer :: i,nperturbers
         nperturbers=size(massperturber)

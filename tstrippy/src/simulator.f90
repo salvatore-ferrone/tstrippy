@@ -9,18 +9,15 @@ MODULE simulator
                           pot_add_composite_expponential_oblate_halo        => addcompositeexponentialoblate,               &
                           pot_add_composite_ibata2024_halo                  => addcompositeibata2024halo,                   &
                           pot_add_composite_bessel_exponential_disk         => addcompositebesselexponentialdisk,           &
-                          pot_model_exp_oblate_halo                         => exponential_oblate_halo,         &
-                          pot_model_ibata2024halo                           => ibata2024halo,                   &
-                          pot_model_axisymmetric_composite_basis            => axisymmetriccompositebasispotential_dispatch, &
                           pot_finalize_axisymmetric_composite               => finalizeaxisymmetriccompositebasisexpansion, &
-                          ! analytical podential denity pairs 
-                          pot_model_pouliasis2017   => pouliasis2017PII,                &
-                          pot_model_miyamoto_nagai  => miyamotonagai,                   &
-                          pot_model_allen_santillan => allensantillianhalo,             &
-                          pot_model_plummer_force   => plummerforce,                    &
-                          pot_model_plummer_phi     => plummerpotential,                &
-                          pot_model_long_murai_bar  => longmuralibar,                   &
-                          pot_nbody_plummers        => NBODYPLUMMERS
+                          grav_cleargravity                                 => cleargravity,                                &
+                          grav_setgravityconstant                           => setgravityconstant,                          &
+                          grav_addgravitycomponent                          => addgravitycomponent,                         &
+                          grav_finalizegravity                              => finalizegravity,                             &
+                          grav_evaluategravityforces                        => evaluategravityforces,                       &
+                          grav_evaluategravitypotential                     => evaluategravitypotential,                    &
+                          grav_gravity_g                                    => GRAVITY_G,                                   &
+                          pot_nbody_plummers                                => NBODYPLUMMERS
     use perturbers, ONLY: pert_init          => perturberinitialization, &
                           pert_deallocate    => perturberdeallocation,   &
                           pert_find_time_idx => findperturbertimeindex,  &
@@ -42,6 +39,7 @@ MODULE simulator
     IMPLICIT NONE
     PRIVATE 
     ! DECLARE SUBROUTINES
+    PUBLIC :: setgravityconstant, cleargravitycomponents, addgravitycomponent, finalizegravity
     PUBLIC :: setstaticgalaxy, setintegrationparameters, setinitialkinematics
     PUBLIC :: setdebugaccelerations, setdebugbarorientation, setbackwardorbit
     PUBLIC :: inithostkinematics, inithostmass, inithostradius
@@ -82,9 +80,9 @@ MODULE simulator
     ! DECLARE MODULE WIDE VARIABLES
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
     REAL*8,DIMENSION(:),ALLOCATABLE,PUBLIC :: xf,yf,zf,vxf,vyf,vzf,tesc,nbodyparams
-    procedure(), pointer,public :: milkywaypotential
+    procedure(), pointer,public :: staticgravitationalforce
+    procedure(), pointer,public :: staticgravitationalpotential
     REAL*8, PRIVATE :: G = -1d0 ! set negative to catch bugs when not set
-    REAL*8,DIMENSION(:),PUBLIC,allocatable :: milkwayparams
     REAL*8, PUBLIC :: currenttime,dt
     INTEGER, PUBLIC :: ntimesteps,ntimepoints,nparticles,nwriteskip
     INTEGER, PUBLIC :: INTEGRATIONMETHOD = 0 ! 0=leapfrog, 1=forest_ruth
@@ -100,58 +98,53 @@ MODULE simulator
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: phiNBODY
     REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: phiTensor
     contains 
+    SUBROUTINE setgravityconstant(Gin)
+        REAL*8, INTENT(IN) :: Gin
+        CALL grav_setgravityconstant(Gin)
+        G = grav_gravity_g
+    END SUBROUTINE setgravityconstant
+
+    SUBROUTINE cleargravitycomponents()
+        CALL grav_cleargravity()
+        GALAXYISSET = .FALSE.
+        G = -1.0D0
+        NULLIFY(staticgravitationalforce)
+        NULLIFY(staticgravitationalpotential)
+    END SUBROUTINE cleargravitycomponents
+
+    SUBROUTINE addgravitycomponent(modelname, params)
+        CHARACTER(LEN=*), INTENT(IN) :: modelname
+        REAL*8, DIMENSION(:), INTENT(IN) :: params
+        CALL grav_addgravitycomponent(modelname, params, SIZE(params))
+    END SUBROUTINE addgravitycomponent
+
+    SUBROUTINE finalizegravity()
+        CALL grav_finalizegravity()
+        IF (.NOT. ASSOCIATED(staticgravitationalforce)) THEN
+            staticgravitationalforce => grav_evaluategravityforces
+        END IF
+        IF (.NOT. ASSOCIATED(staticgravitationalpotential)) THEN
+            staticgravitationalpotential => grav_evaluategravitypotential
+        END IF
+        G = grav_gravity_g
+        GALAXYISSET = .TRUE.
+    END SUBROUTINE finalizegravity
+
     SUBROUTINE setstaticgalaxy(milkywaypotentialname,mwparams)
-        !! decide which potential we are going to integrate in
-        !! more error checking will be done at the python level
-        !! For all of these, G is assumed to be the first parameter
-        character*100, intent(in) :: milkywaypotentialname
-        REAL*8, DIMENSION(:), intent(in) :: mwparams
-        INTEGER :: nparams
-        if (milkywaypotentialname.EQ."pouliasis2017pii") then
-            milkywaypotential => pot_model_pouliasis2017
-        else if (milkywaypotentialname.EQ."miyamotonagai") then
-            milkywaypotential => pot_model_miyamoto_nagai
-        else if (milkywaypotentialname.EQ."allensantillianhalo") then
-            milkywaypotential => pot_model_allen_santillan
-        else if (milkywaypotentialname.EQ."plummer") then
-            milkywaypotential => plummerdispatch
-        else if (milkywaypotentialname.EQ."longmuralibar") then
-            milkywaypotential => pot_model_long_murai_bar
-        else if (milkywaypotentialname.EQ."exponential_oblate_halo") then 
-            milkywaypotential => pot_model_exp_oblate_halo
-        else if (milkywaypotentialname.EQ."ibata2024halo") then 
-            milkywaypotential => pot_model_ibata2024halo
-        else if (milkywaypotentialname.EQ."composite_basis") then
-            milkywaypotential => pot_model_axisymmetric_composite_basis
-        else
-            print*, "ERROR. milkywaypotential not found"
-            print*, "the string must be a valid potential name from potentials.f90"
-            stop
-        end if
-        nparams = size(mwparams)
-        allocate(milkwayparams(nparams))
-        milkwayparams = mwparams
-        GALAXYISSET=.TRUE.
-        G = mwparams(1) ! the gravitational constant is now set
-    
+        ! Legacy wrapper. Expects mwparams = [G, model_params...].
+        CHARACTER*100, INTENT(IN) :: milkywaypotentialname
+        REAL*8, DIMENSION(:), INTENT(IN) :: mwparams
+
+        IF (SIZE(mwparams) < 2) THEN
+            PRINT*, "ERROR: setstaticgalaxy requires [G, model_params...]"
+            STOP
+        END IF
+
+        CALL cleargravitycomponents()
+        CALL setgravityconstant(mwparams(1))
+        CALL addgravitycomponent(TRIM(milkywaypotentialname), mwparams(2:))
+        CALL finalizegravity()
     END SUBROUTINE setstaticgalaxy
-
-    SUBROUTINE plummerdispatch(params, N, x, y, z, ax, ay, az, phi)
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN), DIMENSION(*) :: params
-        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az, phi
-        REAL*8, DIMENSION(2) :: p2
-        REAL*8, DIMENSION(N,3) :: force
-
-        p2 = [params(1), params(2)]
-        CALL pot_model_plummer_force(p2, N, x, y, z, force)
-        CALL pot_model_plummer_phi(p2, N, x, y, z, phi)
-        ax = force(:,1)
-        ay = force(:,2)
-        az = force(:,3)
-    END SUBROUTINE plummerdispatch
 
     ! SUBROUTINES FOR MANUALLY SETTING THE BASIS EXPANSION PARAMS
     SUBROUTINE clearaxisymmetricbasisexpansion()
@@ -954,17 +947,18 @@ MODULE simulator
         phiNBODY=0.0
         
         if (GALAXYISSET) then
-            call milkywaypotential(milkwayparams,nparticles,x,y,z,axSG,aySG,azSG,phiSG)
+            call staticgravitationalforce(nparticles,x,y,z,axSG,aySG,azSG)
+            call staticgravitationalpotential(nparticles,x,y,z,phiSG)
         end if
 
         if (DOHOSTPERTURBER) then
             CALL host_find_time_idx(currenttime)
-            call host_compute_force(nparticles,G,x,y,z,axHP,ayHP,azHP,phiHP)
+            call host_compute_force(nparticles,x,y,z,axHP,ayHP,azHP,phiHP)
         end if
 
         if (DOPERTURBERS) then
             call pert_find_time_idx(currenttime)
-            call pert_compute_force(nparticles,G,x,y,z,axP,ayP,azP,phiP)
+            call pert_compute_force(nparticles,x,y,z,axP,ayP,azP,phiP)
         end if
 
         if (DONBODY) then
@@ -1032,9 +1026,9 @@ MODULE simulator
             INTEGRATIONPARAMETERSSET = .FALSE.
         end if 
         IF (GALAXYISSET) then
-            DEALLOCATE(milkwayparams)
             GALAXYISSET = .FALSE.
-        END IF 
+        END IF
+        CALL cleargravitycomponents()
         
         if (DOHOSTPERTURBER) then
             CALL host_deallocate_mod

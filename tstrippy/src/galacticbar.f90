@@ -29,8 +29,8 @@ MODULE galacticbar
         REAL*8, dimension(:), intent(in) :: barpolycoeff
         INTEGER :: npotentialparameters, npolycoeffs
         IF (barpotentialname.EQ."longmuralibar") then 
-            barpotential => longmuralibar
-            npotentialparameters = 5
+            barpotential => longmuralibarforce
+            npotentialparameters = 4
             ! make sure that the number of parameters is correct
             IF (size(barpotenparams).NE.npotentialparameters) then
                 WRITE(*,*) "ERROR: INCORRECT NUMBER OF PARAMETERS FOR LONGMURALIBAR"

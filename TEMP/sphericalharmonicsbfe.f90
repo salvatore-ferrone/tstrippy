@@ -147,6 +147,26 @@ CONTAINS
         BASIS_PHI_L_COMPONENT_GRID(:,:,icomp) = BASIS_PHI_L_GRID(:,:)
     END SUBROUTINE storesphericalharmoniccomponentphi
 
+    SUBROUTINE loadsphericalharmoniccomponentphi(icomp)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: icomp
+
+        IF (.NOT. BASIS_GRID_SET) THEN
+            WRITE(*,'(A)') "WARNING: loadsphericalharmoniccomponentphi: call initsphericalharmonicbasis first"
+            RETURN
+        END IF
+        IF (.NOT. ALLOCATED(BASIS_PHI_L_COMPONENT_GRID)) THEN
+            WRITE(*,'(A)') "WARNING: loadsphericalharmoniccomponentphi: call initsphericalharmoniccomponentphi first"
+            RETURN
+        END IF
+        IF (icomp < 1 .OR. icomp > BASIS_NCOMP) THEN
+            WRITE(*,'(A)') "WARNING: loadsphericalharmoniccomponentphi: component index out of range"
+            RETURN
+        END IF
+
+        BASIS_PHI_L_GRID(:,:) = BASIS_PHI_L_COMPONENT_GRID(:,:,icomp)
+    END SUBROUTINE loadsphericalharmoniccomponentphi
+
     SUBROUTINE project_axisym_density_generic(params, density_model)
         ! Generic Legendre projection for any axisymmetric density model.
         IMPLICIT NONE

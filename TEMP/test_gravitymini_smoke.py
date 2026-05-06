@@ -144,3 +144,20 @@ def test_finalize_populates_each_multi_sh_component_slot():
 
     assert np.any(np.abs(slot1) > 0.0)
     assert np.any(np.abs(slot2) > 0.0)
+
+
+def test_load_component_phi_restores_slot_into_active_phi_grid():
+    sh = gravitymini.sphericalharmonicsbfe
+
+    sh.defaultinitsphericalharmonicbasis()
+    sh.initsphericalharmoniccomponentphi(2)
+
+    sh.basis_phi_l_grid[:, :] = 1.25
+    sh.storesphericalharmoniccomponentphi(1)
+    sh.basis_phi_l_grid[:, :] = 2.50
+    sh.storesphericalharmoniccomponentphi(2)
+
+    sh.basis_phi_l_grid[:, :] = -9.0
+    sh.loadsphericalharmoniccomponentphi(2)
+
+    np.testing.assert_allclose(sh.basis_phi_l_grid, sh.basis_phi_l_component_grid[:, :, 1])

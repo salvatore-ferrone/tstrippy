@@ -233,3 +233,42 @@ def test_evaluategravitypotential_before_finalize_autofinalizes_for_analytic():
     # Analytic-only configurations auto-finalize on first evaluate call.
     assert g.gravity_finalized
     assert phi[0] < 0.0
+
+
+# ---------------------------------------------------------------------------
+# Non-analytic lifecycle components
+# ---------------------------------------------------------------------------
+
+def test_exponential_oblate_halo_force_and_potential_are_finite():
+    g = tstrippy.gravity
+    g.addgravitycomponent("exponential_oblate_halo", np.array([1.0e8, 5.0, 0.8]))
+    g.finalizegravity()
+
+    x = np.array([8.0]); y = np.array([0.0]); z = np.array([0.5])
+    ax, ay, az = g.evaluategravityforces(x, y, z)
+    phi = g.evaluategravitypotential(x, y, z)
+
+    assert np.isfinite(ax[0])
+    assert np.isfinite(ay[0])
+    assert np.isfinite(az[0])
+    assert np.isfinite(phi[0])
+
+
+def test_exponential_disk_bessel_phi_even_and_az_odd_in_z():
+    g = tstrippy.gravity
+    g.addgravitycomponent("exponential_disk_bessel", np.array([5.0e8, 3.0, 0.3]))
+    g.finalizegravity()
+
+    x = np.array([8.0, 8.0])
+    y = np.zeros(2)
+    z = np.array([0.4, -0.4])
+
+    ax, ay, az = g.evaluategravityforces(x, y, z)
+    phi = g.evaluategravitypotential(x, y, z)
+
+    assert np.all(np.isfinite(ax))
+    assert np.all(np.isfinite(ay))
+    assert np.all(np.isfinite(az))
+    assert np.all(np.isfinite(phi))
+    assert phi[0] == pytest.approx(phi[1], rel=5e-4, abs=5e-7)
+    assert az[0] == pytest.approx(-az[1], rel=5e-4, abs=5e-7)

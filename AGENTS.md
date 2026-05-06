@@ -20,12 +20,12 @@ Prefer linking to these docs in PR notes and chat summaries instead of duplicati
    - `meson compile -C builddir`
    - `meson install -C builddir`
 4. Quick import check:
-   - `python -c "import tstrippy; print(tstrippy.integrator, tstrippy.potentials, tstrippy.mathutils)"`
+   - `python -c "import tstrippy; print(tstrippy.simulator, tstrippy.gravity, tstrippy.mathutils)"`
 
 If shell activation is uncertain (for example after a fresh terminal/session restore), run through conda explicitly:
 - Build: `conda run -n tstrippy ./build.sh`
 - Tests: `conda run -n tstrippy pytest tests/ -q`
-- Quick import check: `conda run -n tstrippy python -c "import tstrippy; print(tstrippy.integrator, tstrippy.potentials, tstrippy.mathutils)"`
+- Quick import check: `conda run -n tstrippy python -c "import tstrippy; print(tstrippy.simulator, tstrippy.gravity, tstrippy.mathutils)"`
 
 Notes:
 - Keep Python within the supported range in [pyproject.toml](pyproject.toml): >=3.9,<3.12.
@@ -46,10 +46,10 @@ Use these boundaries to avoid mixing concerns:
    - Legendre recursion
    - Bessel utilities
    - interpolation and aliasing helpers
-2. [tstrippy/src/potentials.f90](tstrippy/src/potentials.f90): physical potential model evaluators and model-specific logic
-3. [tstrippy/src/integrator.f90](tstrippy/src/integrator.f90): model dispatch and time integration orchestration
+2. [tstrippy/src/gravity.f90](tstrippy/src/gravity.f90): static gravity lifecycle, model evaluators, and basis infrastructure
+3. [tstrippy/src/simulator.f90](tstrippy/src/simulator.f90): integrator orchestration and coupling to gravity/perturbers
 
-If a new potential or renamed evaluator is added in potentials, verify dispatch wiring in integrator.
+If a new gravity component or renamed evaluator is added in gravity, verify simulator wrapper/dispatch wiring.
 
 ## Active Refactor Focus: Exponential-Disk Bessel
 From [plan.md](plan.md), current focus is separating method from application:
@@ -59,9 +59,9 @@ From [plan.md](plan.md), current focus is separating method from application:
 3. Rename and refactor toward explicit naming like `exponential_disk_bessel_eval_component`.
 4. Update dependent tests/docs/notebooks when names or interfaces change.
 
-When editing both mathutils and potentials in one change:
+When editing both mathutils and gravity in one change:
 1. Keep low-level kernels in mathutils.
-2. Keep density-profile-specific assembly in potentials.
+2. Keep density-profile-specific assembly in gravity.
 3. Rebuild and re-run at least fast tests after each coherent refactor step.
 
 ## Notebook Workflow For Current Phase

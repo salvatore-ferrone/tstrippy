@@ -6,7 +6,9 @@ Date: 2026-05-05
 1. Run environment-safe validation first:
   - `conda run -n tstrippy ./build.sh`
   - `conda run -n tstrippy pytest tests/ -q`
-2. Finish Phase 2f.2 by splitting remaining combined Bessel evaluation usage from force-only and potential-only lifecycle paths.
+2. Implement per-component lifecycle output APIs for Phase 2f.2:
+  - `evaluategravityforcecomponents(N, x, y, z, force_tensor)`
+  - `evaluategravitypotentialcomponents(N, x, y, z, phi_tensor)`
 3. Add spherical-harmonic-focused tests:
   - force-only and potential-only parity checks
   - multi-component lifecycle test that exposes/fixes shared `BASIS_*` state contamination
@@ -373,7 +375,7 @@ These points were verified by reading `potentials.f90`, `integrator.f90`, and by
 
 - [ ] Update tests and package-structure checks to new names
 - [ ] Update docs and notebooks to remove `axisymmetric` public API references
-- [ ] Verify build + full test suite after rename slice
+- [x] Verify build + full test suite after rename slice
 
 ### Phase 2f: Force/Potential API Divorce For Family Evaluators (Next)
 
@@ -391,8 +393,8 @@ These points were verified by reading `potentials.f90`, `integrator.f90`, and by
 
 #### 2f.2: Gravity lifecycle evaluator split completion
 
-- [ ] Ensure `evaluategravityforces` never computes potential temporaries for any component kind.
-- [ ] Ensure `evaluategravitypotential` never computes force temporaries for any component kind.
+- [x] Ensure `evaluategravityforces` never computes potential temporaries for any component kind.
+- [x] Ensure `evaluategravitypotential` never computes force temporaries for any component kind.
 - [ ] Introduce per-component lifecycle outputs:
   - `evaluategravityforcecomponents(N, x, y, z, force_tensor)`
   - `evaluategravitypotentialcomponents(N, x, y, z, phi_tensor)`

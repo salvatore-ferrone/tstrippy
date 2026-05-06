@@ -116,3 +116,15 @@ def test_finalize_initializes_component_phi_storage_for_multi_sh():
     assert int(g.gravity_ncomp) == 2
     assert int(sh.basis_ncomp) == 2
     assert sh.basis_phi_l_component_grid.shape[2] == 2
+
+
+def test_store_component_phi_copies_active_phi_table():
+    sh = gravitymini.sphericalharmonicsbfe
+
+    sh.defaultinitsphericalharmonicbasis()
+    sh.initsphericalharmoniccomponentphi(2)
+
+    sh.basis_phi_l_grid[:, :] = 3.25
+    sh.storesphericalharmoniccomponentphi(2)
+
+    np.testing.assert_allclose(sh.basis_phi_l_component_grid[:, :, 1], sh.basis_phi_l_grid)

@@ -23,18 +23,6 @@ conda run -n "${ENV_NAME}" python -m numpy.f2py -c \
     mathutils.f90 \
     sphericalharmonicsbfe.f90 \
     gravity.f90 \
-    -m gravitymini \
-    only: \
-    cleargravity \
-    setgravityconstant \
-    addgravitycomponent \
-    finalizegravity \
-    evaluategravityforcecomponents \
-    evaluategravityforces \
-    evaluategravitypotential \
-    ibata2024halo_density \
-    initsphericalharmonicbasis \
-    clearsphericalharmonicbasis \
-    :
+    -m gravitymini
 
 echo "Build complete: gravitymini module generated in $(pwd)."

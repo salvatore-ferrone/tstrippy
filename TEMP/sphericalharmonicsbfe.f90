@@ -102,7 +102,7 @@ CONTAINS
         CALL initsphericalharmonicbasis(default_lmax, default_nr, r_grid)
     END SUBROUTINE defaultinitsphericalharmonicbasis
 
-    SUBROUTINE project_axisymmetric_density_generic(params, density_model)
+    SUBROUTINE project_axisym_density_generic(params, density_model)
         ! Generic Legendre projection for any axisymmetric density model.
         IMPLICIT NONE
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -113,7 +113,7 @@ CONTAINS
         REAL*8 :: x1(1), y1(1), z1(1), rho1(1), r, rcyl
 
         IF (.NOT. BASIS_GRID_SET) THEN
-            WRITE(*,'(A)') "WARNING: project_axisymmetric_density_generic: call initsphericalharmonicbasis first"
+            WRITE(*,'(A)') "WARNING: project_axisym_density_generic: call initsphericalharmonicbasis first"
             RETURN
         END IF
 
@@ -141,7 +141,7 @@ CONTAINS
         END DO
 
         DEALLOCATE(mu_q, w_q, p)
-    END SUBROUTINE project_axisymmetric_density_generic
+    END SUBROUTINE project_axisym_density_generic
 
     SUBROUTINE compute_phi_tables_from_rho()
         IMPLICIT NONE

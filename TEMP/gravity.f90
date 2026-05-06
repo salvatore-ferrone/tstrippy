@@ -4,7 +4,7 @@ MODULE gravity
                                      sh_clear_basis => clearsphericalharmonicbasis, &
                                      sh_init_basis => initsphericalharmonicbasis, &
                                      sh_default_init_basis => defaultinitsphericalharmonicbasis, &
-                                     sh_project_density => project_axisymmetric_density_generic, &
+                                     sh_project_density => project_axisym_density_generic, &
                                      sh_compute_phi_tables => compute_phi_tables_from_rho, &
                                      sh_eval_force => sphericalharmonicbasisforce, &
                                      sh_eval_potential => sphericalharmonicbasispotential

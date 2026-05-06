@@ -161,3 +161,23 @@ def test_load_component_phi_restores_slot_into_active_phi_grid():
     sh.loadsphericalharmoniccomponentphi(2)
 
     np.testing.assert_allclose(sh.basis_phi_l_grid, sh.basis_phi_l_component_grid[:, :, 1])
+
+
+def test_multi_sh_potential_reads_from_stored_component_slots():
+    g = gravitymini.gravity
+    sh = gravitymini.sphericalharmonicsbfe
+
+    g.cleargravity()
+    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.addgravitycomponent("exponentialoblatehalo", [1.0, 1.0, 1.0])
+    g.finalizegravity()
+
+    x = np.array([1.0, 2.0, 3.0], dtype=float)
+    y = np.array([0.0, 0.1, 0.0], dtype=float)
+    z = np.array([0.2, 0.0, -0.3], dtype=float)
+
+    phi_before = g.evaluategravitypotential(x, y, z)
+    sh.basis_phi_l_component_grid[:, :, 0] = 0.0
+    phi_after = g.evaluategravitypotential(x, y, z)
+
+    assert not np.allclose(phi_before, phi_after, rtol=1e-12, atol=1e-12)

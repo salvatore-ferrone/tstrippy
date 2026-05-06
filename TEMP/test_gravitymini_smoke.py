@@ -91,3 +91,14 @@ def test_ibata_total_potential_api_runs():
 
     assert np.all(np.isfinite(phi))
     assert np.any(np.abs(phi) > 0.0)
+
+
+def test_finalize_precomputes_sh_for_single_component():
+    g = gravitymini.gravity
+    sh = gravitymini.sphericalharmonicsbfe
+
+    g.cleargravity()
+    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.finalizegravity()
+
+    assert bool(sh.basis_expansion_initialized)

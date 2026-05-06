@@ -117,17 +117,37 @@ CONTAINS
 
     SUBROUTINE finalizegravity()
         IMPLICIT NONE
-        INTEGER :: i
+        INTEGER :: i, n_sh, i_sh
         IF (GRAVITY_NCOMP < 1) THEN
             WRITE(*,'(A)') "WARNING: finalizegravity: no components registered"
             RETURN
         END IF
+
+        n_sh = 0
+        i_sh = 0
         DO i = 1, GRAVITY_NCOMP
             IF (GRAVITY_KIND(i) == GRAVITY_KIND_NONE) THEN
                 WRITE(*,'(A)') "WARNING: finalizegravity: component slot is uninitialized"
                 RETURN
             END IF
+            IF (GRAVITY_KIND(i) == GRAVITY_KIND_EXPONENTIALOBLATEHALO .OR. &
+                GRAVITY_KIND(i) == GRAVITY_KIND_IBATA2024HALO) THEN
+                n_sh = n_sh + 1
+                i_sh = i
+            END IF
         END DO
+
+        ! Microstep: eager SH table build in finalize for the single-SH-component case.
+        IF (n_sh == 1) THEN
+            IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
+            SELECT CASE (GRAVITY_KIND(i_sh))
+            CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
+                CALL sh_project_density(GRAVITY_PARAMS(1:3, i_sh), exponentialoblatehalo_density)
+            CASE (GRAVITY_KIND_IBATA2024HALO)
+                CALL sh_project_density(GRAVITY_PARAMS(1:6, i_sh), ibata2024halo_density)
+            END SELECT
+            CALL sh_compute_phi_tables()
+        END IF
         GRAVITY_FINALIZED = .TRUE.
     END SUBROUTINE finalizegravity
 

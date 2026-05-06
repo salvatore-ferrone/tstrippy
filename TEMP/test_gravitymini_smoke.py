@@ -102,3 +102,17 @@ def test_finalize_precomputes_sh_for_single_component():
     g.finalizegravity()
 
     assert bool(sh.basis_expansion_initialized)
+
+
+def test_finalize_initializes_component_phi_storage_for_multi_sh():
+    g = gravitymini.gravity
+    sh = gravitymini.sphericalharmonicsbfe
+
+    g.cleargravity()
+    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.addgravitycomponent("exponentialoblatehalo", [1.0, 1.0, 1.0])
+    g.finalizegravity()
+
+    assert int(g.gravity_ncomp) == 2
+    assert int(sh.basis_ncomp) == 2
+    assert sh.basis_phi_l_component_grid.shape[2] == 2

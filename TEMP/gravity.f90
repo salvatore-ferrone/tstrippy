@@ -4,6 +4,7 @@ MODULE gravity
                                      sh_clear_basis => clearsphericalharmonicbasis, &
                                      sh_init_basis => initsphericalharmonicbasis, &
                                      sh_default_init_basis => defaultinitsphericalharmonicbasis, &
+                                     sh_init_component_phi => initsphericalharmoniccomponentphi, &
                                      sh_project_density => project_axisym_density_generic, &
                                      sh_compute_phi_tables => compute_phi_tables_from_rho, &
                                      sh_eval_force => sphericalharmonicbasisforce, &
@@ -148,6 +149,9 @@ CONTAINS
                 CALL sh_project_density(GRAVITY_PARAMS(1:6, i_sh), ibata2024halo_density)
             END SELECT
             CALL sh_compute_phi_tables()
+        ELSE IF (n_sh > 1) THEN
+            IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
+            CALL sh_init_component_phi(n_sh)
         END IF
         GRAVITY_FINALIZED = .TRUE.
     END SUBROUTINE finalizegravity

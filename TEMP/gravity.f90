@@ -18,6 +18,7 @@ MODULE gravity
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_PLUMMER = 10
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_HERNQUIST = 11
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_EXPONENTIALOBLATEHALO = 20
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_IBATA2024HALO = 21
 
     REAL*8, PUBLIC :: GRAVITY_G = GRAVITY_G_DEFAULT
     LOGICAL, PUBLIC :: GRAVITY_G_IS_DEFAULT = .TRUE.
@@ -25,6 +26,8 @@ MODULE gravity
     INTEGER, PUBLIC :: GRAVITY_NCOMP = 0
     INTEGER, DIMENSION(GRAVITY_MAX_NCOMP), PUBLIC :: GRAVITY_KIND = 0
     REAL*8, DIMENSION(GRAVITY_MAX_PARAMS, GRAVITY_MAX_NCOMP), PUBLIC :: GRAVITY_PARAMS = 0.0D0
+
+    PUBLIC :: ibata2024halo_density
 
 CONTAINS
 
@@ -94,6 +97,9 @@ CONTAINS
         CASE ("exponentialoblatehalo")
             kind_code = GRAVITY_KIND_EXPONENTIALOBLATEHALO
             required_params = 3
+        CASE ("ibata2024halo")
+            kind_code = GRAVITY_KIND_IBATA2024HALO
+            required_params = 6
         CASE DEFAULT
             WRITE(*,'(A)') "WARNING: addgravitycomponent: unknown model_name"
             RETURN
@@ -214,7 +220,6 @@ CONTAINS
     END SUBROUTINE evaluategravityforces
 
     SUBROUTINE evaluategravitypotential(n, x, y, z, phi)
-        IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
@@ -317,6 +322,10 @@ CONTAINS
         phi = -GRAVITY_G*m / (r + a)
     END SUBROUTINE hernquist_potential
 
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !!!! DENSITY ONLY PROFILES !!!!
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
     SUBROUTINE exponentialoblatehalo_density(params, n, x, y, z, rho)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
@@ -334,5 +343,29 @@ CONTAINS
         s = SQRT(r2 + (z/q)**2)
         rho = rho0 * EXP(-(1.0D0/s0) * s)
     END SUBROUTINE exponentialoblatehalo_density
+
+    SUBROUTINE ibata2024halo_density(params, n, x, y, z, rho)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN),  DIMENSION(:) :: params
+        REAL*8, INTENT(IN),  DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n) :: rho
+        REAL*8 :: rho0, r0, rt, q, gamma, beta
+        REAL*8, DIMENSION(n) :: r2, s, s_safe
+        REAL*8, PARAMETER :: eps = 1.0D-30
+
+        rho0  = params(1)
+        r0    = params(2)
+        rt    = params(3)
+        q     = params(4)
+        gamma = params(5)
+        beta  = params(6)
+
+        r2 = x**2 + y**2
+        s = SQRT(r2 + (z/q)**2)
+        s_safe = MAX(s, eps)
+
+        rho = rho0 * (s_safe/r0)**(-gamma) * (1.0D0 + s_safe/r0)**(gamma-beta) * EXP(-(s_safe/rt)**2)
+    END SUBROUTINE ibata2024halo_density    
 
 END MODULE gravity

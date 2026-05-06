@@ -32,6 +32,7 @@ conda run -n "${ENV_NAME}" python -m numpy.f2py -c \
     evaluategravityforcecomponents \
     evaluategravityforces \
     evaluategravitypotential \
+    ibata2024halo_density \
     initsphericalharmonicbasis \
     clearsphericalharmonicbasis \
     :

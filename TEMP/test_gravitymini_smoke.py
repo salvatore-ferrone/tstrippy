@@ -2,6 +2,11 @@ import numpy as np
 import gravitymini
 
 
+def test_ibata_density_is_exposed():
+    g = gravitymini.gravity
+    assert hasattr(g, "ibata2024halo_density")
+
+
 def _reset_with_single_plummer():
     g = gravitymini.gravity
     g.cleargravity()
@@ -38,3 +43,17 @@ def test_component_sum_matches_total_force():
     np.testing.assert_allclose(ax_comp[:ncomp, :].sum(axis=0), ax, rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(ay_comp[:ncomp, :].sum(axis=0), ay, rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(az_comp[:ncomp, :].sum(axis=0), az, rtol=1e-12, atol=1e-12)
+
+
+def test_ibata2024halo():
+    g = gravitymini.gravity
+
+    x = np.array([1.0, 2.0, 3.0], dtype=float)
+    y = np.array([0.0, 0.0, 0.0], dtype=float)
+    z = np.array([0.0, 0.0, 0.0], dtype=float)
+
+
+    params = [1, 1, 100, .8, 1.4, 3.0]
+    den = g.ibata2024halo_density(params,x,y,z)
+    
+    assert np.all(den) > 0 

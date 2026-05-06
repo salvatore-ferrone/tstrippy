@@ -117,8 +117,6 @@ MODULE gravity
     PRIVATE :: sphericalharmonicbasisforce_component
     PRIVATE :: sphericalharmonicbasispotential_component
     PRIVATE :: bessel_eval_component
-    PRIVATE :: exponential_disk_besselforce_component
-    PRIVATE :: exponential_disk_besselpotential_component
     PRIVATE :: exponential_disk_bessel_eval_component
     PRIVATE :: build_exponential_disk_table
     PRIVATE :: disk_table_eval_component
@@ -267,7 +265,7 @@ MODULE gravity
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az
-        REAL*8, DIMENSION(N) :: ax_c, ay_c, az_c
+        REAL*8, DIMENSION(N) :: ax_c, ay_c, az_c, phi_c
         REAL*8, DIMENSION(N,3) :: force_c
         REAL*8, DIMENSION(2) :: p2
         REAL*8, DIMENSION(3) :: p3
@@ -349,7 +347,7 @@ MODULE gravity
                 force_c(:,3) = az_c
             CASE (GRAVITY_KIND_EXPONENTIAL_DISK_BESSEL)
                 p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
-                CALL exponential_disk_besselforce_component(p3, N, x, y, z, ax_c, ay_c, az_c)
+                CALL exponential_disk_bessel_eval_component(p3, N, x, y, z, ax_c, ay_c, az_c, phi_c)
                 force_c(:,1) = ax_c
                 force_c(:,2) = ay_c
                 force_c(:,3) = az_c
@@ -371,6 +369,7 @@ MODULE gravity
         REAL*8, INTENT(IN),  DIMENSION(N) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(N) :: phi
         REAL*8, DIMENSION(N) :: phi_c
+        REAL*8, DIMENSION(N) :: ax_tmp, ay_tmp, az_tmp
         REAL*8, DIMENSION(2) :: p2
         REAL*8, DIMENSION(3) :: p3
         REAL*8, DIMENSION(4) :: p4
@@ -445,7 +444,7 @@ MODULE gravity
                 CALL sphericalharmonicbasispotential(N, x, y, z, phi_c)
             CASE (GRAVITY_KIND_EXPONENTIAL_DISK_BESSEL)
                 p3 = [GRAVITY_PARAMS(1,i), GRAVITY_PARAMS(2,i), GRAVITY_PARAMS(3,i)]
-                CALL exponential_disk_besselpotential_component(p3, N, x, y, z, phi_c)
+                CALL exponential_disk_bessel_eval_component(p3, N, x, y, z, ax_tmp, ay_tmp, az_tmp, phi_c)
             CASE DEFAULT
                 WRITE(*,'(A)') "WARNING: evaluategravitypotential: unknown component kind"
             END SELECT
@@ -1236,125 +1235,6 @@ MODULE gravity
     ! =======================================================================
     ! =======================================================================
     ! =======================================================================
-
-    SUBROUTINE exponential_disk_besselforce_component(params, N, x, y, z, ax, ay, az)
-        ! Force-only exponential-disk Bessel evaluator.
-        IMPLICIT NONE
-        REAL*8, INTENT(IN), DIMENSION(*) :: params
-        INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(OUT), DIMENSION(N) :: ax, ay, az
-        INTEGER, PARAMETER :: nk = 256
-        REAL*8, PARAMETER :: pi = 3.14159265358979323846D0
-        REAL*8, PARAMETER :: eps = 1.0D-16
-        INTEGER :: i, j
-        REAL*8 :: R, absz, signz, aR, A
-        REAL*8 :: sigma0, hR, hZ
-        REAL*8 :: sum_ar, sum_az
-        REAL*8 :: kernel, j0, j1
-        REAL*8 :: kval, t, mu
-        REAL*8, DIMENSION(nk) :: k_grid, quad_w, base_kernel, mu_q, w_q
-
-        sigma0 = params(1)
-        hR = params(2)
-        hZ = params(3)
-
-        A = 2.0D0 * pi * GRAVITY_G * sigma0 * hR * hR
-
-        CALL gauss_legendre_nodes_weights(nk, mu_q, w_q)
-        DO j = 1, nk
-            mu = mu_q(j)
-            t = 0.5D0 * (mu + 1.0D0)
-            kval = t / MAX(1.0D0 - t, 1.0D-14)
-            k_grid(j) = kval
-            quad_w(j) = 0.5D0 * w_q(j) / MAX((1.0D0 - t)**2, 1.0D-14)
-            base_kernel(j) = 1.0D0 / ( (1.0D0 + (kval*hR)**2)**1.5D0 * (1.0D0 + kval*hZ) )
-        END DO
-
-        DO i = 1, N
-            R = SQRT(x(i)**2 + y(i)**2)
-            absz = ABS(z(i))
-            IF (z(i) > 0.0D0) THEN
-                signz = 1.0D0
-            ELSE IF (z(i) < 0.0D0) THEN
-                signz = -1.0D0
-            ELSE
-                signz = 0.0D0
-            END IF
-
-            sum_ar = 0.0D0
-            sum_az = 0.0D0
-            DO j = 1, nk
-                kval = k_grid(j)
-                kernel = EXP(-kval * absz) * base_kernel(j)
-                j0 = bessel_j0_scalar(kval * R)
-                j1 = bessel_j1_scalar(kval * R)
-
-                sum_ar = sum_ar + quad_w(j) * kval * j1 * kernel
-                sum_az = sum_az + quad_w(j) * kval * j0 * kernel
-            END DO
-
-            aR = -A * sum_ar
-            az(i) = -A * signz * sum_az
-
-            IF (R > eps) THEN
-                ax(i) = aR * x(i) / R
-                ay(i) = aR * y(i) / R
-            ELSE
-                ax(i) = 0.0D0
-                ay(i) = 0.0D0
-            END IF
-        END DO
-    END SUBROUTINE exponential_disk_besselforce_component
-
-    SUBROUTINE exponential_disk_besselpotential_component(params, N, x, y, z, phi)
-        ! Potential-only exponential-disk Bessel evaluator.
-        IMPLICIT NONE
-        REAL*8, INTENT(IN), DIMENSION(*) :: params
-        INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(OUT), DIMENSION(N) :: phi
-        INTEGER, PARAMETER :: nk = 256
-        REAL*8, PARAMETER :: pi = 3.14159265358979323846D0
-        INTEGER :: i, j
-        REAL*8 :: R, absz, A
-        REAL*8 :: sigma0, hR, hZ
-        REAL*8 :: sum_phi
-        REAL*8 :: kernel, j0
-        REAL*8 :: kval, t, mu
-        REAL*8, DIMENSION(nk) :: k_grid, quad_w, base_kernel, mu_q, w_q
-
-        sigma0 = params(1)
-        hR = params(2)
-        hZ = params(3)
-
-        A = 2.0D0 * pi * GRAVITY_G * sigma0 * hR * hR
-
-        CALL gauss_legendre_nodes_weights(nk, mu_q, w_q)
-        DO j = 1, nk
-            mu = mu_q(j)
-            t = 0.5D0 * (mu + 1.0D0)
-            kval = t / MAX(1.0D0 - t, 1.0D-14)
-            k_grid(j) = kval
-            quad_w(j) = 0.5D0 * w_q(j) / MAX((1.0D0 - t)**2, 1.0D-14)
-            base_kernel(j) = 1.0D0 / ( (1.0D0 + (kval*hR)**2)**1.5D0 * (1.0D0 + kval*hZ) )
-        END DO
-
-        DO i = 1, N
-            R = SQRT(x(i)**2 + y(i)**2)
-            absz = ABS(z(i))
-
-            sum_phi = 0.0D0
-            DO j = 1, nk
-                kval = k_grid(j)
-                kernel = EXP(-kval * absz) * base_kernel(j)
-                j0 = bessel_j0_scalar(kval * R)
-                sum_phi = sum_phi + quad_w(j) * j0 * kernel
-            END DO
-
-            phi(i) = -A * sum_phi
-        END DO
-    END SUBROUTINE exponential_disk_besselpotential_component
 
     SUBROUTINE exponential_disk_bessel_eval_component(params, N, x, y, z, ax, ay, az, phi)
         ! Exponential-disk application of the generic Bessel/Poisson method.

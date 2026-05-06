@@ -82,6 +82,7 @@ mathutils_build = custom_target('mathutils',
 
 gravity_sources = [
     'tstrippy/src/mathutils.f90',
+    'tstrippy/src/sphericalharmonicsBFE.f90',
     'tstrippy/src/gravity.f90'
 ]
 gravity_out = 'gravity' + ext_suffix
@@ -96,9 +97,10 @@ gravity_build = custom_target('gravity',
 )
 
 simulator_sources = [
+    'tstrippy/src/mathutils.f90',
+    'tstrippy/src/sphericalharmonicsBFE.f90',
     'tstrippy/src/gravity.f90',
     'tstrippy/src/perturbers.f90',
-    'tstrippy/src/mathutils.f90',
     'tstrippy/src/hostperturber.f90',
     'tstrippy/src/galacticbar.f90',
     'tstrippy/src/simulator.f90'

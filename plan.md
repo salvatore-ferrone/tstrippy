@@ -32,6 +32,50 @@ The next work is no longer about raw speed rescue. It is now about API cleanup, 
 
 These are now implementation constraints for the refactor.
 
+## Execution Contract Update (2026-05-06)
+
+These points were reconfirmed and should be treated as settled for the next implementation slices.
+
+### Scope for the next slices
+
+- Immediate priority is API consistency + extendability for analytic and BFE models.
+- `density`, `vcirc`, and `vescape` are explicitly deferred.
+- Numerical invariants/conservation checks are post-processing concerns for now (not a gating item for this refactor slice).
+
+### Public UX and lifecycle
+
+- User-facing gravity workflow remains:
+  1. clear/init module state
+  2. add components by `(model_name, params)`
+  3. optional family-level BFE hyperparameter override before finalize
+  4. finalize (eager table build)
+  5. evaluate
+- `gravity` and `simulator` should expose equivalent gravity-facing calls, even though f2py module state is independent.
+- Mutating calls after finalize should warn + no-op (never `STOP` in Python-exposed flows).
+
+### Units policy
+
+- Default unit convention remains `(Msun, km/s, kpc)` via default `GRAVITY_G`.
+- If user overrides `GRAVITY_G`, unit consistency is user responsibility.
+
+### Component semantics
+
+- Component identity is insertion order only (implicit index).
+- Duplicate model names are valid and expected.
+- Composite/preset models should be compatible with the same add-component UX and additive composition semantics.
+
+### Refactor sequence (approved)
+
+- First extract spherical-harmonic infrastructure into its own source module/file.
+- Then extract Bessel infrastructure into its own source module/file.
+- After both extractions, test combined fields that mix spherical-harmonic and Bessel-backed components.
+
+### Open edge-policy item (to lock during implementation)
+
+- Table-bound behavior for BFE lookups:
+  - `R > Rmax`: warn and clamp/extend policy to be finalized in code.
+  - `R < Rmin`: choose between clamp-at-`Rmin` vs local symmetric handling around zero.
+
 ### Lifecycle and naming
 
 - Verb map is standardized:

@@ -171,6 +171,16 @@ CONTAINS
                 ax_comp(i,:) = ax_c
                 ay_comp(i,:) = ay_c
                 az_comp(i,:) = az_c
+            CASE (GRAVITY_KIND_IBATA2024HALO)
+                IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
+                    CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
+                    CALL sh_compute_phi_tables()
+                END IF
+                CALL sh_eval_force(n, x, y, z, ax_c, ay_c, az_c)
+                ax_comp(i,:) = ax_c
+                ay_comp(i,:) = ay_c
+                az_comp(i,:) = az_c
             END SELECT
         END DO
     END SUBROUTINE evaluategravityforcecomponents
@@ -215,6 +225,16 @@ CONTAINS
                 ax = ax + ax_c
                 ay = ay + ay_c
                 az = az + az_c
+            CASE (GRAVITY_KIND_IBATA2024HALO)
+                IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
+                    CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
+                    CALL sh_compute_phi_tables()
+                END IF
+                CALL sh_eval_force(n, x, y, z, ax_c, ay_c, az_c)
+                ax = ax + ax_c
+                ay = ay + ay_c
+                az = az + az_c
             END SELECT
         END DO
     END SUBROUTINE evaluategravityforces
@@ -245,6 +265,14 @@ CONTAINS
                 IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
+                    CALL sh_compute_phi_tables()
+                END IF
+                CALL sh_eval_potential(n, x, y, z, phi_c)
+                phi = phi + phi_c
+            CASE (GRAVITY_KIND_IBATA2024HALO)
+                IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
+                    CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
                     CALL sh_compute_phi_tables()
                 END IF
                 CALL sh_eval_potential(n, x, y, z, phi_c)

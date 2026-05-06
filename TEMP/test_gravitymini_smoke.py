@@ -57,3 +57,37 @@ def test_ibata2024halo():
     den = g.ibata2024halo_density(params,x,y,z)
     
     assert np.all(den) > 0 
+
+
+def test_ibata_component_force_api_runs():
+    g = gravitymini.gravity
+    g.cleargravity()
+    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.finalizegravity()
+
+    x = np.array([1.0, 2.0, 3.0], dtype=float)
+    y = np.array([0.0, 0.1, 0.0], dtype=float)
+    z = np.array([0.2, 0.0, -0.3], dtype=float)
+
+    ax_comp, ay_comp, az_comp = g.evaluategravityforcecomponents(x, y, z)
+
+    assert np.all(np.isfinite(ax_comp[0, :]))
+    assert np.all(np.isfinite(ay_comp[0, :]))
+    assert np.all(np.isfinite(az_comp[0, :]))
+    assert np.any(np.abs(ax_comp[0, :]) > 0.0) or np.any(np.abs(ay_comp[0, :]) > 0.0) or np.any(np.abs(az_comp[0, :]) > 0.0)
+
+
+def test_ibata_total_potential_api_runs():
+    g = gravitymini.gravity
+    g.cleargravity()
+    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.finalizegravity()
+
+    x = np.array([1.0, 2.0, 3.0], dtype=float)
+    y = np.array([0.0, 0.1, 0.0], dtype=float)
+    z = np.array([0.2, 0.0, -0.3], dtype=float)
+
+    phi = g.evaluategravitypotential(x, y, z)
+
+    assert np.all(np.isfinite(phi))
+    assert np.any(np.abs(phi) > 0.0)

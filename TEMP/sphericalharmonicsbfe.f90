@@ -19,11 +19,13 @@ MODULE sphericalharmonicsbfe
     REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: BASIS_RHO_L_GRID
     REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: BASIS_PHI_L_GRID
     REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: BASIS_DPHI_L_DR_GRID
+    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: BASIS_PHI_L_COMPONENT_GRID
 
     LOGICAL, PUBLIC :: BASIS_GRID_SET = .FALSE.
     LOGICAL, PUBLIC :: BASIS_EXPANSION_INITIALIZED = .FALSE.
     INTEGER, PUBLIC :: BASIS_LMAX = -1
     INTEGER, PUBLIC :: BASIS_NR = -1
+    INTEGER, PUBLIC :: BASIS_NCOMP = 0
 
 CONTAINS
 
@@ -46,11 +48,13 @@ CONTAINS
         IF (ALLOCATED(BASIS_RHO_L_GRID)) DEALLOCATE(BASIS_RHO_L_GRID)
         IF (ALLOCATED(BASIS_PHI_L_GRID)) DEALLOCATE(BASIS_PHI_L_GRID)
         IF (ALLOCATED(BASIS_DPHI_L_DR_GRID)) DEALLOCATE(BASIS_DPHI_L_DR_GRID)
+        IF (ALLOCATED(BASIS_PHI_L_COMPONENT_GRID)) DEALLOCATE(BASIS_PHI_L_COMPONENT_GRID)
 
         BASIS_GRID_SET = .FALSE.
         BASIS_EXPANSION_INITIALIZED = .FALSE.
         BASIS_LMAX = -1
         BASIS_NR = -1
+        BASIS_NCOMP = 0
         G_SHBFE = -1.0D0
         SHBFE_G_IS_SET = .FALSE.
     END SUBROUTINE clearsphericalharmonicbasis
@@ -73,6 +77,7 @@ CONTAINS
 
         BASIS_LMAX = lmax
         BASIS_NR = nr
+        BASIS_NCOMP = 0
         BASIS_R_GRID = r_grid
         BASIS_GRID_SET = .TRUE.
         BASIS_EXPANSION_INITIALIZED = .FALSE.
@@ -101,6 +106,26 @@ CONTAINS
 
         CALL initsphericalharmonicbasis(default_lmax, default_nr, r_grid)
     END SUBROUTINE defaultinitsphericalharmonicbasis
+
+    SUBROUTINE initsphericalharmoniccomponentphi(ncomp)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: ncomp
+
+        IF (.NOT. BASIS_GRID_SET) THEN
+            WRITE(*,'(A)') "WARNING: initsphericalharmoniccomponentphi: call initsphericalharmonicbasis first"
+            RETURN
+        END IF
+        IF (ncomp < 1) THEN
+            IF (ALLOCATED(BASIS_PHI_L_COMPONENT_GRID)) DEALLOCATE(BASIS_PHI_L_COMPONENT_GRID)
+            BASIS_NCOMP = 0
+            RETURN
+        END IF
+
+        IF (ALLOCATED(BASIS_PHI_L_COMPONENT_GRID)) DEALLOCATE(BASIS_PHI_L_COMPONENT_GRID)
+        ALLOCATE(BASIS_PHI_L_COMPONENT_GRID(0:BASIS_LMAX, BASIS_NR, ncomp))
+        BASIS_PHI_L_COMPONENT_GRID = 0.0D0
+        BASIS_NCOMP = ncomp
+    END SUBROUTINE initsphericalharmoniccomponentphi
 
     SUBROUTINE project_axisym_density_generic(params, density_model)
         ! Generic Legendre projection for any axisymmetric density model.

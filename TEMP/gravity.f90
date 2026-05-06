@@ -125,6 +125,50 @@ CONTAINS
         GRAVITY_FINALIZED = .TRUE.
     END SUBROUTINE finalizegravity
 
+    SUBROUTINE evaluategravityforcecomponents(n, x, y, z, ax_comp, ay_comp, az_comp)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(16, n) :: ax_comp, ay_comp, az_comp
+        REAL*8, DIMENSION(n,3) :: force_tmp
+        REAL*8, DIMENSION(n) :: ax_c, ay_c, az_c
+        INTEGER :: i
+
+        ax_comp = 0.0D0
+        ay_comp = 0.0D0
+        az_comp = 0.0D0
+
+        IF (.NOT. GRAVITY_FINALIZED) THEN
+            WRITE(*,'(A)') "WARNING: evaluategravityforcecomponents: call finalizegravity first"
+            RETURN
+        END IF
+
+        DO i = 1, GRAVITY_NCOMP
+            SELECT CASE (GRAVITY_KIND(i))
+            CASE (GRAVITY_KIND_PLUMMER)
+                CALL plummer_force(GRAVITY_PARAMS(1:2, i), n, x, y, z, force_tmp)
+                ax_comp(i,:) = force_tmp(:,1)
+                ay_comp(i,:) = force_tmp(:,2)
+                az_comp(i,:) = force_tmp(:,3)
+            CASE (GRAVITY_KIND_HERNQUIST)
+                CALL hernquist_force(GRAVITY_PARAMS(1:2, i), n, x, y, z, force_tmp)
+                ax_comp(i,:) = force_tmp(:,1)
+                ay_comp(i,:) = force_tmp(:,2)
+                az_comp(i,:) = force_tmp(:,3)
+            CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
+                IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
+                    CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
+                    CALL sh_compute_phi_tables()
+                END IF
+                CALL sh_eval_force(n, x, y, z, ax_c, ay_c, az_c)
+                ax_comp(i,:) = ax_c
+                ay_comp(i,:) = ay_c
+                az_comp(i,:) = az_c
+            END SELECT
+        END DO
+    END SUBROUTINE evaluategravityforcecomponents
+
     SUBROUTINE evaluategravityforces(n, x, y, z, ax, ay, az)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n

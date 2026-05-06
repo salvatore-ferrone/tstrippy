@@ -29,6 +29,7 @@ conda run -n "${ENV_NAME}" python -m numpy.f2py -c \
     setgravityconstant \
     addgravitycomponent \
     finalizegravity \
+    evaluategravityforcecomponents \
     evaluategravityforces \
     evaluategravitypotential \
     initsphericalharmonicbasis \

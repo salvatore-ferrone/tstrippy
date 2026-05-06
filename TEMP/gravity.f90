@@ -181,7 +181,7 @@ CONTAINS
         REAL*8, INTENT(OUT), DIMENSION(16, n) :: ax_comp, ay_comp, az_comp
         REAL*8, DIMENSION(n,3) :: force_tmp
         REAL*8, DIMENSION(n) :: ax_c, ay_c, az_c
-        INTEGER :: i, n_sh
+        INTEGER :: i, n_sh, i_sh_slot
 
         ax_comp = 0.0D0
         ay_comp = 0.0D0
@@ -193,6 +193,7 @@ CONTAINS
         END IF
 
         n_sh = count_sh_components()
+        i_sh_slot = 0
 
         DO i = 1, GRAVITY_NCOMP
             SELECT CASE (GRAVITY_KIND(i))
@@ -207,7 +208,10 @@ CONTAINS
                 ay_comp(i,:) = force_tmp(:,2)
                 az_comp(i,:) = force_tmp(:,3)
             CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
-                IF (.NOT. BASIS_EXPANSION_INITIALIZED .OR. n_sh > 1) THEN
+                IF (n_sh > 1) THEN
+                    i_sh_slot = i_sh_slot + 1
+                    CALL sh_load_component_phi(i_sh_slot)
+                ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
                     CALL sh_compute_phi_tables()
@@ -217,7 +221,10 @@ CONTAINS
                 ay_comp(i,:) = ay_c
                 az_comp(i,:) = az_c
             CASE (GRAVITY_KIND_IBATA2024HALO)
-                IF (.NOT. BASIS_EXPANSION_INITIALIZED .OR. n_sh > 1) THEN
+                IF (n_sh > 1) THEN
+                    i_sh_slot = i_sh_slot + 1
+                    CALL sh_load_component_phi(i_sh_slot)
+                ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
                     CALL sh_compute_phi_tables()

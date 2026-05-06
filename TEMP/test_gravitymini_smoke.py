@@ -203,3 +203,25 @@ def test_multi_sh_force_components_read_from_stored_component_slots():
     before = np.concatenate((ax_before, ay_before, az_before), axis=0)
     after = np.concatenate((ax_after, ay_after, az_after), axis=0)
     assert not np.allclose(before, after, rtol=1e-12, atol=1e-12)
+
+
+def test_multi_sh_total_force_reads_from_stored_component_slots():
+    g = gravitymini.gravity
+    sh = gravitymini.sphericalharmonicsbfe
+
+    g.cleargravity()
+    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.addgravitycomponent("exponentialoblatehalo", [1.0, 1.0, 1.0])
+    g.finalizegravity()
+
+    x = np.array([1.0, 2.0, 3.0], dtype=float)
+    y = np.array([0.0, 0.1, 0.0], dtype=float)
+    z = np.array([0.2, 0.0, -0.3], dtype=float)
+
+    ax_before, ay_before, az_before = g.evaluategravityforces(x, y, z)
+    sh.basis_phi_l_component_grid[:, :, 0] = 0.0
+    ax_after, ay_after, az_after = g.evaluategravityforces(x, y, z)
+
+    before = np.concatenate((ax_before, ay_before, az_before), axis=0)
+    after = np.concatenate((ax_after, ay_after, az_after), axis=0)
+    assert not np.allclose(before, after, rtol=1e-12, atol=1e-12)

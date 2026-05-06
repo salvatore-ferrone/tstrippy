@@ -31,7 +31,7 @@ MODULE gravity
     REAL*8, DIMENSION(GRAVITY_MAX_PARAMS, GRAVITY_MAX_NCOMP), PUBLIC :: GRAVITY_PARAMS = 0.0D0
 
     PUBLIC :: ibata2024halo_density
-    PRIVATE :: count_sh_components
+    PRIVATE :: count_sh_components, sh_slot_for_component
 
 CONTAINS
 
@@ -181,7 +181,7 @@ CONTAINS
         REAL*8, INTENT(OUT), DIMENSION(16, n) :: ax_comp, ay_comp, az_comp
         REAL*8, DIMENSION(n,3) :: force_tmp
         REAL*8, DIMENSION(n) :: ax_c, ay_c, az_c
-        INTEGER :: i, n_sh, i_sh_slot
+        INTEGER :: i, n_sh
 
         ax_comp = 0.0D0
         ay_comp = 0.0D0
@@ -193,7 +193,6 @@ CONTAINS
         END IF
 
         n_sh = count_sh_components()
-        i_sh_slot = 0
 
         DO i = 1, GRAVITY_NCOMP
             SELECT CASE (GRAVITY_KIND(i))
@@ -209,8 +208,7 @@ CONTAINS
                 az_comp(i,:) = force_tmp(:,3)
             CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
                 IF (n_sh > 1) THEN
-                    i_sh_slot = i_sh_slot + 1
-                    CALL sh_load_component_phi(i_sh_slot)
+                    CALL sh_load_component_phi(sh_slot_for_component(i))
                 ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
@@ -222,8 +220,7 @@ CONTAINS
                 az_comp(i,:) = az_c
             CASE (GRAVITY_KIND_IBATA2024HALO)
                 IF (n_sh > 1) THEN
-                    i_sh_slot = i_sh_slot + 1
-                    CALL sh_load_component_phi(i_sh_slot)
+                    CALL sh_load_component_phi(sh_slot_for_component(i))
                 ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
@@ -250,6 +247,22 @@ CONTAINS
         END DO
     END FUNCTION count_sh_components
 
+    INTEGER FUNCTION sh_slot_for_component(i_comp)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: i_comp
+        INTEGER :: i
+
+        sh_slot_for_component = 0
+        IF (i_comp < 1 .OR. i_comp > GRAVITY_NCOMP) RETURN
+
+        DO i = 1, i_comp
+            IF (GRAVITY_KIND(i) == GRAVITY_KIND_EXPONENTIALOBLATEHALO .OR. &
+                GRAVITY_KIND(i) == GRAVITY_KIND_IBATA2024HALO) THEN
+                sh_slot_for_component = sh_slot_for_component + 1
+            END IF
+        END DO
+    END FUNCTION sh_slot_for_component
+
     SUBROUTINE evaluategravityforces(n, x, y, z, ax, ay, az)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
@@ -257,7 +270,7 @@ CONTAINS
         REAL*8, INTENT(OUT), DIMENSION(n) :: ax, ay, az
         REAL*8, DIMENSION(n,3) :: force_tmp
         REAL*8, DIMENSION(n) :: ax_c, ay_c, az_c
-        INTEGER :: i, n_sh, i_sh_slot
+        INTEGER :: i, n_sh
 
         ax = 0.0D0
         ay = 0.0D0
@@ -269,7 +282,6 @@ CONTAINS
         END IF
 
         n_sh = count_sh_components()
-        i_sh_slot = 0
 
         DO i = 1, GRAVITY_NCOMP
             SELECT CASE (GRAVITY_KIND(i))
@@ -285,8 +297,7 @@ CONTAINS
                 az = az + force_tmp(:,3)
             CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
                 IF (n_sh > 1) THEN
-                    i_sh_slot = i_sh_slot + 1
-                    CALL sh_load_component_phi(i_sh_slot)
+                    CALL sh_load_component_phi(sh_slot_for_component(i))
                 ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
@@ -298,8 +309,7 @@ CONTAINS
                 az = az + az_c
             CASE (GRAVITY_KIND_IBATA2024HALO)
                 IF (n_sh > 1) THEN
-                    i_sh_slot = i_sh_slot + 1
-                    CALL sh_load_component_phi(i_sh_slot)
+                    CALL sh_load_component_phi(sh_slot_for_component(i))
                 ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
@@ -318,7 +328,7 @@ CONTAINS
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
         REAL*8, DIMENSION(n) :: phi_c
-        INTEGER :: i, n_sh, i_sh_slot
+        INTEGER :: i, n_sh
 
         phi = 0.0D0
 
@@ -328,7 +338,6 @@ CONTAINS
         END IF
 
         n_sh = count_sh_components()
-        i_sh_slot = 0
 
         DO i = 1, GRAVITY_NCOMP
             SELECT CASE (GRAVITY_KIND(i))
@@ -340,8 +349,7 @@ CONTAINS
                 phi = phi + phi_c
             CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
                 IF (n_sh > 1) THEN
-                    i_sh_slot = i_sh_slot + 1
-                    CALL sh_load_component_phi(i_sh_slot)
+                    CALL sh_load_component_phi(sh_slot_for_component(i))
                 ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
@@ -351,8 +359,7 @@ CONTAINS
                 phi = phi + phi_c
             CASE (GRAVITY_KIND_IBATA2024HALO)
                 IF (n_sh > 1) THEN
-                    i_sh_slot = i_sh_slot + 1
-                    CALL sh_load_component_phi(i_sh_slot)
+                    CALL sh_load_component_phi(sh_slot_for_component(i))
                 ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)

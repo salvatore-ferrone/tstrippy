@@ -5,6 +5,7 @@ MODULE gravity
                                      sh_init_basis => initsphericalharmonicbasis, &
                                      sh_default_init_basis => defaultinitsphericalharmonicbasis, &
                                      sh_init_component_phi => initsphericalharmoniccomponentphi, &
+                                     sh_store_component_phi => storesphericalharmoniccomponentphi, &
                                      sh_project_density => project_axisym_density_generic, &
                                      sh_compute_phi_tables => compute_phi_tables_from_rho, &
                                      sh_eval_force => sphericalharmonicbasisforce, &
@@ -119,7 +120,7 @@ CONTAINS
 
     SUBROUTINE finalizegravity()
         IMPLICIT NONE
-        INTEGER :: i, n_sh, i_sh
+        INTEGER :: i, n_sh, i_sh, i_sh_slot
         IF (GRAVITY_NCOMP < 1) THEN
             WRITE(*,'(A)') "WARNING: finalizegravity: no components registered"
             RETURN
@@ -152,6 +153,22 @@ CONTAINS
         ELSE IF (n_sh > 1) THEN
             IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
             CALL sh_init_component_phi(n_sh)
+
+            i_sh_slot = 0
+            DO i = 1, GRAVITY_NCOMP
+                SELECT CASE (GRAVITY_KIND(i))
+                CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
+                    i_sh_slot = i_sh_slot + 1
+                    CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
+                    CALL sh_compute_phi_tables()
+                    CALL sh_store_component_phi(i_sh_slot)
+                CASE (GRAVITY_KIND_IBATA2024HALO)
+                    i_sh_slot = i_sh_slot + 1
+                    CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
+                    CALL sh_compute_phi_tables()
+                    CALL sh_store_component_phi(i_sh_slot)
+                END SELECT
+            END DO
         END IF
         GRAVITY_FINALIZED = .TRUE.
     END SUBROUTINE finalizegravity

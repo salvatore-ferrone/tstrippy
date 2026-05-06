@@ -128,3 +128,19 @@ def test_store_component_phi_copies_active_phi_table():
     sh.storesphericalharmoniccomponentphi(2)
 
     np.testing.assert_allclose(sh.basis_phi_l_component_grid[:, :, 1], sh.basis_phi_l_grid)
+
+
+def test_finalize_populates_each_multi_sh_component_slot():
+    g = gravitymini.gravity
+    sh = gravitymini.sphericalharmonicsbfe
+
+    g.cleargravity()
+    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.addgravitycomponent("exponentialoblatehalo", [1.0, 1.0, 1.0])
+    g.finalizegravity()
+
+    slot1 = sh.basis_phi_l_component_grid[:, :, 0]
+    slot2 = sh.basis_phi_l_component_grid[:, :, 1]
+
+    assert np.any(np.abs(slot1) > 0.0)
+    assert np.any(np.abs(slot2) > 0.0)

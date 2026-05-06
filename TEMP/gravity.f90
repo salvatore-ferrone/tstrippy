@@ -28,6 +28,7 @@ MODULE gravity
     REAL*8, DIMENSION(GRAVITY_MAX_PARAMS, GRAVITY_MAX_NCOMP), PUBLIC :: GRAVITY_PARAMS = 0.0D0
 
     PUBLIC :: ibata2024halo_density
+    PRIVATE :: count_sh_components
 
 CONTAINS
 
@@ -227,7 +228,7 @@ CONTAINS
         REAL*8, INTENT(OUT), DIMENSION(n) :: ax, ay, az
         REAL*8, DIMENSION(n,3) :: force_tmp
         REAL*8, DIMENSION(n) :: ax_c, ay_c, az_c
-        INTEGER :: i
+        INTEGER :: i, n_sh
 
         ax = 0.0D0
         ay = 0.0D0
@@ -237,6 +238,8 @@ CONTAINS
             WRITE(*,'(A)') "WARNING: evaluategravityforces: call finalizegravity first"
             RETURN
         END IF
+
+        n_sh = count_sh_components()
 
         DO i = 1, GRAVITY_NCOMP
             SELECT CASE (GRAVITY_KIND(i))
@@ -251,7 +254,7 @@ CONTAINS
                 ay = ay + force_tmp(:,2)
                 az = az + force_tmp(:,3)
             CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
-                IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                IF (.NOT. BASIS_EXPANSION_INITIALIZED .OR. n_sh > 1) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
                     CALL sh_compute_phi_tables()
@@ -261,7 +264,7 @@ CONTAINS
                 ay = ay + ay_c
                 az = az + az_c
             CASE (GRAVITY_KIND_IBATA2024HALO)
-                IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                IF (.NOT. BASIS_EXPANSION_INITIALIZED .OR. n_sh > 1) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
                     CALL sh_compute_phi_tables()
@@ -279,7 +282,7 @@ CONTAINS
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
         REAL*8, DIMENSION(n) :: phi_c
-        INTEGER :: i
+        INTEGER :: i, n_sh
 
         phi = 0.0D0
 
@@ -287,6 +290,8 @@ CONTAINS
             WRITE(*,'(A)') "WARNING: evaluategravitypotential: call finalizegravity first"
             RETURN
         END IF
+
+        n_sh = count_sh_components()
 
         DO i = 1, GRAVITY_NCOMP
             SELECT CASE (GRAVITY_KIND(i))
@@ -297,7 +302,7 @@ CONTAINS
                 CALL hernquist_potential(GRAVITY_PARAMS(1:2, i), n, x, y, z, phi_c)
                 phi = phi + phi_c
             CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
-                IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                IF (.NOT. BASIS_EXPANSION_INITIALIZED .OR. n_sh > 1) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
                     CALL sh_compute_phi_tables()
@@ -305,7 +310,7 @@ CONTAINS
                 CALL sh_eval_potential(n, x, y, z, phi_c)
                 phi = phi + phi_c
             CASE (GRAVITY_KIND_IBATA2024HALO)
-                IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                IF (.NOT. BASIS_EXPANSION_INITIALIZED .OR. n_sh > 1) THEN
                     IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
                     CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
                     CALL sh_compute_phi_tables()

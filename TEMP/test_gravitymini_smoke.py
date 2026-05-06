@@ -225,3 +225,36 @@ def test_multi_sh_total_force_reads_from_stored_component_slots():
     before = np.concatenate((ax_before, ay_before, az_before), axis=0)
     after = np.concatenate((ax_after, ay_after, az_after), axis=0)
     assert not np.allclose(before, after, rtol=1e-12, atol=1e-12)
+
+
+def test_interleaved_components_preserve_sh_slot_mapping_order():
+    g = gravitymini.gravity
+    sh = gravitymini.sphericalharmonicsbfe
+
+    g.cleargravity()
+    g.addgravitycomponent("plummer", [1.0, 1.0])
+    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.addgravitycomponent("hernquist", [1.0, 1.0])
+    g.addgravitycomponent("exponentialoblatehalo", [1.0, 1.0, 1.0])
+    g.finalizegravity()
+
+    x = np.array([1.0, 2.0, 3.0], dtype=float)
+    y = np.array([0.0, 0.1, 0.0], dtype=float)
+    z = np.array([0.2, 0.0, -0.3], dtype=float)
+
+    phi0 = g.evaluategravitypotential(x, y, z)
+
+    slot1_backup = sh.basis_phi_l_component_grid[:, :, 0].copy()
+    sh.basis_phi_l_component_grid[:, :, 0] = 0.0
+    phi1 = g.evaluategravitypotential(x, y, z)
+    sh.basis_phi_l_component_grid[:, :, 0] = slot1_backup
+
+    assert not np.allclose(phi0, phi1, rtol=1e-12, atol=1e-12)
+
+    slot2_backup = sh.basis_phi_l_component_grid[:, :, 1].copy()
+    sh.basis_phi_l_component_grid[:, :, 1] = 0.0
+    phi2 = g.evaluategravitypotential(x, y, z)
+    sh.basis_phi_l_component_grid[:, :, 1] = slot2_backup
+
+    assert not np.allclose(phi0, phi2, rtol=1e-12, atol=1e-12)
+    assert not np.allclose(phi1, phi2, rtol=1e-12, atol=1e-12)

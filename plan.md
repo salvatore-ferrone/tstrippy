@@ -1,6 +1,24 @@
 # TSTRIPPY Development Plan
 Date: 2026-05-05
 
+## Lunch Checkpoint (2026-05-06)
+
+TEMP microstep status is now stable:
+
+- Code-side f2py wrapper issue fixed by shortening spherical projector name:
+  - `project_axisymmetric_density_generic` -> `project_axisym_density_generic`
+- `gravity.f90` import alias updated to the new projector name.
+- `TEMP/build.sh` now builds without `only:` (full public wrapping path).
+- Validation passed:
+  - `bash build.sh` in `TEMP`
+  - `conda run -n tstrippy pytest -q test_gravitymini_smoke.py` (4 passed)
+
+Immediate next microsteps (keep one change per step):
+
+1. Wire `ibata2024halo` into SH evaluation branches in `evaluategravityforcecomponents`, `evaluategravityforces`, and `evaluategravitypotential`.
+2. Add one reusable TEMP test that evaluates `ibata2024halo` through gravity force API (not just direct density call).
+3. Move SH table construction from evaluate-time to finalize-time in one small slice, then re-test.
+
 ## Next Session Checklist
 
 1. Run environment-safe validation first:

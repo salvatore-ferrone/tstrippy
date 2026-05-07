@@ -11,6 +11,14 @@ MODULE gravity
                                      sh_compute_phi_tables => compute_phi_tables_from_rho, &
                                      sh_eval_force => sphericalharmonicbasisforce, &
                                      sh_eval_potential => sphericalharmonicbasispotential
+    USE besselbfe, ONLY: BESSEL_INITIALIZED, BESSEL_NCOMP, &
+                         bessel_set_g => bessel_set_gravity_constant, &
+                         bessel_default_init => bessel_default_init, &
+                         bessel_init_comp => bessel_init_component_tables, &
+                         bessel_project_density => bessel_project_axisym_density_generic, &
+                         bessel_load_comp => bessel_load_component, &
+                         bessel_eval_force => bessel_eval_force, &
+                         bessel_eval_potential => bessel_eval_potential
     IMPLICIT NONE
 
     REAL*8, PARAMETER, PUBLIC :: GRAVITY_G_DEFAULT = 4.30091727D-6
@@ -19,6 +27,7 @@ MODULE gravity
 
     INTEGER, PARAMETER, PRIVATE :: BACKEND_ANALYTIC = 1
     INTEGER, PARAMETER, PRIVATE :: BACKEND_SH = 2
+    INTEGER, PARAMETER, PRIVATE :: BACKEND_BESSEL = 3
 
     ABSTRACT INTERFACE
         SUBROUTINE force_eval_iface(params, n, x, y, z, force)
@@ -65,10 +74,11 @@ MODULE gravity
     LOGICAL, PRIVATE :: COMPONENT_HANDLERS_INITIALIZED = .FALSE.
 
     PUBLIC :: ibata2024halo_density
-    PRIVATE :: ensure_component_handlers_initialized, register_handler_analytic, register_handler_sh
-    PRIVATE :: handler_index_from_name, component_is_sh
+    PRIVATE :: ensure_component_handlers_initialized, register_handler_analytic, register_handler_sh, register_handler_bessel
+    PRIVATE :: handler_index_from_name, component_is_sh, component_is_bessel
     PRIVATE :: ensure_sh_component_tables_loaded, eval_component_force, eval_component_potential
     PRIVATE :: sh_force_from_tables, sh_potential_from_tables
+    PRIVATE :: bessel_force_wrapper, bessel_potential_wrapper
     PRIVATE :: count_sh_components, sh_slot_for_component
 
 CONTAINS
@@ -92,6 +102,7 @@ CONTAINS
         CALL register_handler_sh("exponentialoblatehalo", 3, &
                                  exponentialoblatehalo_density)
         CALL register_handler_sh("ibata2024halo", 6, ibata2024halo_density)
+        CALL register_handler_bessel("exponential_disk_bessel", 2, exponentialdisk_density)
 
         COMPONENT_HANDLERS_INITIALIZED = .TRUE.
     END SUBROUTINE ensure_component_handlers_initialized
@@ -136,6 +147,26 @@ CONTAINS
         COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%density_proc => density_proc
     END SUBROUTINE register_handler_sh
 
+    SUBROUTINE register_handler_bessel(model_name, nparams, density_proc)
+        IMPLICIT NONE
+        CHARACTER(LEN=*), INTENT(IN) :: model_name
+        INTEGER, INTENT(IN) :: nparams
+        PROCEDURE(density_eval_iface) :: density_proc
+
+        IF (N_COMPONENT_HANDLERS >= MAX_COMPONENT_HANDLERS) THEN
+            WRITE(*,'(A)') "WARNING: register_handler_bessel: exceeded MAX_COMPONENT_HANDLERS"
+            RETURN
+        END IF
+
+        N_COMPONENT_HANDLERS = N_COMPONENT_HANDLERS + 1
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%model_name = model_name
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%nparams = nparams
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%backend = BACKEND_BESSEL
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%force_proc => bessel_force_wrapper
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%potential_proc => bessel_potential_wrapper
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%density_proc => density_proc
+    END SUBROUTINE register_handler_bessel
+
     INTEGER FUNCTION handler_index_from_name(model_name)
         IMPLICIT NONE
         CHARACTER(LEN=*), INTENT(IN) :: model_name
@@ -163,6 +194,19 @@ CONTAINS
 
         component_is_sh = (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_SH)
     END FUNCTION component_is_sh
+
+    LOGICAL FUNCTION component_is_bessel(i_comp)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: i_comp
+        INTEGER :: i_handler
+
+        component_is_bessel = .FALSE.
+        IF (i_comp < 1 .OR. i_comp > GRAVITY_NCOMP) RETURN
+        i_handler = COMPONENT_HANDLER_SLOT(i_comp)
+        IF (i_handler < 1 .OR. i_handler > N_COMPONENT_HANDLERS) RETURN
+
+        component_is_bessel = (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_BESSEL)
+    END FUNCTION component_is_bessel
 
     ! MODULE-STATE subroutines
     SUBROUTINE cleargravity()
@@ -241,14 +285,16 @@ CONTAINS
 
     SUBROUTINE finalizegravity()
         IMPLICIT NONE
-        INTEGER :: i, n_sh, i_sh, i_sh_slot, i_handler
+        INTEGER :: i, n_sh, n_bessel, i_sh, i_bessel, i_sh_slot, i_handler
         IF (GRAVITY_NCOMP < 1) THEN
             WRITE(*,'(A)') "WARNING: finalizegravity: no components registered"
             RETURN
         END IF
 
         n_sh = 0
+        n_bessel = 0
         i_sh = 0
+        i_bessel = 0
         DO i = 1, GRAVITY_NCOMP
             i_handler = COMPONENT_HANDLER_SLOT(i)
             IF (i_handler < 1 .OR. i_handler > N_COMPONENT_HANDLERS) THEN
@@ -258,6 +304,10 @@ CONTAINS
             IF (component_is_sh(i)) THEN
                 n_sh = n_sh + 1
                 i_sh = i
+            END IF
+            IF (component_is_bessel(i)) THEN
+                n_bessel = n_bessel + 1
+                i_bessel = i
             END IF
         END DO
 
@@ -284,6 +334,20 @@ CONTAINS
                 END IF
             END DO
         END IF
+
+        ! Minimal bessel table build
+        IF (n_bessel >= 1) THEN
+            IF (.NOT. BESSEL_INITIALIZED) CALL bessel_default_init()
+            CALL bessel_init_comp(n_bessel)
+            DO i = 1, GRAVITY_NCOMP
+                IF (component_is_bessel(i)) THEN
+                    i_handler = COMPONENT_HANDLER_SLOT(i)
+                    CALL bessel_project_density(i, GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i), &
+                                                COMPONENT_HANDLERS(i_handler)%density_proc)
+                END IF
+            END DO
+        END IF
+
         GRAVITY_FINALIZED = .TRUE.
     END SUBROUTINE finalizegravity
 
@@ -325,6 +389,10 @@ CONTAINS
             CALL ensure_sh_component_tables_loaded(i_comp, n_sh)
         END IF
 
+        IF (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_BESSEL) THEN
+            CALL bessel_load_comp(i_comp)
+        END IF
+
         CALL COMPONENT_HANDLERS(i_handler)%force_proc( &
             GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_comp), n, x, y, z, force_c)
     END SUBROUTINE eval_component_force
@@ -344,6 +412,10 @@ CONTAINS
 
         IF (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_SH) THEN
             CALL ensure_sh_component_tables_loaded(i_comp, n_sh)
+        END IF
+
+        IF (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_BESSEL) THEN
+            CALL bessel_load_comp(i_comp)
         END IF
 
         CALL COMPONENT_HANDLERS(i_handler)%potential_proc( &
@@ -468,6 +540,30 @@ CONTAINS
 
         CALL sh_eval_potential(n, x, y, z, phi)
     END SUBROUTINE sh_potential_from_tables
+
+    SUBROUTINE bessel_force_wrapper(params, n, x, y, z, force)
+        IMPLICIT NONE
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
+        REAL*8, DIMENSION(n) :: ax, ay, az
+
+        CALL bessel_eval_force(n, x, y, z, ax, ay, az)
+        force(:,1) = ax
+        force(:,2) = ay
+        force(:,3) = az
+    END SUBROUTINE bessel_force_wrapper
+
+    SUBROUTINE bessel_potential_wrapper(params, n, x, y, z, phi)
+        IMPLICIT NONE
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n) :: phi
+
+        CALL bessel_eval_potential(n, x, y, z, phi)
+    END SUBROUTINE bessel_potential_wrapper
 
     ! Spherical harmonics interfacing subroutines
     INTEGER FUNCTION count_sh_components()

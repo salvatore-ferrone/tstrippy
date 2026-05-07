@@ -292,3 +292,79 @@ def test_ibata_exponential_force_components_match_independent_components():
     np.testing.assert_allclose(ax_c[1, :], ax_e, rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(ay_c[1, :], ay_e, rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(az_c[1, :], az_e, rtol=1e-12, atol=1e-12)
+
+
+def test_all_component_pairs_are_commutative_and_force_consistent_on_small_grid():
+    g = gravitymini.gravity
+
+    def rms(a, b):
+        return np.sqrt(np.mean((a.ravel() - b.ravel()) ** 2))
+
+    rho_h_table = 11.4
+    rho0_halo = (rho_h_table / 1000.0) * 1e9
+    r0 = 14.7
+    rt = 1e3
+    q = 0.5
+    gamma = 1.0
+    beta = 3.0
+
+    components = [
+        ("plummer", [1e12, r0]),
+        ("ibata2024halo", [rho0_halo, r0, rt, q, gamma, beta]),
+        ("exponentialoblatehalo", [rho0_halo / 2.0, r0 / 2.0, q]),
+        ("hernquist", [1e10, r0]),
+    ]
+
+    # Compact diagnostics grid: 10x10 points over +/-2*scale radius in x-z plane.
+    x = np.linspace(-2.0 * r0, 2.0 * r0, 10)
+    z = np.linspace(-2.0 * r0, 2.0 * r0, 10)
+    X, Z = np.meshgrid(x, z, indexing="xy")
+    xf = X.ravel()
+    zf = Z.ravel()
+    y0 = np.zeros_like(xf)
+
+    single_force = {}
+    for name, params in components:
+        g.cleargravity()
+        g.addgravitycomponent(name, params)
+        g.finalizegravity()
+        single_force[name] = g.evaluategravityforces(xf, y0, zf)
+
+    for name_i, params_i in components:
+        for name_j, params_j in components:
+            g.cleargravity()
+            g.addgravitycomponent(name_i, params_i)
+            g.addgravitycomponent(name_j, params_j)
+            g.finalizegravity()
+
+            ax, ay, az = g.evaluategravityforces(xf, y0, zf)
+            phi = g.evaluategravitypotential(xf, y0, zf)
+            ax_c, ay_c, az_c = g.evaluategravityforcecomponents(xf, y0, zf)
+
+            ax_sum = ax_c.sum(axis=0)
+            ay_sum = ay_c.sum(axis=0)
+            az_sum = az_c.sum(axis=0)
+
+            g.cleargravity()
+            g.addgravitycomponent(name_j, params_j)
+            g.addgravitycomponent(name_i, params_i)
+            g.finalizegravity()
+            ax_r, ay_r, az_r = g.evaluategravityforces(xf, y0, zf)
+            phi_r = g.evaluategravitypotential(xf, y0, zf)
+
+            ax_s = single_force[name_i][0] + single_force[name_j][0]
+            ay_s = single_force[name_i][1] + single_force[name_j][1]
+            az_s = single_force[name_i][2] + single_force[name_j][2]
+
+            assert rms(ax, ax_sum) < 1e-12
+            assert rms(ay, ay_sum) < 1e-12
+            assert rms(az, az_sum) < 1e-12
+
+            assert rms(ax, ax_s) < 1e-12
+            assert rms(ay, ay_s) < 1e-12
+            assert rms(az, az_s) < 1e-12
+
+            assert rms(ax, ax_r) < 1e-12
+            assert rms(ay, ay_r) < 1e-12
+            assert rms(az, az_r) < 1e-12
+            assert rms(phi, phi_r) < 1e-12

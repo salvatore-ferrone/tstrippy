@@ -35,6 +35,7 @@ MODULE gravity
 
 CONTAINS
 
+    ! MODULE-STATE subroutines
     SUBROUTINE cleargravity()
         IMPLICIT NONE
         GRAVITY_G = GRAVITY_G_DEFAULT
@@ -375,6 +376,7 @@ CONTAINS
     !!! ANALYTICAL POTENTIAL MODELS !!!
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+    ! SPHERES
     SUBROUTINE plummer_force(params, n, x, y, z, force)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
@@ -444,10 +446,202 @@ CONTAINS
         phi = -GRAVITY_G*m / (r + a)
     END SUBROUTINE hernquist_potential
 
+    SUBROUTINE allensantillianhaloforce(params, N, x, y, z, force)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
+        REAL*8 :: M, scale_length, exp, cutoffradius, Mtot, dcut
+        REAL*8, DIMENSION(N) :: r, amod, d, d_exp_minus_1, d_exp_minus_3
+        LOGICAL, DIMENSION(N) :: outside_cutoff, at_zero
+
+        M = params(1)
+        scale_length = params(2)
+        exp = params(3)
+        cutoffradius = params(4)
+
+        r = SQRT(x*x + y*y + z*z)
+        d = r / scale_length
+        dcut = cutoffradius / scale_length
+        d_exp_minus_1 = d**(exp-1)
+        d_exp_minus_3 = d**(exp-3)
+
+        Mtot = M * dcut**exp / (1.0D0 + dcut**(exp-1))
+        amod = -(GRAVITY_G*M/scale_length**3) * (d_exp_minus_3 / (1.0D0 + d_exp_minus_1))
+
+        outside_cutoff = (r > cutoffradius)
+        at_zero = (r == 0.0D0)
+        amod = MERGE(-(GRAVITY_G*Mtot/r**3), amod, outside_cutoff)
+        amod = MERGE(0.0D0, amod, at_zero)
+
+        force(:,1) = amod*x
+        force(:,2) = amod*y
+        force(:,3) = amod*z
+    END SUBROUTINE allensantillianhaloforce
+
+    SUBROUTINE allensantillianhalopotential(params, N, x, y, z, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi
+        REAL*8, DIMENSION(N) :: term1, r, d, d_exp_minus_1
+        REAL*8 :: M, scale_length, exp, cutoffradius, Mtot, term2, dcut
+        LOGICAL, DIMENSION(N) :: outside_cutoff
+
+        M = params(1)
+        scale_length = params(2)
+        exp = params(3)
+        cutoffradius = params(4)
+
+        r = SQRT(x*x + y*y + z*z)
+        d = r / scale_length
+        dcut = cutoffradius / scale_length
+        d_exp_minus_1 = d**(exp-1)
+        term1 = 1.0D0 + d_exp_minus_1
+        term2 = 1.0D0 + dcut**(exp-1)
+
+        Mtot = M * dcut**exp / (1.0D0 + dcut**(exp-1))
+        phi = GRAVITY_G*M/(scale_length*(exp-1.0D0)) * LOG(term1/term2) - GRAVITY_G*Mtot/cutoffradius
+
+        outside_cutoff = (r > cutoffradius)
+        phi = MERGE(-GRAVITY_G*Mtot/r, phi, outside_cutoff)
+    END SUBROUTINE allensantillianhalopotential
+
+    ! DISKS
+    SUBROUTINE miyamotonagaiforce(params, N, x, y, z, force)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(3) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
+        REAL*8, DIMENSION(N) :: R, amod, zmod
+        REAL*8 :: M, a, b
+
+        M = params(1)
+        a = params(2)
+        b = params(3)
+
+        R = SQRT(x*x + y*y)
+        zmod = a + SQRT(z*z + b*b)
+        amod = -GRAVITY_G*M / (R*R + zmod*zmod)**1.5
+
+        force(:,1) = amod*x
+        force(:,2) = amod*y
+        force(:,3) = amod*z*zmod/SQRT(z*z+b*b)
+    END SUBROUTINE miyamotonagaiforce
+
+    SUBROUTINE miyamotonagaipotential(params, N, x, y, z, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(3) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi
+        REAL*8, DIMENSION(N) :: R, zmod
+        REAL*8 :: M, a, b
+
+        M = params(1)
+        a = params(2)
+        b = params(3)
+        R = SQRT(x*x + y*y)
+        zmod = a + SQRT(z*z + b*b)
+        phi = -GRAVITY_G*M / SQRT(R*R + zmod*zmod)
+    END SUBROUTINE miyamotonagaipotential
+
+    ! TRIAXIAL 
+    SUBROUTINE longmuralibarforce(params, N, x, y, z, force)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
+        REAL*8 :: M, abar, bbar, cbar
+        REAL*8, DIMENSION(N) :: Tplus, Tminus
+
+        M = params(1)
+        abar = params(2)
+        bbar = params(3)
+        cbar = params(4)
+
+        Tplus = SQRT((abar+x)**2 + y*y + (bbar+SQRT(cbar*cbar+z*z))**2)
+        Tminus = SQRT((abar-x)**2 + y*y + (bbar+SQRT(cbar*cbar+z*z))**2)
+
+        force(:,1) = -2.0D0*GRAVITY_G*M*x / ((Tplus*Tminus)*(Tplus+Tminus))
+        force(:,2) = -GRAVITY_G*M*y/((2.0D0*Tplus*Tminus)*(y*y+(bbar+SQRT(z*z+cbar*cbar))**2)) * &
+                     (Tplus+Tminus-4.0D0*x*x/(Tplus+Tminus))
+        force(:,3) = -GRAVITY_G*M*z/((2.0D0*Tplus*Tminus)*(y*y+(bbar+SQRT(z*z+cbar*cbar))**2)) * &
+                     (Tplus+Tminus-4.0D0*x*x/(Tplus+Tminus)) * &
+                     ((bbar+SQRT(z*z+cbar*cbar))/SQRT(z*z+cbar*cbar))
+    END SUBROUTINE longmuralibarforce
+
+    SUBROUTINE longmuralibarpotential(params, N, x, y, z, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi
+        REAL*8 :: M, abar, bbar, cbar
+        REAL*8, DIMENSION(N) :: Tplus, Tminus
+
+        M = params(1)
+        abar = params(2)
+        bbar = params(3)
+        cbar = params(4)
+
+        Tplus = SQRT((abar+x)**2 + y*y + (bbar+SQRT(cbar*cbar+z*z))**2)
+        Tminus = SQRT((abar-x)**2 + y*y + (bbar+SQRT(cbar*cbar+z*z))**2)
+        phi = (GRAVITY_G*M / (2.0D0*abar)) * LOG((x-abar+Tminus)/(x+abar+Tplus))
+    END SUBROUTINE longmuralibarpotential
+    
+    ! COMPOSITE
+    SUBROUTINE pouliasis2017piiforce(params, N, x, y, z, force)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(10) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
+        REAL*8, DIMENSION(3) :: thindisk, thickdisk
+        REAL*8, DIMENSION(4) :: halo
+        REAL*8, DIMENSION(N,3) :: force_h, force_d1, force_d2
+
+        halo = (/params(1), params(2), params(3), params(4)/)
+        thindisk = (/params(5), params(6), params(7)/)
+        thickdisk = (/params(8), params(9), params(10)/)
+
+        CALL allensantillianhaloforce(halo, N, x, y, z, force_h)
+        CALL miyamotonagaiforce(thindisk, N, x, y, z, force_d1)
+        CALL miyamotonagaiforce(thickdisk, N, x, y, z, force_d2)
+        force = force_h + force_d1 + force_d2
+    END SUBROUTINE pouliasis2017piiforce
+
+    SUBROUTINE pouliasis2017piipotential(params, N, x, y, z, phi)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: N
+        REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(10) :: params
+        REAL*8, INTENT(OUT), DIMENSION(N) :: phi
+        REAL*8, DIMENSION(3) :: thindisk, thickdisk
+        REAL*8, DIMENSION(4) :: halo
+        REAL*8, DIMENSION(N) :: phi_h, phi_d1, phi_d2
+
+        halo = (/params(1), params(2), params(3), params(4)/)
+        thindisk = (/params(5), params(6), params(7)/)
+        thickdisk = (/params(8), params(9), params(10)/)
+
+        CALL allensantillianhalopotential(halo, N, x, y, z, phi_h)
+        CALL miyamotonagaipotential(thindisk, N, x, y, z, phi_d1)
+        CALL miyamotonagaipotential(thickdisk, N, x, y, z, phi_d2)
+        phi = phi_h + phi_d1 + phi_d2
+    END SUBROUTINE pouliasis2017piipotential
+
+
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     !!!! DENSITY ONLY PROFILES !!!!
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+    !!!! AXIS SYMMETRIC !!!
+    ! HALOS (spherical harmonics)
     SUBROUTINE exponentialoblatehalo_density(params, n, x, y, z, rho)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
@@ -489,5 +683,25 @@ CONTAINS
 
         rho = rho0 * (s_safe/r0)**(-gamma) * (1.0D0 + s_safe/r0)**(gamma-beta) * EXP(-(s_safe/rt)**2)
     END SUBROUTINE ibata2024halo_density    
+
+    ! DISKS (bessel functions)
+    SUBROUTINE exponentialdisk(params, n, x, y, z, rho)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n) :: rho
+        REAL*8 :: sigma0, hR, hZ, rho0
+        REAL*8, DIMENSION(n) :: R 
+
+        sigma0  = params(1)
+        hR      = params(2)
+        hZ      = params(3)
+        rho0    = sigma0 / (2 * hZ)
+        R = sqrt(x**2 + y**2)
+
+        rho = rho0 * exp( -(R/hR) - abs(z)/hZ)
+
+    end subroutine exponentialdisk        
 
 END MODULE gravity

@@ -27,6 +27,42 @@ MODULE gravity
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_EXPONENTIALOBLATEHALO = 20
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_IBATA2024HALO = 21
 
+    INTEGER, PARAMETER, PRIVATE :: BACKEND_ANALYTIC = 1
+    INTEGER, PARAMETER, PRIVATE :: BACKEND_SH = 2
+
+    ABSTRACT INTERFACE
+        SUBROUTINE force_eval_iface(params, n, x, y, z, force)
+            REAL*8, INTENT(IN), DIMENSION(:) :: params
+            INTEGER, INTENT(IN) :: n
+            REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+            REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
+        END SUBROUTINE force_eval_iface
+
+        SUBROUTINE potential_eval_iface(params, n, x, y, z, phi)
+            REAL*8, INTENT(IN), DIMENSION(:) :: params
+            INTEGER, INTENT(IN) :: n
+            REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+            REAL*8, INTENT(OUT), DIMENSION(n) :: phi
+        END SUBROUTINE potential_eval_iface
+
+        SUBROUTINE density_eval_iface(params, n, x, y, z, rho)
+            REAL*8, INTENT(IN), DIMENSION(:) :: params
+            INTEGER, INTENT(IN) :: n
+            REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+            REAL*8, INTENT(OUT), DIMENSION(n) :: rho
+        END SUBROUTINE density_eval_iface
+    END INTERFACE
+
+    TYPE, PRIVATE :: component_handler_t
+        CHARACTER(LEN=32) :: model_name = ""
+        INTEGER :: kind = GRAVITY_KIND_NONE
+        INTEGER :: nparams = 0
+        INTEGER :: backend = BACKEND_ANALYTIC
+        PROCEDURE(force_eval_iface), POINTER, NOPASS :: force_proc => NULL()
+        PROCEDURE(potential_eval_iface), POINTER, NOPASS :: potential_proc => NULL()
+        PROCEDURE(density_eval_iface), POINTER, NOPASS :: density_proc => NULL()
+    END TYPE component_handler_t
+
     REAL*8, PUBLIC :: GRAVITY_G = GRAVITY_G_DEFAULT
     LOGICAL, PUBLIC :: GRAVITY_G_IS_DEFAULT = .TRUE.
     LOGICAL, PUBLIC :: GRAVITY_FINALIZED = .FALSE.
@@ -34,14 +70,128 @@ MODULE gravity
     INTEGER, DIMENSION(GRAVITY_MAX_NCOMP), PUBLIC :: GRAVITY_KIND = 0
     REAL*8, DIMENSION(GRAVITY_MAX_PARAMS, GRAVITY_MAX_NCOMP), PUBLIC :: GRAVITY_PARAMS = 0.0D0
 
+    INTEGER, PARAMETER, PRIVATE :: MAX_COMPONENT_HANDLERS = 16
+    TYPE(component_handler_t), DIMENSION(MAX_COMPONENT_HANDLERS), PRIVATE :: COMPONENT_HANDLERS
+    INTEGER, PRIVATE :: N_COMPONENT_HANDLERS = 0
+    LOGICAL, PRIVATE :: COMPONENT_HANDLERS_INITIALIZED = .FALSE.
+
     PUBLIC :: ibata2024halo_density
+    PRIVATE :: ensure_component_handlers_initialized, register_handler_analytic, register_handler_sh
+    PRIVATE :: handler_index_from_name, handler_index_from_kind, kind_is_sh
+    PRIVATE :: ensure_sh_component_tables_loaded, eval_component_force, eval_component_potential
+    PRIVATE :: sh_force_from_tables, sh_potential_from_tables
     PRIVATE :: count_sh_components, sh_slot_for_component
 
 CONTAINS
 
+    SUBROUTINE ensure_component_handlers_initialized()
+        IMPLICIT NONE
+
+        IF (COMPONENT_HANDLERS_INITIALIZED) RETURN
+
+        N_COMPONENT_HANDLERS = 0
+        CALL register_handler_analytic("plummer", GRAVITY_KIND_PLUMMER, 2, plummer_force, plummer_potential)
+        CALL register_handler_analytic("hernquist", GRAVITY_KIND_HERNQUIST, 2, hernquist_force, hernquist_potential)
+        CALL register_handler_analytic("allensantillianhalo", GRAVITY_KIND_ALLENSANTILLIANHALO, 4, &
+                                       allensantillianhalo_force, allensantillianhalo_potential)
+        CALL register_handler_analytic("miyamotonagai", GRAVITY_KIND_MIYAMOTONAGAI, 3, &
+                                       miyamotonagai_force, miyamotonagai_potential)
+        CALL register_handler_analytic("longmuralibar", GRAVITY_KIND_LONGMURALIBAR, 4, &
+                                       longmuralibar_force, longmuralibar_potential)
+        CALL register_handler_analytic("pouliasis2017pii", GRAVITY_KIND_POULIASIS2017PII, 10, &
+                                       pouliasis2017pii_force, pouliasis2017pii_potential)
+        CALL register_handler_sh("exponentialoblatehalo", GRAVITY_KIND_EXPONENTIALOBLATEHALO, 3, &
+                                 exponentialoblatehalo_density)
+        CALL register_handler_sh("ibata2024halo", GRAVITY_KIND_IBATA2024HALO, 6, ibata2024halo_density)
+
+        COMPONENT_HANDLERS_INITIALIZED = .TRUE.
+    END SUBROUTINE ensure_component_handlers_initialized
+
+    SUBROUTINE register_handler_analytic(model_name, kind, nparams, force_proc, potential_proc)
+        IMPLICIT NONE
+        CHARACTER(LEN=*), INTENT(IN) :: model_name
+        INTEGER, INTENT(IN) :: kind, nparams
+        PROCEDURE(force_eval_iface) :: force_proc
+        PROCEDURE(potential_eval_iface) :: potential_proc
+
+        IF (N_COMPONENT_HANDLERS >= MAX_COMPONENT_HANDLERS) THEN
+            WRITE(*,'(A)') "WARNING: register_handler_analytic: exceeded MAX_COMPONENT_HANDLERS"
+            RETURN
+        END IF
+
+        N_COMPONENT_HANDLERS = N_COMPONENT_HANDLERS + 1
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%model_name = model_name
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%kind = kind
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%nparams = nparams
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%backend = BACKEND_ANALYTIC
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%force_proc => force_proc
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%potential_proc => potential_proc
+    END SUBROUTINE register_handler_analytic
+
+    SUBROUTINE register_handler_sh(model_name, kind, nparams, density_proc)
+        IMPLICIT NONE
+        CHARACTER(LEN=*), INTENT(IN) :: model_name
+        INTEGER, INTENT(IN) :: kind, nparams
+        PROCEDURE(density_eval_iface) :: density_proc
+
+        IF (N_COMPONENT_HANDLERS >= MAX_COMPONENT_HANDLERS) THEN
+            WRITE(*,'(A)') "WARNING: register_handler_sh: exceeded MAX_COMPONENT_HANDLERS"
+            RETURN
+        END IF
+
+        N_COMPONENT_HANDLERS = N_COMPONENT_HANDLERS + 1
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%model_name = model_name
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%kind = kind
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%nparams = nparams
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%backend = BACKEND_SH
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%force_proc => sh_force_from_tables
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%potential_proc => sh_potential_from_tables
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%density_proc => density_proc
+    END SUBROUTINE register_handler_sh
+
+    INTEGER FUNCTION handler_index_from_name(model_name)
+        IMPLICIT NONE
+        CHARACTER(LEN=*), INTENT(IN) :: model_name
+        INTEGER :: i
+
+        CALL ensure_component_handlers_initialized()
+        handler_index_from_name = 0
+        DO i = 1, N_COMPONENT_HANDLERS
+            IF (TRIM(model_name) == TRIM(COMPONENT_HANDLERS(i)%model_name)) THEN
+                handler_index_from_name = i
+                RETURN
+            END IF
+        END DO
+    END FUNCTION handler_index_from_name
+
+    INTEGER FUNCTION handler_index_from_kind(kind_code)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: kind_code
+        INTEGER :: i
+
+        CALL ensure_component_handlers_initialized()
+        handler_index_from_kind = 0
+        DO i = 1, N_COMPONENT_HANDLERS
+            IF (COMPONENT_HANDLERS(i)%kind == kind_code) THEN
+                handler_index_from_kind = i
+                RETURN
+            END IF
+        END DO
+    END FUNCTION handler_index_from_kind
+
+    LOGICAL FUNCTION kind_is_sh(kind_code)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: kind_code
+        INTEGER :: i_handler
+
+        i_handler = handler_index_from_kind(kind_code)
+        kind_is_sh = (i_handler > 0 .AND. COMPONENT_HANDLERS(i_handler)%backend == BACKEND_SH)
+    END FUNCTION kind_is_sh
+
     ! MODULE-STATE subroutines
     SUBROUTINE cleargravity()
         IMPLICIT NONE
+        CALL ensure_component_handlers_initialized()
         GRAVITY_G = GRAVITY_G_DEFAULT
         GRAVITY_G_IS_DEFAULT = .TRUE.
         GRAVITY_FINALIZED = .FALSE.
@@ -85,7 +235,7 @@ CONTAINS
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER, INTENT(IN) :: nparams
         REAL*8, INTENT(IN), DIMENSION(nparams) :: params
-        INTEGER :: kind_code, required_params
+        INTEGER :: i_handler
 
         IF (GRAVITY_FINALIZED) THEN
             WRITE(*,'(A)') "WARNING: addgravitycomponent: cannot add components after finalizegravity"
@@ -96,49 +246,26 @@ CONTAINS
             RETURN
         END IF
 
-        SELECT CASE (TRIM(model_name))
-        CASE ("plummer")
-            kind_code = GRAVITY_KIND_PLUMMER
-            required_params = 2
-        CASE ("hernquist")
-            kind_code = GRAVITY_KIND_HERNQUIST
-            required_params = 2
-        CASE ("allensantillianhalo")
-            kind_code = GRAVITY_KIND_ALLENSANTILLIANHALO
-            required_params = 4
-        CASE ("miyamotonagai")
-            kind_code = GRAVITY_KIND_MIYAMOTONAGAI
-            required_params = 3
-        CASE ("longmuralibar")
-            kind_code = GRAVITY_KIND_LONGMURALIBAR
-            required_params = 4
-        CASE ("pouliasis2017pii")
-            kind_code = GRAVITY_KIND_POULIASIS2017PII
-            required_params = 10
-        CASE ("exponentialoblatehalo")
-            kind_code = GRAVITY_KIND_EXPONENTIALOBLATEHALO
-            required_params = 3
-        CASE ("ibata2024halo")
-            kind_code = GRAVITY_KIND_IBATA2024HALO
-            required_params = 6
-        CASE DEFAULT
+        i_handler = handler_index_from_name(model_name)
+        IF (i_handler <= 0) THEN
             WRITE(*,'(A)') "WARNING: addgravitycomponent: unknown model_name", model_name
             RETURN
-        END SELECT
+        END IF
 
-        IF (nparams /= required_params) THEN
-            WRITE(*,'(A,I0,A,I0)') "WARNING: addgravitycomponent: expected", required_params, " params, got", nparams
+        IF (nparams /= COMPONENT_HANDLERS(i_handler)%nparams) THEN
+            WRITE(*,'(A,I0,A,I0)') "WARNING: addgravitycomponent: expected", COMPONENT_HANDLERS(i_handler)%nparams, &
+                                   " params, got", nparams
             RETURN
         END IF
 
         GRAVITY_NCOMP = GRAVITY_NCOMP + 1
-        GRAVITY_KIND(GRAVITY_NCOMP) = kind_code
+        GRAVITY_KIND(GRAVITY_NCOMP) = COMPONENT_HANDLERS(i_handler)%kind
         GRAVITY_PARAMS(1:nparams, GRAVITY_NCOMP) = params(1:nparams)
     END SUBROUTINE addgravitycomponent
 
     SUBROUTINE finalizegravity()
         IMPLICIT NONE
-        INTEGER :: i, n_sh, i_sh, i_sh_slot
+        INTEGER :: i, n_sh, i_sh, i_sh_slot, i_handler
         IF (GRAVITY_NCOMP < 1) THEN
             WRITE(*,'(A)') "WARNING: finalizegravity: no components registered"
             RETURN
@@ -151,8 +278,7 @@ CONTAINS
                 WRITE(*,'(A)') "WARNING: finalizegravity: component slot is uninitialized"
                 RETURN
             END IF
-            IF (GRAVITY_KIND(i) == GRAVITY_KIND_EXPONENTIALOBLATEHALO .OR. &
-                GRAVITY_KIND(i) == GRAVITY_KIND_IBATA2024HALO) THEN
+            IF (kind_is_sh(GRAVITY_KIND(i))) THEN
                 n_sh = n_sh + 1
                 i_sh = i
             END IF
@@ -161,12 +287,9 @@ CONTAINS
         ! Microstep: eager SH table build in finalize for the single-SH-component case.
         IF (n_sh == 1) THEN
             IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
-            SELECT CASE (GRAVITY_KIND(i_sh))
-            CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
-                CALL sh_project_density(GRAVITY_PARAMS(1:3, i_sh), exponentialoblatehalo_density)
-            CASE (GRAVITY_KIND_IBATA2024HALO)
-                CALL sh_project_density(GRAVITY_PARAMS(1:6, i_sh), ibata2024halo_density)
-            END SELECT
+            i_handler = handler_index_from_kind(GRAVITY_KIND(i_sh))
+            CALL sh_project_density(GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_sh), &
+                                    COMPONENT_HANDLERS(i_handler)%density_proc)
             CALL sh_compute_phi_tables()
         ELSE IF (n_sh > 1) THEN
             IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
@@ -174,22 +297,81 @@ CONTAINS
 
             i_sh_slot = 0
             DO i = 1, GRAVITY_NCOMP
-                SELECT CASE (GRAVITY_KIND(i))
-                CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
+                IF (kind_is_sh(GRAVITY_KIND(i))) THEN
                     i_sh_slot = i_sh_slot + 1
-                    CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
+                    i_handler = handler_index_from_kind(GRAVITY_KIND(i))
+                    CALL sh_project_density(GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i), &
+                                            COMPONENT_HANDLERS(i_handler)%density_proc)
                     CALL sh_compute_phi_tables()
                     CALL sh_store_component_phi(i_sh_slot)
-                CASE (GRAVITY_KIND_IBATA2024HALO)
-                    i_sh_slot = i_sh_slot + 1
-                    CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
-                    CALL sh_compute_phi_tables()
-                    CALL sh_store_component_phi(i_sh_slot)
-                END SELECT
+                END IF
             END DO
         END IF
         GRAVITY_FINALIZED = .TRUE.
     END SUBROUTINE finalizegravity
+
+    SUBROUTINE ensure_sh_component_tables_loaded(i_comp, n_sh)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: i_comp, n_sh
+        INTEGER :: i_handler
+
+        i_handler = handler_index_from_kind(GRAVITY_KIND(i_comp))
+        IF (i_handler <= 0) RETURN
+
+        IF (n_sh > 1) THEN
+            CALL sh_load_component_phi(sh_slot_for_component(i_comp))
+            RETURN
+        END IF
+
+        IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+            IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
+            CALL sh_project_density(GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_comp), &
+                                    COMPONENT_HANDLERS(i_handler)%density_proc)
+            CALL sh_compute_phi_tables()
+        END IF
+    END SUBROUTINE ensure_sh_component_tables_loaded
+
+    SUBROUTINE eval_component_force(i_comp, n_sh, n, x, y, z, force_c)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: i_comp, n_sh, n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n,3) :: force_c
+        INTEGER :: i_handler
+
+        i_handler = handler_index_from_kind(GRAVITY_KIND(i_comp))
+        IF (i_handler <= 0) THEN
+            force_c = 0.0D0
+            RETURN
+        END IF
+
+        IF (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_SH) THEN
+            CALL ensure_sh_component_tables_loaded(i_comp, n_sh)
+        END IF
+
+        CALL COMPONENT_HANDLERS(i_handler)%force_proc( &
+            GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_comp), n, x, y, z, force_c)
+    END SUBROUTINE eval_component_force
+
+    SUBROUTINE eval_component_potential(i_comp, n_sh, n, x, y, z, phi_c)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: i_comp, n_sh, n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n) :: phi_c
+        INTEGER :: i_handler
+
+        i_handler = handler_index_from_kind(GRAVITY_KIND(i_comp))
+        IF (i_handler <= 0) THEN
+            phi_c = 0.0D0
+            RETURN
+        END IF
+
+        IF (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_SH) THEN
+            CALL ensure_sh_component_tables_loaded(i_comp, n_sh)
+        END IF
+
+        CALL COMPONENT_HANDLERS(i_handler)%potential_proc( &
+            GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_comp), n, x, y, z, phi_c)
+    END SUBROUTINE eval_component_potential
 
     SUBROUTINE force_components(n, x, y, z, ax_comp, ay_comp, az_comp)
         IMPLICIT NONE
@@ -197,7 +379,6 @@ CONTAINS
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(16, n) :: ax_comp, ay_comp, az_comp
         REAL*8, DIMENSION(n,3) :: force_tmp
-        REAL*8, DIMENSION(n) :: ax_c, ay_c, az_c
         INTEGER :: i, n_sh
 
         ax_comp = 0.0D0
@@ -212,62 +393,10 @@ CONTAINS
         n_sh = count_sh_components()
 
         DO i = 1, GRAVITY_NCOMP
-            SELECT CASE (GRAVITY_KIND(i))
-            CASE (GRAVITY_KIND_PLUMMER)
-                CALL plummer_force(GRAVITY_PARAMS(1:2, i), n, x, y, z, force_tmp)
-                ax_comp(i,:) = force_tmp(:,1)
-                ay_comp(i,:) = force_tmp(:,2)
-                az_comp(i,:) = force_tmp(:,3)
-            CASE (GRAVITY_KIND_HERNQUIST)
-                CALL hernquist_force(GRAVITY_PARAMS(1:2, i), n, x, y, z, force_tmp)
-                ax_comp(i,:) = force_tmp(:,1)
-                ay_comp(i,:) = force_tmp(:,2)
-                az_comp(i,:) = force_tmp(:,3)
-            CASE (GRAVITY_KIND_ALLENSANTILLIANHALO)
-                CALL allensantillianhalo_force(GRAVITY_PARAMS(1:4, i), n, x, y, z, force_tmp)
-                ax_comp(i,:) = force_tmp(:,1)
-                ay_comp(i,:) = force_tmp(:,2)
-                az_comp(i,:) = force_tmp(:,3)
-            CASE (GRAVITY_KIND_MIYAMOTONAGAI)
-                CALL miyamotonagai_force(GRAVITY_PARAMS(1:3, i), n, x, y, z, force_tmp)
-                ax_comp(i,:) = force_tmp(:,1)
-                ay_comp(i,:) = force_tmp(:,2)
-                az_comp(i,:) = force_tmp(:,3)
-            CASE (GRAVITY_KIND_LONGMURALIBAR)
-                CALL longmuralibar_force(GRAVITY_PARAMS(1:4, i), n, x, y, z, force_tmp)
-                ax_comp(i,:) = force_tmp(:,1)
-                ay_comp(i,:) = force_tmp(:,2)
-                az_comp(i,:) = force_tmp(:,3)
-            CASE (GRAVITY_KIND_POULIASIS2017PII)
-                CALL pouliasis2017pii_force(GRAVITY_PARAMS(1:10, i), n, x, y, z, force_tmp)
-                ax_comp(i,:) = force_tmp(:,1)
-                ay_comp(i,:) = force_tmp(:,2)
-                az_comp(i,:) = force_tmp(:,3)
-            CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
-                IF (n_sh > 1) THEN
-                    CALL sh_load_component_phi(sh_slot_for_component(i))
-                ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
-                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
-                    CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
-                    CALL sh_compute_phi_tables()
-                END IF
-                CALL sh_eval_force(n, x, y, z, ax_c, ay_c, az_c)
-                ax_comp(i,:) = ax_c
-                ay_comp(i,:) = ay_c
-                az_comp(i,:) = az_c
-            CASE (GRAVITY_KIND_IBATA2024HALO)
-                IF (n_sh > 1) THEN
-                    CALL sh_load_component_phi(sh_slot_for_component(i))
-                ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
-                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
-                    CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
-                    CALL sh_compute_phi_tables()
-                END IF
-                CALL sh_eval_force(n, x, y, z, ax_c, ay_c, az_c)
-                ax_comp(i,:) = ax_c
-                ay_comp(i,:) = ay_c
-                az_comp(i,:) = az_c
-            END SELECT
+            CALL eval_component_force(i, n_sh, n, x, y, z, force_tmp)
+            ax_comp(i,:) = force_tmp(:,1)
+            ay_comp(i,:) = force_tmp(:,2)
+            az_comp(i,:) = force_tmp(:,3)
         END DO
     END SUBROUTINE force_components
 
@@ -277,7 +406,6 @@ CONTAINS
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: ax, ay, az
         REAL*8, DIMENSION(n,3) :: force_tmp
-        REAL*8, DIMENSION(n) :: ax_c, ay_c, az_c
         INTEGER :: i, n_sh
 
         ax = 0.0D0
@@ -292,62 +420,10 @@ CONTAINS
         n_sh = count_sh_components()
 
         DO i = 1, GRAVITY_NCOMP
-            SELECT CASE (GRAVITY_KIND(i))
-            CASE (GRAVITY_KIND_PLUMMER)
-                CALL plummer_force(GRAVITY_PARAMS(1:2, i), n, x, y, z, force_tmp)
-                ax = ax + force_tmp(:,1)
-                ay = ay + force_tmp(:,2)
-                az = az + force_tmp(:,3)
-            CASE (GRAVITY_KIND_HERNQUIST)
-                CALL hernquist_force(GRAVITY_PARAMS(1:2, i), n, x, y, z, force_tmp)
-                ax = ax + force_tmp(:,1)
-                ay = ay + force_tmp(:,2)
-                az = az + force_tmp(:,3)
-            CASE (GRAVITY_KIND_ALLENSANTILLIANHALO)
-                CALL allensantillianhalo_force(GRAVITY_PARAMS(1:4, i), n, x, y, z, force_tmp)
-                ax = ax + force_tmp(:,1)
-                ay = ay + force_tmp(:,2)
-                az = az + force_tmp(:,3)
-            CASE (GRAVITY_KIND_MIYAMOTONAGAI)
-                CALL miyamotonagai_force(GRAVITY_PARAMS(1:3, i), n, x, y, z, force_tmp)
-                ax = ax + force_tmp(:,1)
-                ay = ay + force_tmp(:,2)
-                az = az + force_tmp(:,3)
-            CASE (GRAVITY_KIND_LONGMURALIBAR)
-                CALL longmuralibar_force(GRAVITY_PARAMS(1:4, i), n, x, y, z, force_tmp)
-                ax = ax + force_tmp(:,1)
-                ay = ay + force_tmp(:,2)
-                az = az + force_tmp(:,3)
-            CASE (GRAVITY_KIND_POULIASIS2017PII)
-                CALL pouliasis2017pii_force(GRAVITY_PARAMS(1:10, i), n, x, y, z, force_tmp)
-                ax = ax + force_tmp(:,1)
-                ay = ay + force_tmp(:,2)
-                az = az + force_tmp(:,3)
-            CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
-                IF (n_sh > 1) THEN
-                    CALL sh_load_component_phi(sh_slot_for_component(i))
-                ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
-                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
-                    CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
-                    CALL sh_compute_phi_tables()
-                END IF
-                CALL sh_eval_force(n, x, y, z, ax_c, ay_c, az_c)
-                ax = ax + ax_c
-                ay = ay + ay_c
-                az = az + az_c
-            CASE (GRAVITY_KIND_IBATA2024HALO)
-                IF (n_sh > 1) THEN
-                    CALL sh_load_component_phi(sh_slot_for_component(i))
-                ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
-                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
-                    CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
-                    CALL sh_compute_phi_tables()
-                END IF
-                CALL sh_eval_force(n, x, y, z, ax_c, ay_c, az_c)
-                ax = ax + ax_c
-                ay = ay + ay_c
-                az = az + az_c
-            END SELECT
+            CALL eval_component_force(i, n_sh, n, x, y, z, force_tmp)
+            ax = ax + force_tmp(:,1)
+            ay = ay + force_tmp(:,2)
+            az = az + force_tmp(:,3)
         END DO
     END SUBROUTINE force
 
@@ -368,46 +444,8 @@ CONTAINS
         n_sh = count_sh_components()
 
         DO i = 1, GRAVITY_NCOMP
-            SELECT CASE (GRAVITY_KIND(i))
-            CASE (GRAVITY_KIND_PLUMMER)
-                CALL plummer_potential(GRAVITY_PARAMS(1:2, i), n, x, y, z, phi_c)
-                phi = phi + phi_c
-            CASE (GRAVITY_KIND_HERNQUIST)
-                CALL hernquist_potential(GRAVITY_PARAMS(1:2, i), n, x, y, z, phi_c)
-                phi = phi + phi_c
-            CASE (GRAVITY_KIND_ALLENSANTILLIANHALO)
-                CALL allensantillianhalo_potential(GRAVITY_PARAMS(1:4, i), n, x, y, z, phi_c)
-                phi = phi + phi_c
-            CASE (GRAVITY_KIND_MIYAMOTONAGAI)
-                CALL miyamotonagai_potential(GRAVITY_PARAMS(1:3, i), n, x, y, z, phi_c)
-                phi = phi + phi_c
-            CASE (GRAVITY_KIND_LONGMURALIBAR)
-                CALL longmuralibar_potential(GRAVITY_PARAMS(1:4, i), n, x, y, z, phi_c)
-                phi = phi + phi_c
-            CASE (GRAVITY_KIND_POULIASIS2017PII)
-                CALL pouliasis2017pii_potential(GRAVITY_PARAMS(1:10, i), n, x, y, z, phi_c)
-                phi = phi + phi_c
-            CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
-                IF (n_sh > 1) THEN
-                    CALL sh_load_component_phi(sh_slot_for_component(i))
-                ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
-                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
-                    CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
-                    CALL sh_compute_phi_tables()
-                END IF
-                CALL sh_eval_potential(n, x, y, z, phi_c)
-                phi = phi + phi_c
-            CASE (GRAVITY_KIND_IBATA2024HALO)
-                IF (n_sh > 1) THEN
-                    CALL sh_load_component_phi(sh_slot_for_component(i))
-                ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
-                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
-                    CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
-                    CALL sh_compute_phi_tables()
-                END IF
-                CALL sh_eval_potential(n, x, y, z, phi_c)
-                phi = phi + phi_c
-            END SELECT
+            CALL eval_component_potential(i, n_sh, n, x, y, z, phi_c)
+            phi = phi + phi_c
         END DO
     END SUBROUTINE potential
 
@@ -429,48 +467,30 @@ CONTAINS
         n_sh = count_sh_components()
 
         DO i = 1, GRAVITY_NCOMP
-            SELECT CASE (GRAVITY_KIND(i))
-            CASE (GRAVITY_KIND_PLUMMER)
-                CALL plummer_potential(GRAVITY_PARAMS(1:2, i), n, x, y, z, phi_c)
-                phi_comp(i,:) = phi_c
-            CASE (GRAVITY_KIND_HERNQUIST)
-                CALL hernquist_potential(GRAVITY_PARAMS(1:2, i), n, x, y, z, phi_c)
-                phi_comp(i,:) = phi_c
-            CASE (GRAVITY_KIND_ALLENSANTILLIANHALO)
-                CALL allensantillianhalo_potential(GRAVITY_PARAMS(1:4, i), n, x, y, z, phi_c)
-                phi_comp(i,:) = phi_c
-            CASE (GRAVITY_KIND_MIYAMOTONAGAI)
-                CALL miyamotonagai_potential(GRAVITY_PARAMS(1:3, i), n, x, y, z, phi_c)
-                phi_comp(i,:) = phi_c
-            CASE (GRAVITY_KIND_LONGMURALIBAR)
-                CALL longmuralibar_potential(GRAVITY_PARAMS(1:4, i), n, x, y, z, phi_c)
-                phi_comp(i,:) = phi_c
-            CASE (GRAVITY_KIND_POULIASIS2017PII)
-                CALL pouliasis2017pii_potential(GRAVITY_PARAMS(1:10, i), n, x, y, z, phi_c)
-                phi_comp(i,:) = phi_c
-            CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
-                IF (n_sh > 1) THEN
-                    CALL sh_load_component_phi(sh_slot_for_component(i))
-                ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
-                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
-                    CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
-                    CALL sh_compute_phi_tables()
-                END IF
-                CALL sh_eval_potential(n, x, y, z, phi_c)
-                phi_comp(i,:) = phi_c
-            CASE (GRAVITY_KIND_IBATA2024HALO)
-                IF (n_sh > 1) THEN
-                    CALL sh_load_component_phi(sh_slot_for_component(i))
-                ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
-                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
-                    CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
-                    CALL sh_compute_phi_tables()
-                END IF
-                CALL sh_eval_potential(n, x, y, z, phi_c)
-                phi_comp(i,:) = phi_c
-            END SELECT
+            CALL eval_component_potential(i, n_sh, n, x, y, z, phi_c)
+            phi_comp(i,:) = phi_c
         END DO
     END SUBROUTINE potential_components
+
+    SUBROUTINE sh_force_from_tables(params, n, x, y, z, force)
+        IMPLICIT NONE
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
+
+        CALL sh_eval_force(n, x, y, z, force(:,1), force(:,2), force(:,3))
+    END SUBROUTINE sh_force_from_tables
+
+    SUBROUTINE sh_potential_from_tables(params, n, x, y, z, phi)
+        IMPLICIT NONE
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n) :: phi
+
+        CALL sh_eval_potential(n, x, y, z, phi)
+    END SUBROUTINE sh_potential_from_tables
 
     ! Spherical harmonics interfacing subroutines
     INTEGER FUNCTION count_sh_components()
@@ -479,8 +499,7 @@ CONTAINS
 
         count_sh_components = 0
         DO i = 1, GRAVITY_NCOMP
-            IF (GRAVITY_KIND(i) == GRAVITY_KIND_EXPONENTIALOBLATEHALO .OR. &
-                GRAVITY_KIND(i) == GRAVITY_KIND_IBATA2024HALO) THEN
+            IF (kind_is_sh(GRAVITY_KIND(i))) THEN
                 count_sh_components = count_sh_components + 1
             END IF
         END DO
@@ -495,8 +514,7 @@ CONTAINS
         IF (i_comp < 1 .OR. i_comp > GRAVITY_NCOMP) RETURN
 
         DO i = 1, i_comp
-            IF (GRAVITY_KIND(i) == GRAVITY_KIND_EXPONENTIALOBLATEHALO .OR. &
-                GRAVITY_KIND(i) == GRAVITY_KIND_IBATA2024HALO) THEN
+            IF (kind_is_sh(GRAVITY_KIND(i))) THEN
                 sh_slot_for_component = sh_slot_for_component + 1
             END IF
         END DO
@@ -511,7 +529,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(2) :: params
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
         REAL*8, DIMENSION(n) :: r, amod
         REAL*8 :: m, b
@@ -530,7 +548,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(2) :: params
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
         REAL*8, DIMENSION(n) :: r
         REAL*8 :: m, b
@@ -545,7 +563,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(2) :: params
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
         REAL*8, DIMENSION(n) :: r, amod
         REAL*8 :: m, a
@@ -565,7 +583,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(2) :: params
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
         REAL*8, DIMENSION(n) :: r
         REAL*8 :: m, a
@@ -580,7 +598,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
         REAL*8 :: M, scale_length, exp, cutoffradius, Mtot, dcut
         REAL*8, DIMENSION(N) :: r, amod, d, d_exp_minus_1, d_exp_minus_3
@@ -614,7 +632,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(N) :: phi
         REAL*8, DIMENSION(N) :: term1, r, d, d_exp_minus_1
         REAL*8 :: M, scale_length, exp, cutoffradius, Mtot, term2, dcut
@@ -644,7 +662,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(3) :: params
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
         REAL*8, DIMENSION(N) :: R, amod, zmod
         REAL*8 :: M, a, b
@@ -666,7 +684,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(3) :: params
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(N) :: phi
         REAL*8, DIMENSION(N) :: R, zmod
         REAL*8 :: M, a, b
@@ -684,7 +702,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
         REAL*8 :: M, abar, bbar, cbar
         REAL*8, DIMENSION(N) :: Tplus, Tminus
@@ -709,7 +727,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(4) :: params
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(N) :: phi
         REAL*8 :: M, abar, bbar, cbar
         REAL*8, DIMENSION(N) :: Tplus, Tminus
@@ -729,7 +747,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(10) :: params
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(N,3) :: force
         REAL*8, DIMENSION(3) :: thindisk, thickdisk
         REAL*8, DIMENSION(4) :: halo
@@ -749,7 +767,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(10) :: params
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(N) :: phi
         REAL*8, DIMENSION(3) :: thindisk, thickdisk
         REAL*8, DIMENSION(4) :: halo

@@ -12,8 +12,8 @@ conda run -n "${ENV_NAME}" python -c "import sys; print('python:', sys.executabl
 conda run -n "${ENV_NAME}" which gfortran || true
 conda run -n "${ENV_NAME}" python -c "import numpy; print('numpy:', numpy.__version__)"
 
-if [[ ! -f gravity.f90 || ! -f mathutils.f90 || ! -f sphericalharmonicsbfe.f90 ]]; then
-    echo "ERROR: expected gravity.f90, mathutils.f90, and sphericalharmonicsbfe.f90 in $(pwd)"
+if [[ ! -f gravity.f90 || ! -f mathutils.f90 || ! -f sphericalharmonicsbfe.f90 || ! -f besselbfe.f90 ]]; then
+    echo "ERROR: expected gravity.f90, mathutils.f90, sphericalharmonicsbfe.f90, and besselbfe.f90 in $(pwd)"
     exit 1
 fi
 
@@ -22,6 +22,7 @@ rm -f gravitymini*.so gravitymini*.dylib
 conda run -n "${ENV_NAME}" python -m numpy.f2py -c \
     mathutils.f90 \
     sphericalharmonicsbfe.f90 \
+    besselbfe.f90 \
     gravity.f90 \
     -m gravitymini
 

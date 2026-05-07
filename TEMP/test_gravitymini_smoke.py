@@ -258,3 +258,37 @@ def test_interleaved_components_preserve_sh_slot_mapping_order():
 
     assert not np.allclose(phi0, phi2, rtol=1e-12, atol=1e-12)
     assert not np.allclose(phi1, phi2, rtol=1e-12, atol=1e-12)
+
+
+def test_ibata_exponential_force_components_match_independent_components():
+    g = gravitymini.gravity
+
+    x = np.array([1.0, 2.0, 3.0], dtype=float)
+    y = np.array([0.0, 0.1, 0.0], dtype=float)
+    z = np.array([0.2, 0.0, -0.3], dtype=float)
+
+    ibata = [1.0, 1.0, 100.0, 0.8, 1.4, 3.0]
+    expo = [1.0, 1.0, 1.0]
+
+    g.cleargravity()
+    g.addgravitycomponent("ibata2024halo", ibata)
+    g.finalizegravity()
+    ax_i, ay_i, az_i = g.evaluategravityforces(x, y, z)
+
+    g.cleargravity()
+    g.addgravitycomponent("exponentialoblatehalo", expo)
+    g.finalizegravity()
+    ax_e, ay_e, az_e = g.evaluategravityforces(x, y, z)
+
+    g.cleargravity()
+    g.addgravitycomponent("ibata2024halo", ibata)
+    g.addgravitycomponent("exponentialoblatehalo", expo)
+    g.finalizegravity()
+    ax_c, ay_c, az_c = g.evaluategravityforcecomponents(x, y, z)
+
+    np.testing.assert_allclose(ax_c[0, :], ax_i, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(ay_c[0, :], ay_i, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(az_c[0, :], az_i, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(ax_c[1, :], ax_e, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(ay_c[1, :], ay_e, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(az_c[1, :], az_e, rtol=1e-12, atol=1e-12)

@@ -10,24 +10,9 @@ def get_one_comp(coordPHI,coordQ,comp):
     grav.addgravitycomponent(*comp)
     grav.finalizegravity()
     phi = grav.evaluategravitypotential(*coordPHI)
-    starttime = datetime.datetime.now()
     ax,ay,az=grav.evaluategravityforces(*coordQ)
-    endtime = datetime.datetime.now()
-    comptime = endtime-starttime
-    return ax,az,phi,comptime
+    return ax,az,phi
 
-def get_two_comp(coordPHI,coordQ,comp1,comp2):
-    grav = gravitymini.gravity
-    grav.cleargravity()
-    grav.addgravitycomponent(*comp1)
-    grav.addgravitycomponent(*comp2)
-    grav.finalizegravity()
-    phi = grav.evaluategravitypotential(*coordPHI)
-    starttime = datetime.datetime.now()
-    ax,_,az=grav.evaluategravityforces(*coordQ)
-    endtime = datetime.datetime.now()
-    comptime = endtime-starttime
-    return ax,az,phi,comptime
 
 
 ## set the parameters 
@@ -57,9 +42,9 @@ singlecomponents = {}
 for i in range(len(components)):
     key = "{:d}".format(i)
     singlecomponents[key] = {}
-    singlecomponents[key]['component'] = components
+    singlecomponents[key]['component'] = components[i]
     singlecomponents[key]["title"] = "{:.9s}".format(components[i][0])
-    ax,az,PHI,comptime = get_one_comp(coordsPHI,coordsQ,components[i])
+    ax,az,PHI = get_one_comp(coordsPHI,coordsQ,components[i])
     singlecomponents[key]['ax'] = ax
     singlecomponents[key]['az'] = az
     singlecomponents[key]['PHI'] = np.reshape(PHI,coordsPHI[0].shape)
@@ -84,11 +69,11 @@ for i in range(len(components)):
         permutations[key]['comp2'] = components[j]
         permutations[key]['ax'] = ax 
         permutations[key]['az'] = az
-        permutations[key]['phi'] = np.reshape(PHI,X.shape)
+        permutations[key]['phi'] = np.reshape(phi, X.shape)
         permutations[key]["ax_c"] = ax_c
         permutations[key]["az_c"] = az_c
         permutations[key]["ax_cs"] = ax_cs
-        permutations[key]["ax_cs"] = az_cs
+        permutations[key]["az_cs"] = az_cs
 
 # inspect the differences for order independence
 RMS = lambda arg1, arg2 : np.sqrt(np.mean((arg1.flatten()-arg2.flatten())**2) )
@@ -119,7 +104,7 @@ for i in range(len(components)):
         axis[i,j].text( 0.05, 0.05, "RMS: ax {:.1e}".format(permutations[key]["axrms"]),transform=axis[i,j].transAxes,color=textcolor)
         if permutations[key]["azrms"] > 0: textcolor="red"
         else: textcolor="black"
-        axis[i,j].text( 0.05, 0.15, "RMS: ax {:.1e}".format(permutations[key]["azrms"]),transform=axis[i,j].transAxes,color=textcolor)
+        axis[i,j].text( 0.05, 0.15, "RMS: az {:.1e}".format(permutations[key]["azrms"]),transform=axis[i,j].transAxes,color=textcolor)
         if permutations[key]["phirms"] > 0: textcolor="red"
         else: textcolor="black"
         axis[i,j].text( 0.05, 0.85, "RMS: phi {:.1e}".format(permutations[key]["phirms"]),transform=axis[i,j].transAxes,color=textcolor)

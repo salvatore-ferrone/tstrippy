@@ -17,16 +17,6 @@ MODULE gravity
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_MAX_NCOMP = 16
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_MAX_PARAMS = 16
 
-    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_NONE = 0
-    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_PLUMMER = 10
-    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_HERNQUIST = 11
-    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_ALLENSANTILLIANHALO = 12
-    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_MIYAMOTONAGAI = 13
-    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_LONGMURALIBAR = 14
-    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_POULIASIS2017PII = 15
-    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_EXPONENTIALOBLATEHALO = 20
-    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_IBATA2024HALO = 21
-
     INTEGER, PARAMETER, PRIVATE :: BACKEND_ANALYTIC = 1
     INTEGER, PARAMETER, PRIVATE :: BACKEND_SH = 2
 
@@ -55,7 +45,6 @@ MODULE gravity
 
     TYPE, PRIVATE :: component_handler_t
         CHARACTER(LEN=32) :: model_name = ""
-        INTEGER :: kind = GRAVITY_KIND_NONE
         INTEGER :: nparams = 0
         INTEGER :: backend = BACKEND_ANALYTIC
         PROCEDURE(force_eval_iface), POINTER, NOPASS :: force_proc => NULL()
@@ -67,8 +56,8 @@ MODULE gravity
     LOGICAL, PUBLIC :: GRAVITY_G_IS_DEFAULT = .TRUE.
     LOGICAL, PUBLIC :: GRAVITY_FINALIZED = .FALSE.
     INTEGER, PUBLIC :: GRAVITY_NCOMP = 0
-    INTEGER, DIMENSION(GRAVITY_MAX_NCOMP), PUBLIC :: GRAVITY_KIND = 0
     REAL*8, DIMENSION(GRAVITY_MAX_PARAMS, GRAVITY_MAX_NCOMP), PUBLIC :: GRAVITY_PARAMS = 0.0D0
+    INTEGER, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: COMPONENT_HANDLER_SLOT = 0
 
     INTEGER, PARAMETER, PRIVATE :: MAX_COMPONENT_HANDLERS = 16
     TYPE(component_handler_t), DIMENSION(MAX_COMPONENT_HANDLERS), PRIVATE :: COMPONENT_HANDLERS
@@ -77,7 +66,7 @@ MODULE gravity
 
     PUBLIC :: ibata2024halo_density
     PRIVATE :: ensure_component_handlers_initialized, register_handler_analytic, register_handler_sh
-    PRIVATE :: handler_index_from_name, handler_index_from_kind, kind_is_sh
+    PRIVATE :: handler_index_from_name, component_is_sh
     PRIVATE :: ensure_sh_component_tables_loaded, eval_component_force, eval_component_potential
     PRIVATE :: sh_force_from_tables, sh_potential_from_tables
     PRIVATE :: count_sh_components, sh_slot_for_component
@@ -90,27 +79,27 @@ CONTAINS
         IF (COMPONENT_HANDLERS_INITIALIZED) RETURN
 
         N_COMPONENT_HANDLERS = 0
-        CALL register_handler_analytic("plummer", GRAVITY_KIND_PLUMMER, 2, plummer_force, plummer_potential)
-        CALL register_handler_analytic("hernquist", GRAVITY_KIND_HERNQUIST, 2, hernquist_force, hernquist_potential)
-        CALL register_handler_analytic("allensantillianhalo", GRAVITY_KIND_ALLENSANTILLIANHALO, 4, &
+        CALL register_handler_analytic("plummer", 2, plummer_force, plummer_potential)
+        CALL register_handler_analytic("hernquist", 2, hernquist_force, hernquist_potential)
+        CALL register_handler_analytic("allensantillianhalo", 4, &
                                        allensantillianhalo_force, allensantillianhalo_potential)
-        CALL register_handler_analytic("miyamotonagai", GRAVITY_KIND_MIYAMOTONAGAI, 3, &
+        CALL register_handler_analytic("miyamotonagai", 3, &
                                        miyamotonagai_force, miyamotonagai_potential)
-        CALL register_handler_analytic("longmuralibar", GRAVITY_KIND_LONGMURALIBAR, 4, &
+        CALL register_handler_analytic("longmuralibar", 4, &
                                        longmuralibar_force, longmuralibar_potential)
-        CALL register_handler_analytic("pouliasis2017pii", GRAVITY_KIND_POULIASIS2017PII, 10, &
+        CALL register_handler_analytic("pouliasis2017pii", 10, &
                                        pouliasis2017pii_force, pouliasis2017pii_potential)
-        CALL register_handler_sh("exponentialoblatehalo", GRAVITY_KIND_EXPONENTIALOBLATEHALO, 3, &
+        CALL register_handler_sh("exponentialoblatehalo", 3, &
                                  exponentialoblatehalo_density)
-        CALL register_handler_sh("ibata2024halo", GRAVITY_KIND_IBATA2024HALO, 6, ibata2024halo_density)
+        CALL register_handler_sh("ibata2024halo", 6, ibata2024halo_density)
 
         COMPONENT_HANDLERS_INITIALIZED = .TRUE.
     END SUBROUTINE ensure_component_handlers_initialized
 
-    SUBROUTINE register_handler_analytic(model_name, kind, nparams, force_proc, potential_proc)
+    SUBROUTINE register_handler_analytic(model_name, nparams, force_proc, potential_proc)
         IMPLICIT NONE
         CHARACTER(LEN=*), INTENT(IN) :: model_name
-        INTEGER, INTENT(IN) :: kind, nparams
+        INTEGER, INTENT(IN) :: nparams
         PROCEDURE(force_eval_iface) :: force_proc
         PROCEDURE(potential_eval_iface) :: potential_proc
 
@@ -121,17 +110,16 @@ CONTAINS
 
         N_COMPONENT_HANDLERS = N_COMPONENT_HANDLERS + 1
         COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%model_name = model_name
-        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%kind = kind
         COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%nparams = nparams
         COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%backend = BACKEND_ANALYTIC
         COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%force_proc => force_proc
         COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%potential_proc => potential_proc
     END SUBROUTINE register_handler_analytic
 
-    SUBROUTINE register_handler_sh(model_name, kind, nparams, density_proc)
+    SUBROUTINE register_handler_sh(model_name, nparams, density_proc)
         IMPLICIT NONE
         CHARACTER(LEN=*), INTENT(IN) :: model_name
-        INTEGER, INTENT(IN) :: kind, nparams
+        INTEGER, INTENT(IN) :: nparams
         PROCEDURE(density_eval_iface) :: density_proc
 
         IF (N_COMPONENT_HANDLERS >= MAX_COMPONENT_HANDLERS) THEN
@@ -141,7 +129,6 @@ CONTAINS
 
         N_COMPONENT_HANDLERS = N_COMPONENT_HANDLERS + 1
         COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%model_name = model_name
-        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%kind = kind
         COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%nparams = nparams
         COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%backend = BACKEND_SH
         COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%force_proc => sh_force_from_tables
@@ -164,29 +151,18 @@ CONTAINS
         END DO
     END FUNCTION handler_index_from_name
 
-    INTEGER FUNCTION handler_index_from_kind(kind_code)
+    LOGICAL FUNCTION component_is_sh(i_comp)
         IMPLICIT NONE
-        INTEGER, INTENT(IN) :: kind_code
-        INTEGER :: i
-
-        CALL ensure_component_handlers_initialized()
-        handler_index_from_kind = 0
-        DO i = 1, N_COMPONENT_HANDLERS
-            IF (COMPONENT_HANDLERS(i)%kind == kind_code) THEN
-                handler_index_from_kind = i
-                RETURN
-            END IF
-        END DO
-    END FUNCTION handler_index_from_kind
-
-    LOGICAL FUNCTION kind_is_sh(kind_code)
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: kind_code
+        INTEGER, INTENT(IN) :: i_comp
         INTEGER :: i_handler
 
-        i_handler = handler_index_from_kind(kind_code)
-        kind_is_sh = (i_handler > 0 .AND. COMPONENT_HANDLERS(i_handler)%backend == BACKEND_SH)
-    END FUNCTION kind_is_sh
+        component_is_sh = .FALSE.
+        IF (i_comp < 1 .OR. i_comp > GRAVITY_NCOMP) RETURN
+        i_handler = COMPONENT_HANDLER_SLOT(i_comp)
+        IF (i_handler < 1 .OR. i_handler > N_COMPONENT_HANDLERS) RETURN
+
+        component_is_sh = (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_SH)
+    END FUNCTION component_is_sh
 
     ! MODULE-STATE subroutines
     SUBROUTINE cleargravity()
@@ -196,7 +172,7 @@ CONTAINS
         GRAVITY_G_IS_DEFAULT = .TRUE.
         GRAVITY_FINALIZED = .FALSE.
         GRAVITY_NCOMP = 0
-        GRAVITY_KIND = GRAVITY_KIND_NONE
+        COMPONENT_HANDLER_SLOT = 0
         GRAVITY_PARAMS = 0.0D0
         CALL sh_set_basis_g(GRAVITY_G)
     END SUBROUTINE cleargravity
@@ -259,7 +235,7 @@ CONTAINS
         END IF
 
         GRAVITY_NCOMP = GRAVITY_NCOMP + 1
-        GRAVITY_KIND(GRAVITY_NCOMP) = COMPONENT_HANDLERS(i_handler)%kind
+        COMPONENT_HANDLER_SLOT(GRAVITY_NCOMP) = i_handler
         GRAVITY_PARAMS(1:nparams, GRAVITY_NCOMP) = params(1:nparams)
     END SUBROUTINE addgravitycomponent
 
@@ -274,11 +250,12 @@ CONTAINS
         n_sh = 0
         i_sh = 0
         DO i = 1, GRAVITY_NCOMP
-            IF (GRAVITY_KIND(i) == GRAVITY_KIND_NONE) THEN
+            i_handler = COMPONENT_HANDLER_SLOT(i)
+            IF (i_handler < 1 .OR. i_handler > N_COMPONENT_HANDLERS) THEN
                 WRITE(*,'(A)') "WARNING: finalizegravity: component slot is uninitialized"
                 RETURN
             END IF
-            IF (kind_is_sh(GRAVITY_KIND(i))) THEN
+            IF (component_is_sh(i)) THEN
                 n_sh = n_sh + 1
                 i_sh = i
             END IF
@@ -287,7 +264,7 @@ CONTAINS
         ! Microstep: eager SH table build in finalize for the single-SH-component case.
         IF (n_sh == 1) THEN
             IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
-            i_handler = handler_index_from_kind(GRAVITY_KIND(i_sh))
+            i_handler = COMPONENT_HANDLER_SLOT(i_sh)
             CALL sh_project_density(GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_sh), &
                                     COMPONENT_HANDLERS(i_handler)%density_proc)
             CALL sh_compute_phi_tables()
@@ -297,9 +274,9 @@ CONTAINS
 
             i_sh_slot = 0
             DO i = 1, GRAVITY_NCOMP
-                IF (kind_is_sh(GRAVITY_KIND(i))) THEN
+                IF (component_is_sh(i)) THEN
                     i_sh_slot = i_sh_slot + 1
-                    i_handler = handler_index_from_kind(GRAVITY_KIND(i))
+                    i_handler = COMPONENT_HANDLER_SLOT(i)
                     CALL sh_project_density(GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i), &
                                             COMPONENT_HANDLERS(i_handler)%density_proc)
                     CALL sh_compute_phi_tables()
@@ -315,7 +292,7 @@ CONTAINS
         INTEGER, INTENT(IN) :: i_comp, n_sh
         INTEGER :: i_handler
 
-        i_handler = handler_index_from_kind(GRAVITY_KIND(i_comp))
+        i_handler = COMPONENT_HANDLER_SLOT(i_comp)
         IF (i_handler <= 0) RETURN
 
         IF (n_sh > 1) THEN
@@ -338,7 +315,7 @@ CONTAINS
         REAL*8, INTENT(OUT), DIMENSION(n,3) :: force_c
         INTEGER :: i_handler
 
-        i_handler = handler_index_from_kind(GRAVITY_KIND(i_comp))
+        i_handler = COMPONENT_HANDLER_SLOT(i_comp)
         IF (i_handler <= 0) THEN
             force_c = 0.0D0
             RETURN
@@ -359,7 +336,7 @@ CONTAINS
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi_c
         INTEGER :: i_handler
 
-        i_handler = handler_index_from_kind(GRAVITY_KIND(i_comp))
+        i_handler = COMPONENT_HANDLER_SLOT(i_comp)
         IF (i_handler <= 0) THEN
             phi_c = 0.0D0
             RETURN
@@ -499,7 +476,7 @@ CONTAINS
 
         count_sh_components = 0
         DO i = 1, GRAVITY_NCOMP
-            IF (kind_is_sh(GRAVITY_KIND(i))) THEN
+            IF (component_is_sh(i)) THEN
                 count_sh_components = count_sh_components + 1
             END IF
         END DO
@@ -514,7 +491,7 @@ CONTAINS
         IF (i_comp < 1 .OR. i_comp > GRAVITY_NCOMP) RETURN
 
         DO i = 1, i_comp
-            IF (kind_is_sh(GRAVITY_KIND(i))) THEN
+            IF (component_is_sh(i)) THEN
                 sh_slot_for_component = sh_slot_for_component + 1
             END IF
         END DO

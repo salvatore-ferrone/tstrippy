@@ -3,18 +3,18 @@ MODULE besselbfe
                          bicubic_hermite_eval_2d
     IMPLICIT NONE
 
-    ! Public defaults (constants)
-    REAL*8, PARAMETER, PUBLIC :: BESSEL_G_DEFAULT = 4.30091727D-6
-    INTEGER, PARAMETER, PUBLIC :: BESSEL_TABLE_NR_DEFAULT = 128
-    INTEGER, PARAMETER, PUBLIC :: BESSEL_TABLE_NZ_DEFAULT = 128
-    INTEGER, PARAMETER, PUBLIC :: NK_BUILD_DEFAULT = 256
-    REAL*8, PARAMETER, PUBLIC :: BESSEL_R_SCALE_DEFAULT = 1.0D0
-    REAL*8, PARAMETER, PUBLIC :: BESSEL_Z_SCALE_DEFAULT = 1.0D0
+    ! Private defaults (constants)
+    REAL*8, PARAMETER, PRIVATE :: BESSEL_G_DEFAULT = 4.30091727D-6
+    INTEGER, PARAMETER, PRIVATE :: BESSEL_TABLE_NR_DEFAULT = 128
+    INTEGER, PARAMETER, PRIVATE :: BESSEL_TABLE_NZ_DEFAULT = 128
+    INTEGER, PARAMETER, PRIVATE :: NK_BUILD_DEFAULT = 256
+    REAL*8, PARAMETER, PRIVATE :: BESSEL_R_SCALE_DEFAULT = 1.0D0
+    REAL*8, PARAMETER, PRIVATE :: BESSEL_Z_SCALE_DEFAULT = 1.0D0
 
     ! Meta field count (internal bookkeeping)
     INTEGER, PARAMETER, PRIVATE :: BESSEL_META_FIELDS = 3
 
-    ! Public runtime configuration (user can modify before init)
+    ! Public state (read-only, set via init routines)
     REAL*8, PUBLIC :: BESSEL_G = BESSEL_G_DEFAULT
     INTEGER, PUBLIC :: BESSEL_TABLE_NR = BESSEL_TABLE_NR_DEFAULT
     INTEGER, PUBLIC :: BESSEL_TABLE_NZ = BESSEL_TABLE_NZ_DEFAULT
@@ -78,6 +78,49 @@ CONTAINS
         BESSEL_G = g
     END SUBROUTINE bessel_set_gravity_constant
 
+    SUBROUTINE bessel_init(nr, nz, nk_build_in, r_scale, z_scale)
+        ! Explicit initialization with all tunable parameters
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: nr, nz, nk_build_in
+        REAL*8, INTENT(IN) :: r_scale, z_scale
+
+        IF (nr < 2) THEN
+            WRITE(*,'(A)') "WARNING: bessel_init: nr must be >= 2"
+            RETURN
+        END IF
+        IF (nz < 2) THEN
+            WRITE(*,'(A)') "WARNING: bessel_init: nz must be >= 2"
+            RETURN
+        END IF
+        IF (nk_build_in < 4) THEN
+            WRITE(*,'(A)') "WARNING: bessel_init: nk_build must be >= 4"
+            RETURN
+        END IF
+        IF (r_scale <= 0.0D0) THEN
+            WRITE(*,'(A)') "WARNING: bessel_init: r_scale must be positive"
+            RETURN
+        END IF
+        IF (z_scale <= 0.0D0) THEN
+            WRITE(*,'(A)') "WARNING: bessel_init: z_scale must be positive"
+            RETURN
+        END IF
+
+        CALL bessel_clear()
+        BESSEL_TABLE_NR = nr
+        BESSEL_TABLE_NZ = nz
+        NK_BUILD = nk_build_in
+        BESSEL_R_SCALE = r_scale
+        BESSEL_Z_SCALE = z_scale
+        BESSEL_INITIALIZED = .TRUE.
+    END SUBROUTINE bessel_init
+
+    SUBROUTINE bessel_default_init()
+        ! Default initialization using hardcoded parameter defaults
+        IMPLICIT NONE
+        CALL bessel_init(BESSEL_TABLE_NR_DEFAULT, BESSEL_TABLE_NZ_DEFAULT, &
+                         NK_BUILD_DEFAULT, BESSEL_R_SCALE_DEFAULT, BESSEL_Z_SCALE_DEFAULT)
+    END SUBROUTINE bessel_default_init
+
     SUBROUTINE bessel_init_component_tables(ncomp)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: ncomp
@@ -87,7 +130,6 @@ CONTAINS
             RETURN
         END IF
 
-        CALL bessel_clear()
         BESSEL_NCOMP = ncomp
 
         ALLOCATE(BESSEL_TABLE_PHI(BESSEL_TABLE_NR, BESSEL_TABLE_NZ, BESSEL_NCOMP))
@@ -103,7 +145,6 @@ CONTAINS
         BESSEL_TABLE_D2PHI_DRDZ = 0.0D0
         BESSEL_TABLE_META = 0.0D0
         BESSEL_COMPONENT_READY = .FALSE.
-        BESSEL_INITIALIZED = .TRUE.
     END SUBROUTINE bessel_init_component_tables
 
     SUBROUTINE bessel_project_axisym_density_generic(component_index, params, density_model)

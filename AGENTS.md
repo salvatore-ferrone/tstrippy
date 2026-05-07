@@ -51,27 +51,35 @@ Use these boundaries to avoid mixing concerns:
 
 If a new gravity component or renamed evaluator is added in gravity, verify simulator wrapper/dispatch wiring.
 
-## Active Refactor Focus: Exponential-Disk Bessel
-From [plan.md](plan.md), current focus is separating method from application:
+## Integration Status: Exponential-Disk Bessel
 
-1. Treat Bessel machinery as a generic Poisson-solver method.
-2. Keep exponential-disk specifics in model-level evaluators.
-3. Rename and refactor toward explicit naming like `exponential_disk_bessel_eval_component`.
-4. Update dependent tests/docs/notebooks when names or interfaces change.
+**Phase 3 Complete (2026-05-07)**: Bessel backend integrated into gravity dispatch system.
 
-When editing both mathutils and gravity in one change:
-1. Keep low-level kernels in mathutils.
-2. Keep density-profile-specific assembly in gravity.
-3. Rebuild and re-run at least fast tests after each coherent refactor step.
+- Handler registration: `exponentialdisk` model routes to BACKEND_BESSEL
+- Lifecycle: `addgravitycomponent("exponentialdisk", [Sigma0, hR, hZ])` → `finalizegravity()` → evaluate
+- Multi-component indexing: Implemented `bessel_slot_for_component()` helper (mirrors SH pattern)
+- Memory safety: `bessel_clear()` called in `cleargravity()` for proper lifecycle cleanup
+- Validation: Integration test passes; no crashes; deterministic outputs; smoke tests green
 
-## Notebook Workflow For Current Phase
-Planned validation notebook: [docs/source/bessel_functions_expansion.ipynb](docs/source/bessel_functions_expansion.ipynb)
+**Phase 4 In Progress (2026-05-08 onwards)**: Physics validation and convergence analysis.
 
-Execution expectations:
-1. Notebook should run top-to-bottom without hidden state assumptions.
-2. Include convergence sweeps for Bessel order and profile shape regimes, as defined in [plan.md](plan.md).
-3. Include potential-gradient consistency checks and orbit-convergence diagnostics.
-4. Keep cell outputs deterministic where possible for CI/nightly reproducibility.
+Current known issue: bessel backend produces valid deterministic values but correctness not yet verified.
+
+Next steps:
+1. Run convergence sweeps on table resolution (BESSEL_TABLE_NR, BESSEL_TABLE_NZ, NK_BUILD)
+2. Validate against reference solutions (analytic exponential disk or high-res Legendre baseline)
+3. Check potential-gradient consistency and orbit conservation
+4. Tune parameters if needed for accuracy
+
+## Notebook Workflow For Phase 4
+Validation notebooks: [docs/source/bessel_functions_expansion.ipynb](docs/source/bessel_functions_expansion.ipynb)
+
+Execution plan:
+1. Top-to-bottom convergence sweeps for Bessel order and profile shape regimes
+2. Potential-gradient consistency checks (compare analytical and finite-difference force)
+3. Orbit integration tests (compare with reference solutions)
+4. Document recommended parameter ranges for accuracy vs speed trade-off
+5. Keep cell outputs deterministic for CI/nightly reproducibility
 
 ## Practical Guardrails
 1. Do not edit generated build artifact trees unless the task is explicitly about build tooling:

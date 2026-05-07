@@ -67,10 +67,25 @@ This path is the primary API direction and owns `GRAVITY_G` internally.
 
 This currently coexists with lifecycle `addgravitycomponent` and is an active unification target in the plan.
 
+## Backend Integration Status
+
+**Spherical Harmonics (SH)**:
+- Status: Integrated and working
+- Pattern: `sh_init_component_phi()` → per-component storage with `i_sh_slot` counter mapping
+- Component mapping: `sh_slot_for_component(i_comp)` helper function
+- Table construction: finalize-time eager build per component
+
+**Bessel (Cylindrical Disk)**:
+- Status: Integrated (2026-05-07) with physics validation pending
+- Model: `exponentialdisk` with 3 params (Sigma0, hR, hZ)
+- Pattern: Mirrors SH architecture with `bessel_slot_for_component()` helper
+- Table construction: finalize-time eager build per component
+- Known issue: Numerical accuracy not yet validated; requires convergence analysis
+
 ## Known Architectural Tensions (Tracked in plan.md)
 
 - Lifecycle non-analytic spherical-harmonic state is still shared via module-level `BASIS_*` tables, which can contaminate multi-component configurations.
-- Bessel internals are being refactored toward force-only and potential-only paths for consistency with the split evaluator architecture.
+- Bessel backend numerics require validation (Phase 4); values are deterministic but correctness TBD.
 - Composite and lifecycle control surfaces overlap and need a canonical mixed analytic+BFE path.
 
 ## Build and Validation

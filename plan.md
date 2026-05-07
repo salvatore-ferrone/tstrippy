@@ -1,6 +1,32 @@
 # TSTRIPPY Development Plan
 Date: 2026-05-05
 
+## Session Status (2026-05-07)
+
+**Bessel Backend Integration: Phase 3 COMPLETE (with known physics issue)**
+
+Milestone: Bessel backend successfully integrated into gravity dispatch system.
+
+✅ **Completed**:
+- Bessel backend (BACKEND_BESSEL=3) registered in handler system
+- `exponentialdisk` model wired to bessel backend with 3-param signature
+- Two critical bugs fixed:
+  1. Memory leak: Added `bessel_clear()` call to `cleargravity()` → no crash on second run
+  2. Component indexing: Implemented `bessel_slot_for_component()` helper and fixed `finalizegravity()` bessel loop to use internal slot counter (matching SH pattern)
+- Integration test validates: component adds, finalizegravity() completes, force/potential evaluation produces deterministic non-NaN values, second run executes without crash
+- All 18 smoke tests pass (no regressions)
+- Build succeeds cleanly
+
+⚠️ **Known Issue**:
+- Physics values produced by bessel evaluator need validation
+- Values are deterministic and non-NaN but magnitude/behavior not yet confirmed correct
+- Requires detailed convergence checks and comparison with reference solutions
+
+**Next Session (2026-05-08)**:
+- Phase 4: Physics validation for bessel backend
+- Use notebooks: basis_expansion_verification, legendre_BFE_orbit_convergence, composite_basis_potential
+- May require parameter tuning or table resolution adjustments
+
 ## Lunch Checkpoint (2026-05-06)
 
 TEMP microstep status is now stable:

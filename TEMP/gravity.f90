@@ -175,7 +175,7 @@ CONTAINS
         GRAVITY_FINALIZED = .TRUE.
     END SUBROUTINE finalizegravity
 
-    SUBROUTINE evaluategravityforcecomponents(n, x, y, z, ax_comp, ay_comp, az_comp)
+    SUBROUTINE force_components(n, x, y, z, ax_comp, ay_comp, az_comp)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -233,38 +233,9 @@ CONTAINS
                 az_comp(i,:) = az_c
             END SELECT
         END DO
-    END SUBROUTINE evaluategravityforcecomponents
+    END SUBROUTINE force_components
 
-    INTEGER FUNCTION count_sh_components()
-        IMPLICIT NONE
-        INTEGER :: i
-
-        count_sh_components = 0
-        DO i = 1, GRAVITY_NCOMP
-            IF (GRAVITY_KIND(i) == GRAVITY_KIND_EXPONENTIALOBLATEHALO .OR. &
-                GRAVITY_KIND(i) == GRAVITY_KIND_IBATA2024HALO) THEN
-                count_sh_components = count_sh_components + 1
-            END IF
-        END DO
-    END FUNCTION count_sh_components
-
-    INTEGER FUNCTION sh_slot_for_component(i_comp)
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: i_comp
-        INTEGER :: i
-
-        sh_slot_for_component = 0
-        IF (i_comp < 1 .OR. i_comp > GRAVITY_NCOMP) RETURN
-
-        DO i = 1, i_comp
-            IF (GRAVITY_KIND(i) == GRAVITY_KIND_EXPONENTIALOBLATEHALO .OR. &
-                GRAVITY_KIND(i) == GRAVITY_KIND_IBATA2024HALO) THEN
-                sh_slot_for_component = sh_slot_for_component + 1
-            END IF
-        END DO
-    END FUNCTION sh_slot_for_component
-
-    SUBROUTINE evaluategravityforces(n, x, y, z, ax, ay, az)
+    SUBROUTINE force(n, x, y, z, ax, ay, az)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -322,9 +293,9 @@ CONTAINS
                 az = az + az_c
             END SELECT
         END DO
-    END SUBROUTINE evaluategravityforces
+    END SUBROUTINE force
 
-    SUBROUTINE evaluategravitypotential(n, x, y, z, phi)
+    SUBROUTINE potential(n, x, y, z, phi)
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
@@ -370,7 +341,86 @@ CONTAINS
                 phi = phi + phi_c
             END SELECT
         END DO
-    END SUBROUTINE evaluategravitypotential
+    END SUBROUTINE potential
+
+    SUBROUTINE potential_components(n, x, y, z, phi_comp)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(16, n) :: phi_comp
+        REAL*8, DIMENSION(n) :: phi_c
+        INTEGER :: i, n_sh
+
+        phi_comp = 0.0D0
+
+        IF (.NOT. GRAVITY_FINALIZED) THEN
+            WRITE(*,'(A)') "WARNING: evaluategravitypotentialcomponents: call finalizegravity first"
+            RETURN
+        END IF
+
+        n_sh = count_sh_components()
+
+        DO i = 1, GRAVITY_NCOMP
+            SELECT CASE (GRAVITY_KIND(i))
+            CASE (GRAVITY_KIND_PLUMMER)
+                CALL plummer_potential(GRAVITY_PARAMS(1:2, i), n, x, y, z, phi_c)
+                phi_comp(i,:) = phi_c
+            CASE (GRAVITY_KIND_HERNQUIST)
+                CALL hernquist_potential(GRAVITY_PARAMS(1:2, i), n, x, y, z, phi_c)
+                phi_comp(i,:) = phi_c
+            CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
+                IF (n_sh > 1) THEN
+                    CALL sh_load_component_phi(sh_slot_for_component(i))
+                ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
+                    CALL sh_project_density(GRAVITY_PARAMS(1:3, i), exponentialoblatehalo_density)
+                    CALL sh_compute_phi_tables()
+                END IF
+                CALL sh_eval_potential(n, x, y, z, phi_c)
+                phi_comp(i,:) = phi_c
+            CASE (GRAVITY_KIND_IBATA2024HALO)
+                IF (n_sh > 1) THEN
+                    CALL sh_load_component_phi(sh_slot_for_component(i))
+                ELSE IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
+                    IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
+                    CALL sh_project_density(GRAVITY_PARAMS(1:6, i), ibata2024halo_density)
+                    CALL sh_compute_phi_tables()
+                END IF
+                CALL sh_eval_potential(n, x, y, z, phi_c)
+                phi_comp(i,:) = phi_c
+            END SELECT
+        END DO
+    END SUBROUTINE potential_components
+
+    ! Spherical harmonics interfacing subroutines
+    INTEGER FUNCTION count_sh_components()
+        IMPLICIT NONE
+        INTEGER :: i
+
+        count_sh_components = 0
+        DO i = 1, GRAVITY_NCOMP
+            IF (GRAVITY_KIND(i) == GRAVITY_KIND_EXPONENTIALOBLATEHALO .OR. &
+                GRAVITY_KIND(i) == GRAVITY_KIND_IBATA2024HALO) THEN
+                count_sh_components = count_sh_components + 1
+            END IF
+        END DO
+    END FUNCTION count_sh_components
+
+    INTEGER FUNCTION sh_slot_for_component(i_comp)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: i_comp
+        INTEGER :: i
+
+        sh_slot_for_component = 0
+        IF (i_comp < 1 .OR. i_comp > GRAVITY_NCOMP) RETURN
+
+        DO i = 1, i_comp
+            IF (GRAVITY_KIND(i) == GRAVITY_KIND_EXPONENTIALOBLATEHALO .OR. &
+                GRAVITY_KIND(i) == GRAVITY_KIND_IBATA2024HALO) THEN
+                sh_slot_for_component = sh_slot_for_component + 1
+            END IF
+        END DO
+    END FUNCTION sh_slot_for_component
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     !!! ANALYTICAL POTENTIAL MODELS !!!

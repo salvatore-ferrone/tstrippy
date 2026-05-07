@@ -20,6 +20,10 @@ MODULE gravity
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_NONE = 0
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_PLUMMER = 10
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_HERNQUIST = 11
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_ALLENSANTILLIANHALO = 12
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_MIYAMOTONAGAI = 13
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_LONGMURALIBAR = 14
+    INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_POULIASIS2017PII = 15
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_EXPONENTIALOBLATEHALO = 20
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_KIND_IBATA2024HALO = 21
 
@@ -99,6 +103,18 @@ CONTAINS
         CASE ("hernquist")
             kind_code = GRAVITY_KIND_HERNQUIST
             required_params = 2
+        CASE ("allensantillianhalo")
+            kind_code = GRAVITY_KIND_ALLENSANTILLIANHALO
+            required_params = 4
+        CASE ("miyamotonagai")
+            kind_code = GRAVITY_KIND_MIYAMOTONAGAI
+            required_params = 3
+        CASE ("longmuralibar")
+            kind_code = GRAVITY_KIND_LONGMURALIBAR
+            required_params = 4
+        CASE ("pouliasis2017pii")
+            kind_code = GRAVITY_KIND_POULIASIS2017PII
+            required_params = 10
         CASE ("exponentialoblatehalo")
             kind_code = GRAVITY_KIND_EXPONENTIALOBLATEHALO
             required_params = 3
@@ -106,7 +122,7 @@ CONTAINS
             kind_code = GRAVITY_KIND_IBATA2024HALO
             required_params = 6
         CASE DEFAULT
-            WRITE(*,'(A)') "WARNING: addgravitycomponent: unknown model_name"
+            WRITE(*,'(A)') "WARNING: addgravitycomponent: unknown model_name", model_name
             RETURN
         END SELECT
 
@@ -207,6 +223,26 @@ CONTAINS
                 ax_comp(i,:) = force_tmp(:,1)
                 ay_comp(i,:) = force_tmp(:,2)
                 az_comp(i,:) = force_tmp(:,3)
+            CASE (GRAVITY_KIND_ALLENSANTILLIANHALO)
+                CALL allensantillianhalo_force(GRAVITY_PARAMS(1:4, i), n, x, y, z, force_tmp)
+                ax_comp(i,:) = force_tmp(:,1)
+                ay_comp(i,:) = force_tmp(:,2)
+                az_comp(i,:) = force_tmp(:,3)
+            CASE (GRAVITY_KIND_MIYAMOTONAGAI)
+                CALL miyamotonagai_force(GRAVITY_PARAMS(1:3, i), n, x, y, z, force_tmp)
+                ax_comp(i,:) = force_tmp(:,1)
+                ay_comp(i,:) = force_tmp(:,2)
+                az_comp(i,:) = force_tmp(:,3)
+            CASE (GRAVITY_KIND_LONGMURALIBAR)
+                CALL longmuralibar_force(GRAVITY_PARAMS(1:4, i), n, x, y, z, force_tmp)
+                ax_comp(i,:) = force_tmp(:,1)
+                ay_comp(i,:) = force_tmp(:,2)
+                az_comp(i,:) = force_tmp(:,3)
+            CASE (GRAVITY_KIND_POULIASIS2017PII)
+                CALL pouliasis2017pii_force(GRAVITY_PARAMS(1:10, i), n, x, y, z, force_tmp)
+                ax_comp(i,:) = force_tmp(:,1)
+                ay_comp(i,:) = force_tmp(:,2)
+                az_comp(i,:) = force_tmp(:,3)
             CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
                 IF (n_sh > 1) THEN
                     CALL sh_load_component_phi(sh_slot_for_component(i))
@@ -267,6 +303,26 @@ CONTAINS
                 ax = ax + force_tmp(:,1)
                 ay = ay + force_tmp(:,2)
                 az = az + force_tmp(:,3)
+            CASE (GRAVITY_KIND_ALLENSANTILLIANHALO)
+                CALL allensantillianhalo_force(GRAVITY_PARAMS(1:4, i), n, x, y, z, force_tmp)
+                ax = ax + force_tmp(:,1)
+                ay = ay + force_tmp(:,2)
+                az = az + force_tmp(:,3)
+            CASE (GRAVITY_KIND_MIYAMOTONAGAI)
+                CALL miyamotonagai_force(GRAVITY_PARAMS(1:3, i), n, x, y, z, force_tmp)
+                ax = ax + force_tmp(:,1)
+                ay = ay + force_tmp(:,2)
+                az = az + force_tmp(:,3)
+            CASE (GRAVITY_KIND_LONGMURALIBAR)
+                CALL longmuralibar_force(GRAVITY_PARAMS(1:4, i), n, x, y, z, force_tmp)
+                ax = ax + force_tmp(:,1)
+                ay = ay + force_tmp(:,2)
+                az = az + force_tmp(:,3)
+            CASE (GRAVITY_KIND_POULIASIS2017PII)
+                CALL pouliasis2017pii_force(GRAVITY_PARAMS(1:10, i), n, x, y, z, force_tmp)
+                ax = ax + force_tmp(:,1)
+                ay = ay + force_tmp(:,2)
+                az = az + force_tmp(:,3)
             CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
                 IF (n_sh > 1) THEN
                     CALL sh_load_component_phi(sh_slot_for_component(i))
@@ -319,6 +375,18 @@ CONTAINS
             CASE (GRAVITY_KIND_HERNQUIST)
                 CALL hernquist_potential(GRAVITY_PARAMS(1:2, i), n, x, y, z, phi_c)
                 phi = phi + phi_c
+            CASE (GRAVITY_KIND_ALLENSANTILLIANHALO)
+                CALL allensantillianhalo_potential(GRAVITY_PARAMS(1:4, i), n, x, y, z, phi_c)
+                phi = phi + phi_c
+            CASE (GRAVITY_KIND_MIYAMOTONAGAI)
+                CALL miyamotonagai_potential(GRAVITY_PARAMS(1:3, i), n, x, y, z, phi_c)
+                phi = phi + phi_c
+            CASE (GRAVITY_KIND_LONGMURALIBAR)
+                CALL longmuralibar_potential(GRAVITY_PARAMS(1:4, i), n, x, y, z, phi_c)
+                phi = phi + phi_c
+            CASE (GRAVITY_KIND_POULIASIS2017PII)
+                CALL pouliasis2017pii_potential(GRAVITY_PARAMS(1:10, i), n, x, y, z, phi_c)
+                phi = phi + phi_c
             CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
                 IF (n_sh > 1) THEN
                     CALL sh_load_component_phi(sh_slot_for_component(i))
@@ -367,6 +435,18 @@ CONTAINS
                 phi_comp(i,:) = phi_c
             CASE (GRAVITY_KIND_HERNQUIST)
                 CALL hernquist_potential(GRAVITY_PARAMS(1:2, i), n, x, y, z, phi_c)
+                phi_comp(i,:) = phi_c
+            CASE (GRAVITY_KIND_ALLENSANTILLIANHALO)
+                CALL allensantillianhalo_potential(GRAVITY_PARAMS(1:4, i), n, x, y, z, phi_c)
+                phi_comp(i,:) = phi_c
+            CASE (GRAVITY_KIND_MIYAMOTONAGAI)
+                CALL miyamotonagai_potential(GRAVITY_PARAMS(1:3, i), n, x, y, z, phi_c)
+                phi_comp(i,:) = phi_c
+            CASE (GRAVITY_KIND_LONGMURALIBAR)
+                CALL longmuralibar_potential(GRAVITY_PARAMS(1:4, i), n, x, y, z, phi_c)
+                phi_comp(i,:) = phi_c
+            CASE (GRAVITY_KIND_POULIASIS2017PII)
+                CALL pouliasis2017pii_potential(GRAVITY_PARAMS(1:10, i), n, x, y, z, phi_c)
                 phi_comp(i,:) = phi_c
             CASE (GRAVITY_KIND_EXPONENTIALOBLATEHALO)
                 IF (n_sh > 1) THEN
@@ -659,9 +739,9 @@ CONTAINS
         thindisk = (/params(5), params(6), params(7)/)
         thickdisk = (/params(8), params(9), params(10)/)
 
-        CALL allensantillianhaloforce(halo, N, x, y, z, force_h)
-        CALL miyamotonagaiforce(thindisk, N, x, y, z, force_d1)
-        CALL miyamotonagaiforce(thickdisk, N, x, y, z, force_d2)
+        CALL allensantillianhalo_force(halo, N, x, y, z, force_h)
+        CALL miyamotonagai_force(thindisk, N, x, y, z, force_d1)
+        CALL miyamotonagai_force(thickdisk, N, x, y, z, force_d2)
         force = force_h + force_d1 + force_d2
     END SUBROUTINE pouliasis2017pii_force
 
@@ -679,9 +759,9 @@ CONTAINS
         thindisk = (/params(5), params(6), params(7)/)
         thickdisk = (/params(8), params(9), params(10)/)
 
-        CALL allensantillianhalopotential(halo, N, x, y, z, phi_h)
-        CALL miyamotonagaipotential(thindisk, N, x, y, z, phi_d1)
-        CALL miyamotonagaipotential(thickdisk, N, x, y, z, phi_d2)
+        CALL allensantillianhalo_potential(halo, N, x, y, z, phi_h)
+        CALL miyamotonagai_potential(thindisk, N, x, y, z, phi_d1)
+        CALL miyamotonagai_potential(thickdisk, N, x, y, z, phi_d2)
         phi = phi_h + phi_d1 + phi_d2
     END SUBROUTINE pouliasis2017pii_potential
 

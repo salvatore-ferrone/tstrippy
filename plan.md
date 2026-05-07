@@ -19,6 +19,36 @@ Immediate next microsteps (keep one change per step):
 2. Add one reusable TEMP test that evaluates `ibata2024halo` through gravity force API (not just direct density call).
 3. Move SH table construction from evaluate-time to finalize-time in one small slice, then re-test.
 
+## Post-Lunch Roadmap (2026-05-07)
+
+Planned execution order after switching to the development branch:
+
+1. Rebuild from a clean base before further refactors.
+  - Recreate/refresh build artifacts from scratch.
+  - Confirm import and baseline tests are green before any new feature edits.
+
+2. Continue hardening gravity first (TEMP workflow, then port).
+  - Reintroduce remaining analytic models and force evaluators into the new gravity path.
+  - Keep additive composition/order-independence guarantees as gating checks.
+  - Keep per-component-vs-net-force consistency checks as required regressions.
+
+3. Validate extensibility while re-adding models.
+  - Add each analytic model in microsteps.
+  - For each model: single-component checks, pairwise composition checks, commutativity checks, and component-sum parity checks.
+  - Keep these checks in reusable pytest tests (not one-off scripts).
+
+4. After gravity is stable, introduce a separate Bessel module.
+  - Extract Bessel-specific state and evaluators into dedicated module/file(s).
+  - Preserve gravity public API and composition semantics.
+  - Re-run full gravity regression suite after extraction.
+
+5. Rebuild simulator only after gravity/Bessel stabilization.
+  - Reconnect simulator to updated gravity interfaces.
+  - Validate integrator outputs against gravity-only reference checks.
+  - Defer broader simulator redesign until gravity-side correctness is locked.
+
+Gating rule for this roadmap: no step advances unless build + reusable tests pass at that step.
+
 ## Next Session Checklist
 
 1. Run environment-safe validation first:

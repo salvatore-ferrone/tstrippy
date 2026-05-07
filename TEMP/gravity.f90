@@ -371,6 +371,10 @@ CONTAINS
         END DO
     END SUBROUTINE evaluategravitypotential
 
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !!! ANALYTICAL POTENTIAL MODELS !!!
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
     SUBROUTINE plummer_force(params, n, x, y, z, force)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n

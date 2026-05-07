@@ -40,7 +40,7 @@ def test_bessel_with_minimal_profile_params():
     
     print("✓ Attempting bessel setup with minimal 2-element params...")
     try:
-        g.addgravitycomponent("exponential_disk_bessel", minimal_params)
+        g.addgravitycomponent("exponentialdisk", minimal_params)
         print("✓ SUCCESS: Component accepted minimal params")
     except Exception as e:
         print(f"✗ FAILED: {e}")

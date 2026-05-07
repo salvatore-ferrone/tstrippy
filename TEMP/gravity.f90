@@ -12,6 +12,7 @@ MODULE gravity
                                      sh_eval_force => sphericalharmonicbasisforce, &
                                      sh_eval_potential => sphericalharmonicbasispotential
     USE besselbfe, ONLY: BESSEL_INITIALIZED, BESSEL_NCOMP, &
+                         bessel_clear, &
                          bessel_set_g => bessel_set_gravity_constant, &
                          bessel_default_init => bessel_default_init, &
                          bessel_init_comp => bessel_init_component_tables, &
@@ -79,7 +80,7 @@ MODULE gravity
     PRIVATE :: ensure_sh_component_tables_loaded, eval_component_force, eval_component_potential
     PRIVATE :: sh_force_from_tables, sh_potential_from_tables
     PRIVATE :: bessel_force_wrapper, bessel_potential_wrapper
-    PRIVATE :: count_sh_components, sh_slot_for_component
+    PRIVATE :: count_sh_components, sh_slot_for_component, count_bessel_components, bessel_slot_for_component
 
 CONTAINS
 
@@ -102,7 +103,7 @@ CONTAINS
         CALL register_handler_sh("exponentialoblatehalo", 3, &
                                  exponentialoblatehalo_density)
         CALL register_handler_sh("ibata2024halo", 6, ibata2024halo_density)
-        CALL register_handler_bessel("exponential_disk_bessel", 2, exponentialdisk_density)
+        CALL register_handler_bessel("exponentialdisk", 3, exponentialdisk_density)
 
         COMPONENT_HANDLERS_INITIALIZED = .TRUE.
     END SUBROUTINE ensure_component_handlers_initialized
@@ -219,6 +220,7 @@ CONTAINS
         COMPONENT_HANDLER_SLOT = 0
         GRAVITY_PARAMS = 0.0D0
         CALL sh_set_basis_g(GRAVITY_G)
+        CALL bessel_clear()
     END SUBROUTINE cleargravity
 
     SUBROUTINE setgravityconstant(g)
@@ -339,10 +341,13 @@ CONTAINS
         IF (n_bessel >= 1) THEN
             IF (.NOT. BESSEL_INITIALIZED) CALL bessel_default_init()
             CALL bessel_init_comp(n_bessel)
+
+            i_bessel = 0
             DO i = 1, GRAVITY_NCOMP
                 IF (component_is_bessel(i)) THEN
+                    i_bessel = i_bessel + 1
                     i_handler = COMPONENT_HANDLER_SLOT(i)
-                    CALL bessel_project_density(i, GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i), &
+                    CALL bessel_project_density(i_bessel, GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i), &
                                                 COMPONENT_HANDLERS(i_handler)%density_proc)
                 END IF
             END DO
@@ -377,7 +382,7 @@ CONTAINS
         INTEGER, INTENT(IN) :: i_comp, n_sh, n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n,3) :: force_c
-        INTEGER :: i_handler
+        INTEGER :: i_handler, i_bessel_slot
 
         i_handler = COMPONENT_HANDLER_SLOT(i_comp)
         IF (i_handler <= 0) THEN
@@ -390,7 +395,8 @@ CONTAINS
         END IF
 
         IF (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_BESSEL) THEN
-            CALL bessel_load_comp(i_comp)
+            i_bessel_slot = bessel_slot_for_component(i_comp)
+            CALL bessel_load_comp(i_bessel_slot)
         END IF
 
         CALL COMPONENT_HANDLERS(i_handler)%force_proc( &
@@ -402,7 +408,7 @@ CONTAINS
         INTEGER, INTENT(IN) :: i_comp, n_sh, n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi_c
-        INTEGER :: i_handler
+        INTEGER :: i_handler, i_bessel_slot
 
         i_handler = COMPONENT_HANDLER_SLOT(i_comp)
         IF (i_handler <= 0) THEN
@@ -415,7 +421,8 @@ CONTAINS
         END IF
 
         IF (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_BESSEL) THEN
-            CALL bessel_load_comp(i_comp)
+            i_bessel_slot = bessel_slot_for_component(i_comp)
+            CALL bessel_load_comp(i_bessel_slot)
         END IF
 
         CALL COMPONENT_HANDLERS(i_handler)%potential_proc( &
@@ -592,6 +599,33 @@ CONTAINS
             END IF
         END DO
     END FUNCTION sh_slot_for_component
+
+    INTEGER FUNCTION count_bessel_components()
+        IMPLICIT NONE
+        INTEGER :: i
+
+        count_bessel_components = 0
+        DO i = 1, GRAVITY_NCOMP
+            IF (component_is_bessel(i)) THEN
+                count_bessel_components = count_bessel_components + 1
+            END IF
+        END DO
+    END FUNCTION count_bessel_components
+
+    INTEGER FUNCTION bessel_slot_for_component(i_comp)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: i_comp
+        INTEGER :: i
+
+        bessel_slot_for_component = 0
+        IF (i_comp < 1 .OR. i_comp > GRAVITY_NCOMP) RETURN
+
+        DO i = 1, i_comp
+            IF (component_is_bessel(i)) THEN
+                bessel_slot_for_component = bessel_slot_for_component + 1
+            END IF
+        END DO
+    END FUNCTION bessel_slot_for_component
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     !!! ANALYTICAL POTENTIAL MODELS !!!

@@ -13,8 +13,6 @@ def get_one_comp(coordPHI,coordQ,comp):
     ax,ay,az=grav.evaluategravityforces(*coordQ)
     return ax,az,phi
 
-
-
 ## set the parameters 
 rho_h_table = 11.4  # [Msun pc^-3]/1000
 rho0_halo = (rho_h_table / 1000.0) * 1e9  # Msun / kpc^3
@@ -160,7 +158,6 @@ for i in range(len(components)):
         print("    ", permutations[key_reverse]["title"],RMS(axsinglesum,permutations[key_reverse]["ax_cs"]))
         if not np.isclose(RMS(axsinglesum,permutations[key_reverse]["ax_cs"]),0 ):print("FAILED")
         else: print("SUCCESS")
-
 
         print("")
         print("checking to see if sum of single gravity module is the same as evaluategravityforces")

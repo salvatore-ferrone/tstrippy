@@ -16,11 +16,12 @@ g = gravitymini.gravity
 g.cleargravity()
 
 # Try to add exponential_disk_bessel component
-params = np.array([1.0, 1.0], dtype=np.float64)  # Sigma0, scale_r
+# exponentialdisk takes 3 params: Sigma0, scale_r (hR), scale_z (hZ)
+params = np.array([1.0, 4.0, 4.0], dtype=np.float64)
 
 try:
-    g.addgravitycomponent("exponential_disk_bessel", params)
-    print("✓ exponential_disk_bessel component added successfully")
+    g.addgravitycomponent("exponentialdisk", params)
+    print("✓ exponentialdisk (bessel backend) component added successfully")
 except Exception as e:
     print(f"✗ FAILED to add component: {e}")
     raise

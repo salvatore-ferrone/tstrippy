@@ -130,3 +130,43 @@ def test_bessel_matches_direct_thick_disk_reference():
     phi_ref = _direct_reference_potential(x[0], z[0], sigma0, hR, hZ)
 
     np.testing.assert_allclose(phi_bessel, phi_ref, rtol=1.5e-1, atol=2.0e-4)
+
+
+def test_bessel_resolution_convergence_force_and_potential():
+    sigma0 = 1.0
+    hR = 4.0
+    hZ = 0.8
+
+    x = np.array([2.0, 4.0, 8.0], dtype=float)
+    y = np.array([0.0, 0.0, 0.0], dtype=float)
+    z = np.array([0.2, 0.8, 1.5], dtype=float)
+
+    g_low = _configure_single_bessel_disk(sigma0=sigma0, hR=hR, hZ=hZ, nr=64, nz=64, nk=128)
+    phi_low = g_low.potential(x, y, z)
+    ax_low, _, az_low = g_low.force(x, y, z)
+
+    g_mid = _configure_single_bessel_disk(sigma0=sigma0, hR=hR, hZ=hZ, nr=128, nz=128, nk=256)
+    phi_mid = g_mid.potential(x, y, z)
+    ax_mid, _, az_mid = g_mid.force(x, y, z)
+
+    g_high = _configure_single_bessel_disk(sigma0=sigma0, hR=hR, hZ=hZ, nr=192, nz=160, nk=384)
+    phi_high = g_high.potential(x, y, z)
+    ax_high, _, az_high = g_high.force(x, y, z)
+
+    err_lm_phi = np.linalg.norm(phi_low - phi_mid)
+    err_mh_phi = np.linalg.norm(phi_mid - phi_high)
+
+    force_low = np.column_stack((ax_low, az_low))
+    force_mid = np.column_stack((ax_mid, az_mid))
+    force_high = np.column_stack((ax_high, az_high))
+
+    err_lm_force = np.linalg.norm(force_low - force_mid)
+    err_mh_force = np.linalg.norm(force_mid - force_high)
+
+    # Convergence gate: higher resolution should move less than lower resolution.
+    assert err_mh_phi < 0.9 * err_lm_phi
+    assert err_mh_force < 0.9 * err_lm_force
+
+    # Absolute sanity: medium and high should already be close for this test set.
+    np.testing.assert_allclose(phi_mid, phi_high, rtol=1.5e-1, atol=2.0e-4)
+    np.testing.assert_allclose(force_mid, force_high, rtol=2.0e-1, atol=2.0e-4)

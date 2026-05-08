@@ -116,7 +116,6 @@ def test_bessel_far_field_matches_monopole_mass():
     np.testing.assert_allclose(az[0], 0.0, atol=1e-12)
 
 
-@pytest.mark.xfail(strict=True, reason="Known Bessel physics issue under review: thick-disk reference mismatch expected until kernel is validated")
 def test_bessel_matches_direct_thick_disk_reference():
     sigma0 = 1.0
     hR = 4.0

@@ -344,16 +344,18 @@ CONTAINS
         REAL*8, INTENT(IN), DIMENSION(:) :: params
         PROCEDURE(axisymmetric_density_model) :: density_model
         REAL*8, PARAMETER :: pi = 3.14159265358979323846D0
-        INTEGER :: iR, iZ, j
-        REAL*8 :: R, z_val
+        INTEGER :: iR, iZ, j, m
+        REAL*8 :: R, z_val, z1, z2
         REAL*8 :: logR_min, logR_max, dlogR, z_max, dz
-        REAL*8 :: sum_phi, sum_dphi_dR, sum_dphi_dz, kernel, j0v, j1v
-        REAL*8 :: kval, t, mu
-        REAL*8 :: r_scale, z_scale
+        REAL*8 :: sum_phi, j0v
+        REAL*8 :: kval, t, mu, kmax, k_scale
+        REAL*8 :: r_scale, z_scale, inner1, inner2
         REAL*8 :: dr_loc
-        REAL*8, DIMENSION(BESSEL_TABLE_NR) :: r_nodes, sigma_nodes, int_nodes
+        REAL*8, DIMENSION(BESSEL_TABLE_NR) :: r_nodes, int_nodes
         REAL*8, DIMENSION(BESSEL_TABLE_NZ) :: z_nodes, x_line, y_line, rho_line
-        REAL*8, DIMENSION(NK_BUILD) :: k_grid, quad_w, kernel_k, mu_q, w_q
+        REAL*8, DIMENSION(BESSEL_TABLE_NR, BESSEL_TABLE_NZ) :: rho_nodes
+        REAL*8, DIMENSION(NK_BUILD, BESSEL_TABLE_NZ) :: rho_kz, zconv_kz
+        REAL*8, DIMENSION(NK_BUILD) :: k_grid, quad_w, mu_q, w_q
 
         ! Use public module-level domain scales (profile-agnostic)
         r_scale = MAX(BESSEL_R_SCALE, 1.0D-8)
@@ -376,13 +378,7 @@ CONTAINS
             r_nodes(iR) = EXP(logR_min + DBLE(iR - 1) * dlogR)
             x_line = r_nodes(iR)
             CALL density_model(params, BESSEL_TABLE_NZ, x_line, y_line, z_nodes, rho_line)
-
-            sigma_nodes(iR) = 0.0D0
-            DO iZ = 1, BESSEL_TABLE_NZ - 1
-                sigma_nodes(iR) = sigma_nodes(iR) + 0.5D0 * (rho_line(iZ) + rho_line(iZ+1)) * &
-                                  (z_nodes(iZ+1) - z_nodes(iZ))
-            END DO
-            sigma_nodes(iR) = 2.0D0 * sigma_nodes(iR)
+            rho_nodes(iR, :) = rho_line(:)
         END DO
 
         BESSEL_TABLE_META(1, component_index) = logR_min
@@ -390,49 +386,104 @@ CONTAINS
         BESSEL_TABLE_META(3, component_index) = dz
 
         CALL gauss_legendre_nodes_weights(NK_BUILD, mu_q, w_q)
+        ! Bounded k quadrature is more stable in practice than [0,inf) rational mapping
+        ! for oscillatory midplane integrals in table construction.
+        k_scale = MAX(1.0D0 / r_scale, 1.0D0 / z_scale)
+        kmax = 40.0D0 * k_scale
         DO j = 1, NK_BUILD
             mu = mu_q(j)
             t = 0.5D0 * (mu + 1.0D0)
-            kval = t / MAX(1.0D0 - t, 1.0D-14)
+            kval = t * kmax
             k_grid(j) = kval
-            quad_w(j) = 0.5D0 * w_q(j) / MAX((1.0D0 - t)**2, 1.0D-14)
+            quad_w(j) = 0.5D0 * w_q(j) * kmax
         END DO
 
+        ! Radial Hankel transform of rho(R,z) for each z-slice: rho_kz(k,z)
         DO j = 1, NK_BUILD
-            DO iR = 1, BESSEL_TABLE_NR
-                int_nodes(iR) = r_nodes(iR) * bessel_j0_scalar(k_grid(j) * r_nodes(iR)) * sigma_nodes(iR)
+            kval = k_grid(j)
+            DO iZ = 1, BESSEL_TABLE_NZ
+                DO iR = 1, BESSEL_TABLE_NR
+                    int_nodes(iR) = r_nodes(iR) * bessel_j0_scalar(kval * r_nodes(iR)) * rho_nodes(iR, iZ)
+                END DO
+
+                rho_kz(j, iZ) = 0.0D0
+                DO iR = 1, BESSEL_TABLE_NR - 1
+                    dr_loc = r_nodes(iR+1) - r_nodes(iR)
+                    rho_kz(j, iZ) = rho_kz(j, iZ) + 0.5D0 * (int_nodes(iR) + int_nodes(iR+1)) * dr_loc
+                END DO
             END DO
 
-            kernel_k(j) = 0.0D0
-            DO iR = 1, BESSEL_TABLE_NR - 1
-                dr_loc = r_nodes(iR+1) - r_nodes(iR)
-                kernel_k(j) = kernel_k(j) + 0.5D0 * (int_nodes(iR) + int_nodes(iR+1)) * dr_loc
+            ! Vertical convolution for even-density extension:
+            ! int_0^inf rho_k(z') [exp(-k|z-z'|) + exp(-k(z+z'))] dz'
+            DO iZ = 1, BESSEL_TABLE_NZ
+                z_val = z_nodes(iZ)
+                zconv_kz(j, iZ) = 0.0D0
+                DO m = 1, BESSEL_TABLE_NZ - 1
+                    z1 = z_nodes(m)
+                    z2 = z_nodes(m+1)
+
+                    inner1 = rho_kz(j, m) * (EXP(-kval * ABS(z_val - z1)) + EXP(-kval * (z_val + z1)))
+                    inner2 = rho_kz(j, m+1) * (EXP(-kval * ABS(z_val - z2)) + EXP(-kval * (z_val + z2)))
+
+                    zconv_kz(j, iZ) = zconv_kz(j, iZ) + 0.5D0 * (inner1 + inner2) * (z2 - z1)
+                END DO
             END DO
-            kernel_k(j) = 2.0D0 * pi * BESSEL_G * kernel_k(j)
         END DO
 
         DO iR = 1, BESSEL_TABLE_NR
             R = EXP(logR_min + DBLE(iR - 1) * dlogR)
             DO iZ = 1, BESSEL_TABLE_NZ
-                z_val = DBLE(iZ - 1) * dz
-
                 sum_phi = 0.0D0
-                sum_dphi_dR = 0.0D0
-                sum_dphi_dz = 0.0D0
                 DO j = 1, NK_BUILD
                     kval = k_grid(j)
-                    kernel = EXP(-kval * z_val) * kernel_k(j)
                     j0v = bessel_j0_scalar(kval * R)
-                    j1v = bessel_j1_scalar(kval * R)
 
-                    sum_phi = sum_phi + quad_w(j) * j0v * kernel
-                    sum_dphi_dR = sum_dphi_dR + quad_w(j) * kval * j1v * kernel
-                    sum_dphi_dz = sum_dphi_dz + quad_w(j) * kval * j0v * kernel
+                    sum_phi = sum_phi + quad_w(j) * j0v * zconv_kz(j, iZ)
                 END DO
 
-                BESSEL_TABLE_PHI(iR, iZ, component_index) = -sum_phi
-                BESSEL_TABLE_DPHI_DR(iR, iZ, component_index) = sum_dphi_dR
-                BESSEL_TABLE_DPHI_DZ(iR, iZ, component_index) = sum_dphi_dz
+                BESSEL_TABLE_PHI(iR, iZ, component_index) = -2.0D0 * pi * BESSEL_G * sum_phi
+            END DO
+        END DO
+
+        ! Compute dphi/dR from the potential table on the nonuniform R grid.
+        DO iZ = 1, BESSEL_TABLE_NZ
+            DO iR = 1, BESSEL_TABLE_NR
+                IF (iR == 1) THEN
+                    BESSEL_TABLE_DPHI_DR(iR, iZ, component_index) = &
+                        (BESSEL_TABLE_PHI(iR+1, iZ, component_index) - &
+                         BESSEL_TABLE_PHI(iR, iZ, component_index)) / &
+                        MAX(r_nodes(iR+1) - r_nodes(iR), 1.0D-16)
+                ELSE IF (iR == BESSEL_TABLE_NR) THEN
+                    BESSEL_TABLE_DPHI_DR(iR, iZ, component_index) = &
+                        (BESSEL_TABLE_PHI(iR, iZ, component_index) - &
+                         BESSEL_TABLE_PHI(iR-1, iZ, component_index)) / &
+                        MAX(r_nodes(iR) - r_nodes(iR-1), 1.0D-16)
+                ELSE
+                    BESSEL_TABLE_DPHI_DR(iR, iZ, component_index) = &
+                        (BESSEL_TABLE_PHI(iR+1, iZ, component_index) - &
+                         BESSEL_TABLE_PHI(iR-1, iZ, component_index)) / &
+                        MAX(r_nodes(iR+1) - r_nodes(iR-1), 1.0D-16)
+                END IF
+            END DO
+        END DO
+
+        ! Compute dphi/dz from the potential table for consistency with the
+        ! chosen vertical Green-function discretization.
+        DO iR = 1, BESSEL_TABLE_NR
+            DO iZ = 1, BESSEL_TABLE_NZ
+                IF (iZ == 1) THEN
+                    BESSEL_TABLE_DPHI_DZ(iR, iZ, component_index) = &
+                        (BESSEL_TABLE_PHI(iR, iZ+1, component_index) - &
+                         BESSEL_TABLE_PHI(iR, iZ, component_index)) / dz
+                ELSE IF (iZ == BESSEL_TABLE_NZ) THEN
+                    BESSEL_TABLE_DPHI_DZ(iR, iZ, component_index) = &
+                        (BESSEL_TABLE_PHI(iR, iZ, component_index) - &
+                         BESSEL_TABLE_PHI(iR, iZ-1, component_index)) / dz
+                ELSE
+                    BESSEL_TABLE_DPHI_DZ(iR, iZ, component_index) = &
+                        (BESSEL_TABLE_PHI(iR, iZ+1, component_index) - &
+                         BESSEL_TABLE_PHI(iR, iZ-1, component_index)) / (2.0D0 * dz)
+                END IF
             END DO
         END DO
 

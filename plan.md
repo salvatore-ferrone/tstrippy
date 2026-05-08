@@ -1,5 +1,30 @@
 # TSTRIPPY Development Plan
-Date: 2026-05-05
+Date: 2026-05-05, Updated 2026-05-08
+
+## Session Status (2026-05-08)
+
+**Simulator Redesign: Phase 5 INCOMING (from bottom-up)**
+
+Milestone: Planning comprehensive simulator rebuild to ensure extensibility and correctness.
+
+Next Phase (2026-05-08 onwards): Simulator redesign from the ground up with the following requirements:
+1. Support multiple integration schemes (leapfrog, forest-ruth, extensible for future schemes)
+2. Accept user-provided initial conditions cleanly
+3. Interface with multiple force modules (gravity, hostperturber, perturbers, galacticbar) correctly
+4. Write resumable snapshots on interrupt
+5. Be user-friendly for adding new physics modules
+
+Current status: Pre-design phase—conducting "grill-me" review session to finalize architecture before implementation.
+
+Design corrections locked on 2026-05-08:
+- Integration schemes are zero-argument steppers that advance simulator module state in place.
+- The simulator owns initial, current, and final phase-space arrays as persistent module state.
+- Full trajectory retention is a separate feature from restart snapshots.
+- Trajectories are stored only for the first `NparticlesSaved`, chosen from a memory limit and `nsteps`.
+- The hot-path force evaluation should iterate over a registry of active procedure pointers, not branch on inactive-module flags.
+- Initial conditions and integration parameters remain separate configuration calls: `setinitialconditions(...)` and `setintegrationparameters(...)`.
+- Restart snapshots remain deferred until after the core integrator rebuild is working.
+
 
 ## Session Status (2026-05-07)
 
@@ -49,13 +74,6 @@ Observed on 2026-05-08 from the new TEMP validation test:
 - For `Sigma0=1`, `hR=4`, `hZ=0.8` at `R=80`, the backend returns `Phi ~ -1.96e-2` whereas the monopole expectation is `Phi ~ -5.40e-6`.
 - This points to a normalization / kernel-form issue, not just a small interpolation error.
 
-Working hypothesis to validate or falsify:
-- The current backend likely behaves like a vertically-collapsed / surface-density Hankel solve because it first integrates `rho(R,z)` into `Sigma(R)` before applying the `exp(-k |z|)` kernel.
-- If true, symmetry and force/potential consistency may pass while thick-disk reference comparisons fail.
-
-## Lunch Checkpoint (2026-05-06)
-
-TEMP microstep status is now stable:
 
 - Code-side f2py wrapper issue fixed by shortening spherical projector name:
   - `project_axisymmetric_density_generic` -> `project_axisym_density_generic`

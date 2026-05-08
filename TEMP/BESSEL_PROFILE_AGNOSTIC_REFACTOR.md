@@ -1,7 +1,12 @@
 # Bessel Backend: Profile-Agnosticism Refactor
 
 ## Summary
-Successfully removed all hidden profile-specific assumptions from the bessel backend. The module is now completely decoupled from density profile parameter layouts.
+Successfully removed the hidden parameter-layout assumptions from the bessel backend. The module is now decoupled from density profile parameter layouts when choosing table-domain scales.
+
+Important scope note:
+- This refactor addresses parameter-layout agnosticism only.
+- It does **not** prove that the current Bessel table builder is a fully profile-agnostic axisymmetric Poisson solver in the mathematical sense.
+- The current implementation still makes solver-level assumptions through its table domain, vertical symmetry handling, and use of a surface-density-style Hankel kernel.
 
 ## Changes Made
 
@@ -87,6 +92,10 @@ BESSEL_Z_SCALE = BESSEL_Z_SCALE_DEFAULT
 - Profile params only encode profile-intrinsic quantities
 - Table domain controlled independently via module state
 
+### Current limitation
+- The backend is profile-agnostic with respect to parameter encoding, but physics validation is still pending.
+- In particular, the current build path integrates the density over `z` into `Sigma(R)` before constructing the Bessel kernel, so thick-disk correctness must be checked explicitly against a 3D reference.
+
 ### ✅ **User Control**
 - All numerical configuration exposed as public variables
 - Can override before initialization (same pattern as spherical harmonics)
@@ -126,15 +135,30 @@ BESSEL_TABLE_NZ = 256     # Finer vertical resolution
 ✅ **Tests:** All 18 smoke tests pass
 ✅ **Backwards Compatibility:** No changes to public API
 ✅ **Code Review:** Params extraction removed, domain scales are now profile-agnostic
+⚠️ **Physics Status:** Table-build numerics are not yet validated for full thick-disk correctness
 
 ---
 
 ## Next Steps
 
-1. Wire bessel backend into gravity dispatch (add BACKEND_BESSEL case)
-2. Create bessel-based gravity models (e.g., `exponential_disk_bessel`)
-3. Add integration tests for actual bessel gravity evaluation
-4. Document tunable settings in user guide
+1. Run explicit physics gates: symmetry, force/potential finite differences, far-field normalization
+2. Add a slow thick-disk reference test for `exponentialdisk`
+3. Determine whether the current kernel is a thin-disk / vertically-collapsed approximation or a valid 3D solve
+4. Only after physics validation, continue user-guide documentation for recommended settings
+
+## Review Outcome
+
+Current best hypothesis from code review:
+
+- The refactor succeeded at removing hidden `params(2:3)` extraction.
+- The likely source of the remaining physics issue is not the profile-agnostic refactor itself.
+- The likely issue is in the mathematical form of the table build: it first computes `Sigma(R)` and then reconstructs `Phi(R,z)` with `exp(-k z)`, which is consistent with a vertically-collapsed treatment and therefore must be validated carefully for a genuinely thick density law.
+
+First concrete failure observed after review:
+
+- A new far-field normalization test fails strongly.
+- For `Sigma0=1`, `hR=4`, `hZ=0.8` at `R=80`, the backend potential is orders of magnitude larger than the expected monopole limit from `M_tot = 2*pi*Sigma0*hR^2`.
+- This strongly suggests that the remaining issue is mathematical / normalization related inside the table build, not API dispatch wiring.
 
 ---
 

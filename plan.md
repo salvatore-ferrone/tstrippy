@@ -27,6 +27,32 @@ Milestone: Bessel backend successfully integrated into gravity dispatch system.
 - Use notebooks: basis_expansion_verification, legendre_BFE_orbit_convergence, composite_basis_potential
 - May require parameter tuning or table resolution adjustments
 
+### Phase 4 Physics Gates For Bessel Backend
+
+The next Bessel step is not more integration wiring. It is numerical validation with explicit pass/fail gates.
+
+Required validation sequence:
+
+1. Force/potential consistency
+  - Check that returned accelerations match finite differences of the returned potential away from the origin and table boundaries.
+2. Symmetry checks for even disk density
+  - Require `Phi(R,z)=Phi(R,-z)`, `a_R(R,z)=a_R(R,-z)`, `a_z(R,z)=-a_z(R,-z)`, and `a_z(R,0)=0`.
+3. Far-field normalization
+  - For exponential disk, require asymptotic agreement with the total-mass monopole using `M_tot = 2*pi*Sigma0*hR^2`.
+4. Resolution convergence
+  - Require convergence under `(NR, NZ, NK)` refinement before trusting the table path.
+5. Thick-disk reference comparison
+  - Compare the backend against a slow direct reference for the full 3D exponential disk, not just internal consistency.
+
+Observed on 2026-05-08 from the new TEMP validation test:
+- The far-field monopole check already fails badly for the current Bessel backend.
+- For `Sigma0=1`, `hR=4`, `hZ=0.8` at `R=80`, the backend returns `Phi ~ -1.96e-2` whereas the monopole expectation is `Phi ~ -5.40e-6`.
+- This points to a normalization / kernel-form issue, not just a small interpolation error.
+
+Working hypothesis to validate or falsify:
+- The current backend likely behaves like a vertically-collapsed / surface-density Hankel solve because it first integrates `rho(R,z)` into `Sigma(R)` before applying the `exp(-k |z|)` kernel.
+- If true, symmetry and force/potential consistency may pass while thick-disk reference comparisons fail.
+
 ## Lunch Checkpoint (2026-05-06)
 
 TEMP microstep status is now stable:

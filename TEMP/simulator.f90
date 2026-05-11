@@ -65,6 +65,12 @@ MODULE simulator
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
     INTEGER, PRIVATE :: NSTEPS, current_step
 
+    ! for saving some trajectories
+    REAL*8, PUBLIC :: trajectory_ram_limit_MB = 512.0D0 ! the default
+    INTEGER, PRIVATE :: ntraj_particles = 0 
+    INTEGER, PRIVATE :: nskip_trajectory = 1 
+    REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: orbits
+
 
     CONTAINS 
 
@@ -95,8 +101,74 @@ MODULE simulator
 
     END SUBROUTINE CLEAR
 
-    ! builds tables, creates temp/dirs and runs last checks before computing.
-    ! order independent config calls happen before finalize 
+    SUBROUTINE setinitialconditions(N,xin,yin,zin,vxin,vyin,vzin)
+        INTEGER, INTENT(in) :: N 
+        REAL*8, DIMENSION(N), INTENT(IN) :: xin,yin,zin,vxin,vyin,vzin
+        Nparticles = N
+        allocate(x(Nparticles),y(Nparticles),z(Nparticles),vx(Nparticles),vy(Nparticles),vz(Nparticles))
+        x = xin
+        y = yin 
+        z = zin 
+        vx = vxin 
+        vy = vyin
+        vz = vzin 
+        state%initial_conditions_set = .TRUE.
+    END SUBROUTINE setinitialconditions
+
+    SUBROUTINE setscheme(name, params, nparams)
+        CHARACTER(LEN=*), INTENT(IN) :: name
+        INTEGER, INTENT(IN) :: nparams
+        REAL*8, DIMENSION(nparams), INTENT(IN) :: params 
+
+        IF (allocated(scheme_params)) DEALLOCATE(scheme_params)
+        ALLOCATE(scheme_params(SIZE(params)))
+        scheme_params = params
+        scheme_name = TRIM(name)
+
+        SELECT CASE (TRIM(NAME))
+            CASE ("leapfrog")
+                scheme=>leapfrog
+            CASE ("forest_ruth")
+                scheme=> forest_ruth
+            CASE DEFAULT
+                PRINT*, "ERROR: unknown scheme:, ", TRIM(name)
+                NULLIFY(scheme)
+                state%scheme_set = .false.
+                RETURN 
+        END SELECT
+
+        state%scheme_set = .TRUE.
+
+    END SUBROUTINE setscheme
+
+    SUBROUTINE settimestamps(tstamps, nt)
+        INTEGER, INTENT(IN) :: nt
+        REAL*8, DIMENSION(nt), INTENT(IN) :: tstamps
+        IF (ALLOCATED(timestamps)) DEALLOCATE(timestamps)
+        ALLOCATE(timestamps(nt))
+        timestamps = tstamps
+        nsteps = nt - 1
+        state%timestamps_from_user = .TRUE.
+        state%finalized = .FALSE.
+    END SUBROUTINE settimestamps
+
+    SUBROUTINE setbackwardorbit()
+        state%backward_orbit = .TRUE.
+        state%finalized = .FALSE.
+    END SUBROUTINE setbackwardorbit
+
+    SUBROUTINE run()
+        
+        call finalize()
+
+        if (.not. state%finalized) then 
+            print*, "ERROR: finalize failed. Cannot Run"
+            RETURN 
+        END IF 
+
+
+    END SUBROUTINE run 
+
     SUBROUTINE finalize()
         state%finalized = .FALSE.
 
@@ -145,21 +217,45 @@ MODULE simulator
 
     END subroutine finalize
     
-    SUBROUTINE setinitialconditions(N,xin,yin,zin,vxin,vyin,vzin)
-        INTEGER, INTENT(in) :: N 
-        REAL*8, DIMENSION(N), INTENT(IN) :: xin,yin,zin,vxin,vyin,vzin
-        Nparticles = N
-        allocate(x(Nparticles),y(Nparticles),z(Nparticles),vx(Nparticles),vy(Nparticles),vz(Nparticles))
-        x = xin
-        y = yin 
-        z = zin 
-        vx = vxin 
-        vy = vyin
-        vz = vzin 
-        state%initial_conditions_set = .TRUE.
-    END SUBROUTINE setinitialconditions
+    ! CALLS MADE BY FINALIZE 
 
-    ! integration parameters
+    SUBROUTINE allocate_orbits(nskip)
+        INTEGER, INTENT(IN):: NSKIP
+        LOGICAL :: QUIT = .False.
+        INTEGER :: limit_bytes, bytes_per_particle, max_particles_8, nvars_saved
+
+        IF (.NOT.state%initial_conditions_set) then 
+            print*, "ERROR. The initial conditions must be set before allocating space for the orbit trajectories"
+            QUIT = .TRUE.
+        END IF 
+
+        IF (.NOT.state%scheme_set) then 
+            print*, "ERROR: the scheme must be set before allocating allocating space for the orbit trajectories"
+            QUIT = .TRUE. 
+        END IF 
+
+        if (trajectory_ram_limit_MB <= 0.0D0) THEN 
+            print*, "ERROR: trajectory_ram_limit_MB must be > 0"
+            ntraj_particles = 0
+            QUIT = .TRUE.
+        END IF 
+
+        if (QUIT) THEN 
+            RETURN 
+        END IF 
+        nvars_saved = 6 
+
+        ! get the esimated size 
+        limit_bytes = NSTEPS * nvars_saved * 8
+
+        ! limit_bytes = INT(trajectory_ram_limit_MB * 1024.0D0 * 1024.0D0)
+        ! bytes_per_particle = INT(nsaved_steps) * INT(nvars_saved) * 8_8
+
+
+
+
+    END SUBROUTINE 
+
     SUBROUTINE build_fixed_timestamps()
         INTEGER :: i
         REAL*8 :: t0, dtmag, sgn
@@ -196,48 +292,6 @@ MODULE simulator
             timestamps(i) = t0 + sgn * dtmag * DBLE(i - 1)
         END DO
     END SUBROUTINE build_fixed_timestamps    
-
-    SUBROUTINE setscheme(name, params, nparams)
-        CHARACTER(LEN=*), INTENT(IN) :: name
-        INTEGER, INTENT(IN) :: nparams
-        REAL*8, DIMENSION(nparams), INTENT(IN) :: params 
-
-        IF (allocated(scheme_params)) DEALLOCATE(scheme_params)
-        ALLOCATE(scheme_params(SIZE(params)))
-        scheme_params = params
-        scheme_name = TRIM(name)
-
-        SELECT CASE (TRIM(NAME))
-            CASE ("leapfrog")
-                scheme=>leapfrog
-            CASE ("forest_ruth")
-                scheme=> forest_ruth
-            CASE DEFAULT
-                PRINT*, "ERROR: unknown scheme:, ", TRIM(name)
-                NULLIFY(scheme)
-                state%scheme_set = .false.
-                RETURN 
-        END SELECT
-
-        state%scheme_set = .TRUE.
-
-    END SUBROUTINE setscheme
-
-    SUBROUTINE settimestamps(tstamps, nt)
-        INTEGER, INTENT(IN) :: nt
-        REAL*8, DIMENSION(nt), INTENT(IN) :: tstamps
-        IF (ALLOCATED(timestamps)) DEALLOCATE(timestamps)
-        ALLOCATE(timestamps(nt))
-        timestamps = tstamps
-        nsteps = nt - 1
-        state%timestamps_from_user = .TRUE.
-        state%finalized = .FALSE.
-    END SUBROUTINE settimestamps
-
-    SUBROUTINE setbackwardorbit()
-        state%backward_orbit = .TRUE.
-        state%finalized = .FALSE.
-    END SUBROUTINE setbackwardorbit
 
     ! THE NUMERICAL SCHEMES
     SUBROUTINE leapfrog()

@@ -67,7 +67,7 @@ MODULE simulator
 
 
     CONTAINS 
-    
+
     SUBROUTINE CLEAR()
         ! Positions / velocities
         IF (ALLOCATED(x))  DEALLOCATE(x)
@@ -197,10 +197,10 @@ MODULE simulator
         END DO
     END SUBROUTINE build_fixed_timestamps    
 
-    SUBROUTINE setscheme(name, params, timestamps_optional)
+    SUBROUTINE setscheme(name, params, nparams)
         CHARACTER(LEN=*), INTENT(IN) :: name
-        REAL*8, DIMENSION(:), INTENT(IN) :: params 
-        REAL*8, DIMENSION(:), INTENT(IN), OPTIONAL :: timestamps_optional
+        INTEGER, INTENT(IN) :: nparams
+        REAL*8, DIMENSION(nparams), INTENT(IN) :: params 
 
         IF (allocated(scheme_params)) DEALLOCATE(scheme_params)
         ALLOCATE(scheme_params(SIZE(params)))
@@ -217,19 +217,22 @@ MODULE simulator
                 NULLIFY(scheme)
                 state%scheme_set = .false.
                 RETURN 
-        END SELECT 
-
-        IF (PRESENT(timestamps_optional)) THEN 
-            IF (ALLOCATED(timestamps)) DEALLOCATE(timestamps)
-            ALLOCATE(timestamps(SIZE(timestamps_optional)))
-            timestamps = timestamps_optional
-            nsteps = SIZE(timestamps) - 1
-            state%timestamps_from_user = .TRUE.
-        END IF 
+        END SELECT
 
         state%scheme_set = .TRUE.
 
     END SUBROUTINE setscheme
+
+    SUBROUTINE settimestamps(tstamps, nt)
+        INTEGER, INTENT(IN) :: nt
+        REAL*8, DIMENSION(nt), INTENT(IN) :: tstamps
+        IF (ALLOCATED(timestamps)) DEALLOCATE(timestamps)
+        ALLOCATE(timestamps(nt))
+        timestamps = tstamps
+        nsteps = nt - 1
+        state%timestamps_from_user = .TRUE.
+        state%finalized = .FALSE.
+    END SUBROUTINE settimestamps
 
     SUBROUTINE setbackwardorbit()
         state%backward_orbit = .TRUE.

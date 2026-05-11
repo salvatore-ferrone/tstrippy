@@ -67,17 +67,82 @@ MODULE simulator
 
 
     CONTAINS 
-   SUBROUTINE CLEAR()
-    ! erases everything so it may be used again 
-        if (state%initial_conditions_set) then 
-            DEALLOCATE(x,y,z,vx,vy,vz)
-            state%initial_conditions_set = .FALSE.
-        END IF 
+    
+    SUBROUTINE CLEAR()
+        ! Positions / velocities
+        IF (ALLOCATED(x))  DEALLOCATE(x)
+        IF (ALLOCATED(y))  DEALLOCATE(y)
+        IF (ALLOCATED(z))  DEALLOCATE(z)
+        IF (ALLOCATED(vx)) DEALLOCATE(vx)
+        IF (ALLOCATED(vy)) DEALLOCATE(vy)
+        IF (ALLOCATED(vz)) DEALLOCATE(vz)
+
+        ! Timestamps and scheme params
+        IF (ALLOCATED(timestamps))   DEALLOCATE(timestamps)
+        IF (ALLOCATED(scheme_params)) DEALLOCATE(scheme_params)
+
+        ! Scheme pointer and name
+        NULLIFY(scheme)
+        scheme_name = ""
+
+        ! Counters
+        Nparticles   = 0
+        nsteps       = 0
+        current_step = 1
+
+        ! Reset all state flags to defaults
+        state = state_t()
+
     END SUBROUTINE CLEAR
 
+    ! builds tables, creates temp/dirs and runs last checks before computing.
+    ! order independent config calls happen before finalize 
     SUBROUTINE finalize()
-        ! builds tables, creates temp/dirs and runs last checks before computing.
+        state%finalized = .FALSE.
+
+        IF (.NOT. state%initial_conditions_set) THEN
+            PRINT*, "ERROR: initial conditions are not set"
+            RETURN
+        END IF
+
+        IF (.NOT. ASSOCIATED(scheme)) THEN
+            PRINT*, "ERROR: integration scheme not configured"
+            RETURN
+        END IF
+
+        ! Resolve timestamps: build if user did not provide them
+        IF (.NOT. state%timestamps_from_user) THEN
+            CALL build_fixed_timestamps()
+        END IF
+
+        ! Universal checks on timestamps regardless of source
+        IF (.NOT. ALLOCATED(timestamps)) THEN
+            PRINT*, "ERROR: timestamps not available"
+            RETURN
+        END IF
+
+        IF (SIZE(timestamps) < 2) THEN
+            PRINT*, "ERROR: timestamps must have at least 2 entries"
+            RETURN
+        END IF
+
+        IF (state%backward_orbit) THEN
+            IF (.NOT. is_strictly_decreasing(timestamps)) THEN
+                PRINT*, "ERROR: backward orbit requires strictly decreasing timestamps"
+                RETURN
+            END IF
+        ELSE
+            IF (.NOT. is_strictly_increasing(timestamps)) THEN
+                PRINT*, "ERROR: forward orbit requires strictly increasing timestamps"
+                RETURN
+            END IF
+        END IF
+
+        nsteps = SIZE(timestamps) - 1
+        current_step = 1
+        state%scheme_set = .TRUE.
         state%finalized = .TRUE.
+
     END subroutine finalize
     
     SUBROUTINE setinitialconditions(N,xin,yin,zin,vxin,vyin,vzin)
@@ -132,7 +197,7 @@ MODULE simulator
         END DO
     END SUBROUTINE build_fixed_timestamps    
 
-    SUBROUTINE setschema(name, params, timestamps_optional)
+    SUBROUTINE setscheme(name, params, timestamps_optional)
         CHARACTER(LEN=*), INTENT(IN) :: name
         REAL*8, DIMENSION(:), INTENT(IN) :: params 
         REAL*8, DIMENSION(:), INTENT(IN), OPTIONAL :: timestamps_optional
@@ -155,26 +220,21 @@ MODULE simulator
         END SELECT 
 
         IF (PRESENT(timestamps_optional)) THEN 
-            IF (SIZE(timestamps_optional) <2 ) then 
-                print*, "ERROR timestamps must have at least 2 entries"
-                state%scheme_set = .FALSE.
-                RETURN 
-            END IF 
-            
             IF (ALLOCATED(timestamps)) DEALLOCATE(timestamps)
             ALLOCATE(timestamps(SIZE(timestamps_optional)))
             timestamps = timestamps_optional
             nsteps = SIZE(timestamps) - 1
             state%timestamps_from_user = .TRUE.
-        
-        ELSE 
-            state%timestamps_from_user = .FALSE.
-            call build_fixed_timestamps()
         END IF 
 
         state%scheme_set = .TRUE.
 
-    END SUBROUTINE setschema
+    END SUBROUTINE setscheme
+
+    SUBROUTINE setbackwardorbit()
+        state%backward_orbit = .TRUE.
+        state%finalized = .FALSE.
+    END SUBROUTINE setbackwardorbit
 
     ! THE NUMERICAL SCHEMES
     SUBROUTINE leapfrog()

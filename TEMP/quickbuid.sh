@@ -1,3 +1,6 @@
+echo "QUICK BUILD"
+
+
 #!/bin/bash
 set -euo pipefail
 
@@ -20,10 +23,6 @@ fi
 rm -f gravitymini*.so gravitymini*.dylib
 
 conda run -n "${ENV_NAME}" python -m numpy.f2py -c \
-    mathutils.f90 \
-    sphericalharmonicsbfe.f90 \
-    besselbfe.f90 \
-    gravity.f90 \
     simulator.f90 \
     -m tstrippytest
 

@@ -194,9 +194,8 @@ MODULE simulator
         state%orbits_allocated = .FALSE.
         state%finalized = .FALSE.
     END SUBROUTINE trim_orbits
-
     
-    SUBROUTINE CLEAR()
+    SUBROUTINE clear()
         ! Positions / velocities
         IF (ALLOCATED(x))  DEALLOCATE(x)
         IF (ALLOCATED(y))  DEALLOCATE(y)
@@ -244,7 +243,7 @@ MODULE simulator
         ! Reset all state flags to defaults
         state = state_t()
 
-    END SUBROUTINE CLEAR
+    END SUBROUTINE clear
 
     SUBROUTINE finalize()
         LOGICAL :: should_return = .FALSE.

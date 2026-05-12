@@ -69,12 +69,16 @@ MODULE simulator
     ! for saving some trajectories
     REAL*8, PUBLIC :: orbit_ram_limit_MB = 1024.0D0 ! the default
     INTEGER, PRIVATE :: n_particles_orbit = 1 
-    INTEGER, PRIVATE :: nskip_orbit_default = 1 
+    INTEGER, PRIVATE :: nskip_orbit_timestamps = 1 
     INTEGER, PRIVATE :: nvars_orbits = 7 ! time and phase space 
     REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: orbits
 
+    ! some other limits
+    REAL*8, PUBLIC :: max_ram_MB = 1024.0D0
+
 
     CONTAINS 
+
 
     SUBROUTINE CLEAR()
         ! Positions / velocities
@@ -103,10 +107,46 @@ MODULE simulator
 
     END SUBROUTINE CLEAR
 
+
+    SUBROUTINE compute_memory_particle_limit(particle_limit)
+        INTEGER, INTENT(OUT) :: particle_limit
+        INTEGER, PARAMETER :: nvariables = 6
+        REAL*8, PARAMETER :: datasize_MB = 8.0D-6
+
+        IF (max_ram_MB <= 0.0D0) THEN
+            particle_limit = 0
+            RETURN
+        END IF
+
+        particle_limit = INT(max_ram_MB / (DBLE(nvariables) * datasize_MB), kind=kind(particle_limit))
+    END SUBROUTINE compute_memory_particle_limit
+
     SUBROUTINE setinitialconditions(N,xin,yin,zin,vxin,vyin,vzin)
         INTEGER, INTENT(in) :: N 
+        INTEGER :: max_particles
         REAL*8, DIMENSION(N), INTENT(IN) :: xin,yin,zin,vxin,vyin,vzin
+        ! Check if this violates configured particle-memory limit.
+
+        IF (N < 1) THEN
+            PRINT*, "ERROR in setinitialconditions: N must be >= 1"
+            RETURN
+        END IF
+
+        CALL compute_memory_particle_limit(max_particles)
+        if (N.gt.max_particles) then 
+            PRINT*, "WARNING: Estimated memory for particles + overhead exceeds limit"
+            print*, "   Max particles is", max_particles, "user entered: ", N
+            print*, "   Break up the simulation or increase simulator.max_ram_MB"
+            return 
+        END IF 
+
         Nparticles = N
+        IF (ALLOCATED(x))  DEALLOCATE(x)
+        IF (ALLOCATED(y))  DEALLOCATE(y)
+        IF (ALLOCATED(z))  DEALLOCATE(z)
+        IF (ALLOCATED(vx)) DEALLOCATE(vx)
+        IF (ALLOCATED(vy)) DEALLOCATE(vy)
+        IF (ALLOCATED(vz)) DEALLOCATE(vz)
         allocate(x(Nparticles),y(Nparticles),z(Nparticles),vx(Nparticles),vy(Nparticles),vz(Nparticles))
         x = xin
         y = yin 
@@ -115,6 +155,7 @@ MODULE simulator
         vy = vyin
         vz = vzin 
         state%initial_conditions_set = .TRUE.
+        state%finalized = .FALSE.
     END SUBROUTINE setinitialconditions
 
     SUBROUTINE setscheme(name, params, nparams)
@@ -172,6 +213,7 @@ MODULE simulator
     END SUBROUTINE run 
 
     SUBROUTINE finalize()
+        LOGICAL :: should_return = .FALSE.
         state%finalized = .FALSE.
 
         IF (.NOT. state%initial_conditions_set) THEN
@@ -181,7 +223,7 @@ MODULE simulator
 
         IF (.NOT. ASSOCIATED(scheme)) THEN
             PRINT*, "ERROR: integration scheme not configured"
-            RETURN
+            should_return = .TRUE.
         END IF
 
         ! Resolve timestamps: build if user did not provide them
@@ -192,25 +234,33 @@ MODULE simulator
         ! Universal checks on timestamps regardless of source
         IF (.NOT. ALLOCATED(timestamps)) THEN
             PRINT*, "ERROR: timestamps not available"
-            RETURN
+            should_return = .TRUE.
         END IF
 
         IF (SIZE(timestamps) < 2) THEN
             PRINT*, "ERROR: timestamps must have at least 2 entries"
-            RETURN
+            should_return = .TRUE.
         END IF
 
         IF (state%backward_orbit) THEN
             IF (.NOT. is_strictly_decreasing(timestamps)) THEN
                 PRINT*, "ERROR: backward orbit requires strictly decreasing timestamps"
-                RETURN
+                should_return = .TRUE.
             END IF
         ELSE
             IF (.NOT. is_strictly_increasing(timestamps)) THEN
                 PRINT*, "ERROR: forward orbit requires strictly increasing timestamps"
-                RETURN
+                should_return = .TRUE.
             END IF
         END IF
+
+        if (should_return) return
+        
+        if (.not.state%orbits_allocated) THEN 
+            print*, "ALLOCATING ORBITS!"
+            CALL allocate_orbits(nskip_orbit_timestamps)
+        END IF 
+        
 
         nsteps = SIZE(timestamps) - 1
         current_step = 1
@@ -257,6 +307,11 @@ MODULE simulator
         END DO
     END SUBROUTINE build_fixed_timestamps    
 
+    subroutine trim_orbits(NSKIP)
+        INTEGER, INTENT(IN) :: NSKIP 
+        nskip_orbit_timestamps = NSKIP
+    END SUBROUTINE trim_orbits
+
     SUBROUTINE allocate_orbits(NSKIP)
         INTEGER, INTENT(IN):: NSKIP
         LOGICAL :: QUIT = .False.
@@ -282,11 +337,6 @@ MODULE simulator
             print*, "ERROR in allocate_orbits: the scheme must be set before allocating space for the orbit trajectories"
             QUIT = .TRUE. 
         END IF 
-
-        IF (NSTEPS.lt.1) then
-            print*, "ERROR in allocate_orbits: NSTEPS (",NSTEPS,") must be >= 1. Call finalize() first."
-            QUIT = .TRUE.
-        END IF
 
         IF (Nparticles.lt.1) then
             print*, "ERROR in allocate_orbits: Nparticles must be >= 1"
@@ -324,18 +374,18 @@ MODULE simulator
             print*, "   Memory allocation limit:", orbit_ram_limit_MB, "MBytes"
             print*, "   Size of full simulation:", memory_estimate, "MBytes"
             print*, "   Size of a single orbit:", int(memory_estimate/DBLE(Nparticles))
-            print*, "   To get a sample of orbits, call `simulator.allocate_orbits(NSKIP)`, to skip over intermediate timesteps"
+            print*, "   To get a sample of orbits, call `simulator.trim_orbits(NSKIP)`, to skip over intermediate timesteps"
         ELSE IF (memory_estimate .gt. orbit_ram_limit_MB) THEN 
             print*, "NOTE TO USER."
             print*, "   Only subset of the orbital trajectories will be allocated to `simulator.orbits`"
             print*, "   ALLOCATING: ", n_particles_orbit, "/", Nparticles, "particles"
-            print*, "   IF all orbits are desired, reduce total integration time or call `allocate_orbits(NSKIP)` to skip over intermediate timesteps"
+            print*, "   IF all orbits are desired, reduce total integration time or call `trim_orbits(NSKIP)` to skip over intermediate timesteps"
         end IF 
 
         allocate(orbits(NSAVED_ORBITS,nvars_orbits,n_particles_orbit))
         state%orbits_allocated=.TRUE.
 
-    END SUBROUTINE 
+    END SUBROUTINE allocate_orbits
 
     ! THE NUMERICAL SCHEMES
     SUBROUTINE leapfrog()

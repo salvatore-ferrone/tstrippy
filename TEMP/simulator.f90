@@ -195,26 +195,6 @@ MODULE simulator
         state%finalized = .FALSE.
     END SUBROUTINE trim_orbits
 
-    !!!! OUTPUTS
-    SUBROUTINE initwritesnapshots(nskip, directory, basename)
-        INTEGER, INTENT(IN) :: nskip
-        CHARACTER(LEN=*), INTENT(IN) :: directory, basename
-
-        directory_snapshots = TRIM(directory)
-        basename_snapshots = TRIM(basename)
-        nskip_writesnapshots = nskip
-        state%writesnapshots = .TRUE.
-    END SUBROUTINE initwritesnapshots
-
-    SUBROUTINE initwriteorbits(nskip, directory, basename)
-        INTEGER, INTENT(IN) :: nskip
-        CHARACTER(LEN=*), INTENT(IN) :: directory, basename
-
-        directory_orbits = TRIM(directory)
-        basename_orbits = TRIM(basename)
-        nskip_writeorbits = nskip
-        state%writeorbits = .TRUE.
-    END SUBROUTINE initwriteorbits
     
     SUBROUTINE CLEAR()
         ! Positions / velocities
@@ -396,6 +376,27 @@ MODULE simulator
 
     END SUBROUTINE run
 
+    !!!! OUTPUTS
+    SUBROUTINE initwritesnapshots(nskip, directory, basename)
+        INTEGER, INTENT(IN) :: nskip
+        CHARACTER(LEN=*), INTENT(IN) :: directory, basename
+
+        directory_snapshots = TRIM(directory)
+        basename_snapshots = TRIM(basename)
+        nskip_writesnapshots = nskip
+        state%writesnapshots = .TRUE.
+    END SUBROUTINE initwritesnapshots
+
+    SUBROUTINE initwriteorbits(nskip, directory, basename)
+        INTEGER, INTENT(IN) :: nskip
+        CHARACTER(LEN=*), INTENT(IN) :: directory, basename
+
+        directory_orbits = TRIM(directory)
+        basename_orbits = TRIM(basename)
+        nskip_writeorbits = nskip
+        state%writeorbits = .TRUE.
+    END SUBROUTINE initwriteorbits
+        
     SUBROUTINE write_snapshot_file(istep)
         INTEGER, INTENT(IN) :: istep
         CHARACTER(LEN=600) :: filepath

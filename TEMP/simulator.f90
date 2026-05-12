@@ -79,55 +79,8 @@ MODULE simulator
     ! some other limits
     REAL*8, PUBLIC :: max_ram_MB = DEFAULT_MAX_RAM_MB
 
-
     CONTAINS 
-
-
-    SUBROUTINE CLEAR()
-        ! Positions / velocities
-        IF (ALLOCATED(x))  DEALLOCATE(x)
-        IF (ALLOCATED(y))  DEALLOCATE(y)
-        IF (ALLOCATED(z))  DEALLOCATE(z)
-        IF (ALLOCATED(vx)) DEALLOCATE(vx)
-        IF (ALLOCATED(vy)) DEALLOCATE(vy)
-        IF (ALLOCATED(vz)) DEALLOCATE(vz)
-
-        ! Timestamps and scheme params
-        IF (ALLOCATED(timestamps))   DEALLOCATE(timestamps)
-        IF (ALLOCATED(scheme_params)) DEALLOCATE(scheme_params)
-        IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
-
-        ! Scheme pointer and name
-        NULLIFY(scheme)
-        scheme_name = ""
-
-        ! Counters
-        Nparticles   = 0
-        nsteps       = 0
-        current_step = 1
-        n_particles_orbit = 1
-        nskip_orbit_timestamps = 1
-        orbit_ram_limit_MB = DEFAULT_ORBIT_RAM_LIMIT_MB
-        max_ram_MB = DEFAULT_MAX_RAM_MB
-
-        ! Reset all state flags to defaults
-        state = state_t()
-
-    END SUBROUTINE CLEAR
-
-    SUBROUTINE compute_memory_particle_limit(particle_limit)
-        INTEGER, INTENT(OUT) :: particle_limit
-        INTEGER, PARAMETER :: nvariables = 6
-        REAL*8, PARAMETER :: datasize_MB = 8.0D-6
-
-        IF (max_ram_MB <= 0.0D0) THEN
-            particle_limit = 0
-            RETURN
-        END IF
-
-        particle_limit = INT(max_ram_MB / (DBLE(nvariables) * datasize_MB), kind=kind(particle_limit))
-    END SUBROUTINE compute_memory_particle_limit
-
+    !!!!! CALLS WHERE THE USER INTERFACES WITH THE MODULE
     SUBROUTINE setinitialconditions(N,xin,yin,zin,vxin,vyin,vzin)
         INTEGER, INTENT(in) :: N 
         INTEGER :: max_particles
@@ -214,17 +167,51 @@ MODULE simulator
         state%finalized = .FALSE.
     END SUBROUTINE setbackwardorbit
 
-    SUBROUTINE run()
-        
-        call finalize()
+    subroutine trim_orbits(NSKIP)
+        INTEGER, INTENT(IN) :: NSKIP 
+        IF (NSKIP < 1) THEN
+            PRINT*, "ERROR in trim_orbits: NSKIP must be >= 1"
+            RETURN
+        END IF
 
-        if (.not. state%finalized) then 
-            print*, "ERROR: finalize failed. Cannot Run"
-            RETURN 
-        END IF 
+        nskip_orbit_timestamps = NSKIP
+        IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
+        state%orbits_allocated = .FALSE.
+        state%finalized = .FALSE.
+    END SUBROUTINE trim_orbits
 
+    !!!! THE CALLS TO RUN THE COMPUTATION !
+    SUBROUTINE CLEAR()
+        ! Positions / velocities
+        IF (ALLOCATED(x))  DEALLOCATE(x)
+        IF (ALLOCATED(y))  DEALLOCATE(y)
+        IF (ALLOCATED(z))  DEALLOCATE(z)
+        IF (ALLOCATED(vx)) DEALLOCATE(vx)
+        IF (ALLOCATED(vy)) DEALLOCATE(vy)
+        IF (ALLOCATED(vz)) DEALLOCATE(vz)
 
-    END SUBROUTINE run 
+        ! Timestamps and scheme params
+        IF (ALLOCATED(timestamps))   DEALLOCATE(timestamps)
+        IF (ALLOCATED(scheme_params)) DEALLOCATE(scheme_params)
+        IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
+
+        ! Scheme pointer and name
+        NULLIFY(scheme)
+        scheme_name = ""
+
+        ! Counters
+        Nparticles   = 0
+        nsteps       = 0
+        current_step = 1
+        n_particles_orbit = 1
+        nskip_orbit_timestamps = 1
+        orbit_ram_limit_MB = DEFAULT_ORBIT_RAM_LIMIT_MB
+        max_ram_MB = DEFAULT_MAX_RAM_MB
+
+        ! Reset all state flags to defaults
+        state = state_t()
+
+    END SUBROUTINE CLEAR
 
     SUBROUTINE finalize()
         LOGICAL :: should_return = .FALSE.
@@ -285,8 +272,20 @@ MODULE simulator
         state%finalized = .TRUE.
 
     END subroutine finalize
-    
-    ! CALLS MADE BY FINALIZE 
+
+    SUBROUTINE run()
+        
+        call finalize()
+
+        if (.not. state%finalized) then 
+            print*, "ERROR: finalize failed. Cannot Run"
+            RETURN 
+        END IF 
+
+
+    END SUBROUTINE run 
+
+    ! COMPUTATION AND PREPARATIONS
     SUBROUTINE build_fixed_timestamps()
         INTEGER :: i
         REAL*8 :: t0, dtmag, sgn
@@ -324,18 +323,18 @@ MODULE simulator
         END DO
     END SUBROUTINE build_fixed_timestamps    
 
-    subroutine trim_orbits(NSKIP)
-        INTEGER, INTENT(IN) :: NSKIP 
-        IF (NSKIP < 1) THEN
-            PRINT*, "ERROR in trim_orbits: NSKIP must be >= 1"
+    SUBROUTINE compute_memory_particle_limit(particle_limit)
+        INTEGER, INTENT(OUT) :: particle_limit
+        INTEGER, PARAMETER :: nvariables = 6
+        REAL*8, PARAMETER :: datasize_MB = 8.0D-6
+
+        IF (max_ram_MB <= 0.0D0) THEN
+            particle_limit = 0
             RETURN
         END IF
 
-        nskip_orbit_timestamps = NSKIP
-        IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
-        state%orbits_allocated = .FALSE.
-        state%finalized = .FALSE.
-    END SUBROUTINE trim_orbits
+        particle_limit = INT(max_ram_MB / (DBLE(nvariables) * datasize_MB), kind=kind(particle_limit))
+    END SUBROUTINE compute_memory_particle_limit
 
     SUBROUTINE allocate_orbits(NSKIP)
         INTEGER, INTENT(IN):: NSKIP
@@ -449,7 +448,7 @@ MODULE simulator
     END SUBROUTINE forest_ruth
 
     ! HELPER FUNCTIONS 
-        LOGICAL FUNCTION is_strictly_increasing(t)
+    LOGICAL FUNCTION is_strictly_increasing(t)
         REAL*8, DIMENSION(:), INTENT(IN) :: t
         INTEGER :: i
         is_strictly_increasing = .TRUE.

@@ -28,3 +28,6 @@ meson setup builddir
 # Build
 meson compile -C builddir
 meson install -C builddir/
+
+echo ""
+echo "BUILD SUCCESS"

@@ -24,7 +24,7 @@ print("Test 1: Verify bessel_default_init() exists and works")
 print("=" * 70)
 
 g = tstrippy.gravity
-g.cleargravity()
+g.clear()
 
 # This should initialize bessel backend with hardcoded defaults
 try:

@@ -210,7 +210,7 @@ CONTAINS
     END FUNCTION component_is_bessel
 
     ! MODULE-STATE subroutines
-    SUBROUTINE gravity_clear()
+    SUBROUTINE clear()
         IMPLICIT NONE
         CALL ensure_component_handlers_initialized()
         GRAVITY_G = GRAVITY_G_DEFAULT
@@ -221,9 +221,9 @@ CONTAINS
         GRAVITY_PARAMS = 0.0D0
         CALL setsphericalharmonicbasisgravityconstant(GRAVITY_G)
         CALL bessel_clear()
-    END SUBROUTINE gravity_clear
+    END SUBROUTINE clear
 
-    SUBROUTINE gravity_set_gravity_constant(g)
+    SUBROUTINE set_gravity_constant(g)
         IMPLICIT NONE
         REAL*8, INTENT(IN) :: g
         IF (GRAVITY_FINALIZED) THEN
@@ -237,9 +237,9 @@ CONTAINS
         GRAVITY_G = g
         GRAVITY_G_IS_DEFAULT = .FALSE.
         CALL setsphericalharmonicbasisgravityconstant(GRAVITY_G)
-    END SUBROUTINE gravity_set_gravity_constant
+    END SUBROUTINE set_gravity_constant
 
-    SUBROUTINE gravity_add_component(model_name, params, nparams)
+    SUBROUTINE add_component(model_name, params, nparams)
         IMPLICIT NONE
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER, INTENT(IN) :: nparams
@@ -270,9 +270,9 @@ CONTAINS
         GRAVITY_NCOMP = GRAVITY_NCOMP + 1
         COMPONENT_HANDLER_SLOT(GRAVITY_NCOMP) = i_handler
         GRAVITY_PARAMS(1:nparams, GRAVITY_NCOMP) = params(1:nparams)
-    END SUBROUTINE gravity_add_component
+    END SUBROUTINE add_component
 
-    SUBROUTINE gravity_finalize()
+    SUBROUTINE finalize()
         IMPLICIT NONE
         INTEGER :: i, n_sh, n_bessel, i_sh, i_bessel, i_sh_slot, i_handler
         IF (GRAVITY_NCOMP < 1) THEN
@@ -341,7 +341,7 @@ CONTAINS
         END IF
 
         GRAVITY_FINALIZED = .TRUE.
-    END SUBROUTINE gravity_finalize
+    END SUBROUTINE finalize
 
     SUBROUTINE ensure_sh_component_tables_loaded(i_comp, n_sh)
         IMPLICIT NONE
@@ -416,7 +416,7 @@ CONTAINS
             GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_comp), n, x, y, z, phi_c)
     END SUBROUTINE eval_component_potential
 
-    SUBROUTINE gravity_eval_force_components(n, x, y, z, ax_comp, ay_comp, az_comp)
+    SUBROUTINE force_components(n, x, y, z, ax_comp, ay_comp, az_comp)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -441,9 +441,9 @@ CONTAINS
             ay_comp(i,:) = force_tmp(:,2)
             az_comp(i,:) = force_tmp(:,3)
         END DO
-    END SUBROUTINE gravity_eval_force_components
+    END SUBROUTINE force_components
 
-    SUBROUTINE gravity_eval_force(n, x, y, z, ax, ay, az)
+    SUBROUTINE force(n, x, y, z, ax, ay, az)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -468,9 +468,9 @@ CONTAINS
             ay = ay + force_tmp(:,2)
             az = az + force_tmp(:,3)
         END DO
-    END SUBROUTINE gravity_eval_force
+    END SUBROUTINE force
 
-    SUBROUTINE gravity_eval_potential(n, x, y, z, phi)
+    SUBROUTINE potential(n, x, y, z, phi)
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
@@ -490,9 +490,9 @@ CONTAINS
             CALL eval_component_potential(i, n_sh, n, x, y, z, phi_c)
             phi = phi + phi_c
         END DO
-    END SUBROUTINE gravity_eval_potential
+    END SUBROUTINE potential
 
-    SUBROUTINE gravity_eval_potential_components(n, x, y, z, phi_comp)
+    SUBROUTINE potential_components(n, x, y, z, phi_comp)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -513,7 +513,7 @@ CONTAINS
             CALL eval_component_potential(i, n_sh, n, x, y, z, phi_c)
             phi_comp(i,:) = phi_c
         END DO
-    END SUBROUTINE gravity_eval_potential_components
+    END SUBROUTINE potential_components
 
     SUBROUTINE sh_force_from_tables(params, n, x, y, z, force)
         IMPLICIT NONE

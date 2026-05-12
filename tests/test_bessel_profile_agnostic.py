@@ -31,7 +31,7 @@ def simple_density_model(params, n, x, y, z):
 def test_bessel_with_minimal_profile_params():
     """Test that bessel backend works with minimal params (no scale encoding)."""
     g = tstrippy.gravity
-    g.cleargravity()
+    g.clear()
     
     # Only 2 params needed (not 3+)!
     # Previously required at least 3 to encode r_scale, z_scale
@@ -40,14 +40,14 @@ def test_bessel_with_minimal_profile_params():
     
     print("✓ Attempting bessel setup with minimal 2-element params...")
     try:
-        g.addgravitycomponent("exponentialdisk", minimal_params)
+        g.add_component("exponentialdisk", minimal_params)
         print("✓ SUCCESS: Component accepted minimal params")
     except Exception as e:
         print(f"✗ FAILED: {e}")
         raise
     
     print("✓ Finalizing gravity system...")
-    g.finalizegravity()
+    g.finalize()
     
     # Test evaluation
     x = np.array([1.0, 2.0], dtype=float)

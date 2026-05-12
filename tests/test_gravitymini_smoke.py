@@ -9,9 +9,9 @@ def test_ibata_density_is_exposed():
 
 def _reset_with_single_plummer():
     g = tstrippy.gravity
-    g.cleargravity()
-    g.addgravitycomponent("plummer", [1.0, 1.0])
-    g.finalizegravity()
+    g.clear()
+    g.add_component("plummer", [1.0, 1.0])
+    g.finalize()
     return g
 
 
@@ -61,9 +61,9 @@ def test_ibata2024halo():
 
 def test_ibata_component_force_api_runs():
     g = tstrippy.gravity
-    g.cleargravity()
-    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
-    g.finalizegravity()
+    g.clear()
+    g.add_component("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.finalize()
 
     x = np.array([1.0, 2.0, 3.0], dtype=float)
     y = np.array([0.0, 0.1, 0.0], dtype=float)
@@ -79,9 +79,9 @@ def test_ibata_component_force_api_runs():
 
 def test_ibata_total_potential_api_runs():
     g = tstrippy.gravity
-    g.cleargravity()
-    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
-    g.finalizegravity()
+    g.clear()
+    g.add_component("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.finalize()
 
     x = np.array([1.0, 2.0, 3.0], dtype=float)
     y = np.array([0.0, 0.1, 0.0], dtype=float)
@@ -97,9 +97,9 @@ def test_finalize_precomputes_sh_for_single_component():
     g = tstrippy.gravity
     sh = tstrippy.sphericalharmonicsbfe
 
-    g.cleargravity()
-    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
-    g.finalizegravity()
+    g.clear()
+    g.add_component("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.finalize()
 
     assert bool(sh.basis_expansion_initialized)
 
@@ -108,10 +108,10 @@ def test_finalize_initializes_component_phi_storage_for_multi_sh():
     g = tstrippy.gravity
     sh = tstrippy.sphericalharmonicsbfe
 
-    g.cleargravity()
-    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
-    g.addgravitycomponent("exponentialoblatehalo", [1.0, 1.0, 1.0])
-    g.finalizegravity()
+    g.clear()
+    g.add_component("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.add_component("exponentialoblatehalo", [1.0, 1.0, 1.0])
+    g.finalize()
 
     assert int(g.gravity_ncomp) == 2
     assert int(sh.basis_ncomp) == 2
@@ -134,10 +134,10 @@ def test_finalize_populates_each_multi_sh_component_slot():
     g = tstrippy.gravity
     sh = tstrippy.sphericalharmonicsbfe
 
-    g.cleargravity()
-    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
-    g.addgravitycomponent("exponentialoblatehalo", [1.0, 1.0, 1.0])
-    g.finalizegravity()
+    g.clear()
+    g.add_component("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.add_component("exponentialoblatehalo", [1.0, 1.0, 1.0])
+    g.finalize()
 
     slot1 = sh.basis_phi_l_component_grid[:, :, 0]
     slot2 = sh.basis_phi_l_component_grid[:, :, 1]
@@ -167,10 +167,10 @@ def test_multi_sh_potential_reads_from_stored_component_slots():
     g = tstrippy.gravity
     sh = tstrippy.sphericalharmonicsbfe
 
-    g.cleargravity()
-    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
-    g.addgravitycomponent("exponentialoblatehalo", [1.0, 1.0, 1.0])
-    g.finalizegravity()
+    g.clear()
+    g.add_component("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.add_component("exponentialoblatehalo", [1.0, 1.0, 1.0])
+    g.finalize()
 
     x = np.array([1.0, 2.0, 3.0], dtype=float)
     y = np.array([0.0, 0.1, 0.0], dtype=float)
@@ -187,10 +187,10 @@ def test_multi_sh_force_components_read_from_stored_component_slots():
     g = tstrippy.gravity
     sh = tstrippy.sphericalharmonicsbfe
 
-    g.cleargravity()
-    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
-    g.addgravitycomponent("exponentialoblatehalo", [1.0, 1.0, 1.0])
-    g.finalizegravity()
+    g.clear()
+    g.add_component("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.add_component("exponentialoblatehalo", [1.0, 1.0, 1.0])
+    g.finalize()
 
     x = np.array([1.0, 2.0, 3.0], dtype=float)
     y = np.array([0.0, 0.1, 0.0], dtype=float)
@@ -209,10 +209,10 @@ def test_multi_sh_total_force_reads_from_stored_component_slots():
     g = tstrippy.gravity
     sh = tstrippy.sphericalharmonicsbfe
 
-    g.cleargravity()
-    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
-    g.addgravitycomponent("exponentialoblatehalo", [1.0, 1.0, 1.0])
-    g.finalizegravity()
+    g.clear()
+    g.add_component("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.add_component("exponentialoblatehalo", [1.0, 1.0, 1.0])
+    g.finalize()
 
     x = np.array([1.0, 2.0, 3.0], dtype=float)
     y = np.array([0.0, 0.1, 0.0], dtype=float)
@@ -231,12 +231,12 @@ def test_interleaved_components_preserve_sh_slot_mapping_order():
     g = tstrippy.gravity
     sh = tstrippy.sphericalharmonicsbfe
 
-    g.cleargravity()
-    g.addgravitycomponent("plummer", [1.0, 1.0])
-    g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
-    g.addgravitycomponent("hernquist", [1.0, 1.0])
-    g.addgravitycomponent("exponentialoblatehalo", [1.0, 1.0, 1.0])
-    g.finalizegravity()
+    g.clear()
+    g.add_component("plummer", [1.0, 1.0])
+    g.add_component("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
+    g.add_component("hernquist", [1.0, 1.0])
+    g.add_component("exponentialoblatehalo", [1.0, 1.0, 1.0])
+    g.finalize()
 
     x = np.array([1.0, 2.0, 3.0], dtype=float)
     y = np.array([0.0, 0.1, 0.0], dtype=float)
@@ -270,20 +270,20 @@ def test_ibata_exponential_force_components_match_independent_components():
     ibata = [1.0, 1.0, 100.0, 0.8, 1.4, 3.0]
     expo = [1.0, 1.0, 1.0]
 
-    g.cleargravity()
-    g.addgravitycomponent("ibata2024halo", ibata)
-    g.finalizegravity()
+    g.clear()
+    g.add_component("ibata2024halo", ibata)
+    g.finalize()
     ax_i, ay_i, az_i = g.force(x, y, z)
 
-    g.cleargravity()
-    g.addgravitycomponent("exponentialoblatehalo", expo)
-    g.finalizegravity()
+    g.clear()
+    g.add_component("exponentialoblatehalo", expo)
+    g.finalize()
     ax_e, ay_e, az_e = g.force(x, y, z)
 
-    g.cleargravity()
-    g.addgravitycomponent("ibata2024halo", ibata)
-    g.addgravitycomponent("exponentialoblatehalo", expo)
-    g.finalizegravity()
+    g.clear()
+    g.add_component("ibata2024halo", ibata)
+    g.add_component("exponentialoblatehalo", expo)
+    g.finalize()
     ax_c, ay_c, az_c = g.force_components(x, y, z)
 
     np.testing.assert_allclose(ax_c[0, :], ax_i, rtol=1e-12, atol=1e-12)
@@ -325,17 +325,17 @@ def test_all_component_pairs_are_commutative_and_force_consistent_on_small_grid(
 
     single_force = {}
     for name, params in components:
-        g.cleargravity()
-        g.addgravitycomponent(name, params)
-        g.finalizegravity()
+        g.clear()
+        g.add_component(name, params)
+        g.finalize()
         single_force[name] = g.force(xf, y0, zf)
 
     for name_i, params_i in components:
         for name_j, params_j in components:
-            g.cleargravity()
-            g.addgravitycomponent(name_i, params_i)
-            g.addgravitycomponent(name_j, params_j)
-            g.finalizegravity()
+            g.clear()
+            g.add_component(name_i, params_i)
+            g.add_component(name_j, params_j)
+            g.finalize()
 
             ax, ay, az = g.force(xf, y0, zf)
             phi = g.potential(xf, y0, zf)
@@ -345,10 +345,10 @@ def test_all_component_pairs_are_commutative_and_force_consistent_on_small_grid(
             ay_sum = ay_c.sum(axis=0)
             az_sum = az_c.sum(axis=0)
 
-            g.cleargravity()
-            g.addgravitycomponent(name_j, params_j)
-            g.addgravitycomponent(name_i, params_i)
-            g.finalizegravity()
+            g.clear()
+            g.add_component(name_j, params_j)
+            g.add_component(name_i, params_i)
+            g.finalize()
             ax_r, ay_r, az_r = g.force(xf, y0, zf)
             phi_r = g.potential(xf, y0, zf)
 
@@ -373,11 +373,11 @@ def test_all_component_pairs_are_commutative_and_force_consistent_on_small_grid(
 def test_component_potential_sum_matches_total_potential():
     g = tstrippy.gravity
 
-    g.cleargravity()
-    g.addgravitycomponent("plummer", [1e12, 14.7])
-    g.addgravitycomponent("ibata2024halo", [1.14e7, 14.7, 1e3, 0.5, 1.0, 3.0])
-    g.addgravitycomponent("exponentialoblatehalo", [5.7e6, 7.35, 0.5])
-    g.finalizegravity()
+    g.clear()
+    g.add_component("plummer", [1e12, 14.7])
+    g.add_component("ibata2024halo", [1.14e7, 14.7, 1e3, 0.5, 1.0, 3.0])
+    g.add_component("exponentialoblatehalo", [5.7e6, 7.35, 0.5])
+    g.finalize()
 
     x = np.array([1.0, 2.0, 3.0], dtype=float)
     y = np.array([0.0, 0.1, 0.0], dtype=float)

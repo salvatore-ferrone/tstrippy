@@ -77,8 +77,31 @@ mathutils_build = custom_target('mathutils',
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils'],
     env: fc_env,
     install: true,
-    install_dir: module_install_dir
-    )
+    install_dir: module_install_dir)
+
+besselbfe_sources = [
+    'tstrippy/src/mathutils.f90',
+    'tstrippy/src/besselbfe.f90',]
+besselbfe_out = 'besselbfe' + ext_suffix
+besselbfe_build = custom_target('besselbfe',
+    output:besselbfe_out,
+    input: besselbfe_sources,
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'besselbfe'],
+    env: fc_env,
+    install: true,
+    install_dir: module_install_dir) 
+
+sphericalharmonicsbfe_sources = [
+    'tstrippy/src/mathutils.f90',
+    'tstrippy/src/sphericalharmonicsbfe.f90',]
+sphericalharmonicsbfe_out = 'sphericalharmonicsbfe' + ext_suffix
+sphericalharmonicsbfe_build = custom_target('sphericalharmonicsbfe',
+    output:sphericalharmonicsbfe_out,
+    input: sphericalharmonicsbfe_sources,
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'sphericalharmonicsbfe'],
+    env: fc_env,
+    install: true,
+    install_dir: module_install_dir)     
 
 gravity_sources = [
     'tstrippy/src/mathutils.f90',

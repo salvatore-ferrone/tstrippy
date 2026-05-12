@@ -43,6 +43,8 @@ __all__ = [
     'simulator',
     'gravity',
     'mathutils',
+    "sphericalharmonicsbfe",
+    "besselbfe",
     'io',
     'code',
 ]

@@ -13,21 +13,21 @@ print("Testing exponential_disk_bessel registration and basic setup")
 print("=" * 70)
 
 g = tstrippy.gravity
-g.cleargravity()
+g.clear()
 
 # Try to add exponential_disk_bessel component
 # exponentialdisk takes 3 params: Sigma0, scale_r (hR), scale_z (hZ)
 params = np.array([1.0, 4.0, 4.0], dtype=np.float64)
 
 try:
-    g.addgravitycomponent("exponentialdisk", params)
+    g.add_component("exponentialdisk", params)
     print("✓ exponentialdisk (bessel backend) component added successfully")
 except Exception as e:
     print(f"✗ FAILED to add component: {e}")
     raise
 
 try:
-    g.finalizegravity()
+    g.finalize()
     print("✓ finalizegravity() succeeded")
 except Exception as e:
     print(f"✗ FAILED to finalize: {e}")

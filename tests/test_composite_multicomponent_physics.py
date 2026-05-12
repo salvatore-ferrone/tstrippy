@@ -15,12 +15,12 @@ def _composite_components():
 
 def _build_and_eval_force(component_list, x, y, z):
     g = tstrippy.gravity
-    g.cleargravity()
+    g.clear()
 
     for model_name, params in component_list:
-        g.addgravitycomponent(model_name, params)
+        g.add_component(model_name, params)
 
-    g.finalizegravity()
+    g.finalize()
     ax, ay, az = g.force(x, y, z)
     return ax, ay, az
 
@@ -37,10 +37,10 @@ def test_composite_force_component_sum_matches_net_force():
     y = np.array([0.0, 0.8, -0.4, 0.3], dtype=float)
     z = np.array([0.1, -0.2, 0.5, -0.7], dtype=float)
 
-    g.cleargravity()
+    g.clear()
     for model_name, params in components:
-        g.addgravitycomponent(model_name, params)
-    g.finalizegravity()
+        g.add_component(model_name, params)
+    g.finalize()
 
     ax_net, ay_net, az_net = g.force(x, y, z)
     ax_comp, ay_comp, az_comp = g.force_components(x, y, z)
@@ -76,18 +76,18 @@ def test_composite_force_matches_sum_of_independent_components():
     y = np.array([0.0, 0.8, -0.4, 0.3], dtype=float)
     z = np.array([0.1, -0.2, 0.5, -0.7], dtype=float)
 
-    g.cleargravity()
+    g.clear()
     for model_name, params in components:
-        g.addgravitycomponent(model_name, params)
-    g.finalizegravity()
+        g.add_component(model_name, params)
+    g.finalize()
     ax_net, ay_net, az_net = g.force(x, y, z)
     force_net = _stack_force(ax_net, ay_net, az_net)
 
     force_sum = np.zeros_like(force_net)
     for model_name, params in components:
-        g.cleargravity()
-        g.addgravitycomponent(model_name, params)
-        g.finalizegravity()
+        g.clear()
+        g.add_component(model_name, params)
+        g.finalize()
         ax_i, ay_i, az_i = g.force(x, y, z)
         force_sum += _stack_force(ax_i, ay_i, az_i)
 

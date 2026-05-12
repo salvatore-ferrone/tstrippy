@@ -1,7 +1,7 @@
 """
 Tests for the gravity module lifecycle API.
 Covers: cleargravity, setgravityconstant, addgravitycomponent,
-        finalizegravity, evaluategravityforces, evaluategravitypotential,
+        finalizegravity, force, potential,
         printgravitystate.
 """
 import numpy as np
@@ -131,108 +131,88 @@ def test_finalizegravity_no_components_stops():
 
 
 # ---------------------------------------------------------------------------
-# evaluategravityforces
+# force
 # ---------------------------------------------------------------------------
 
-def test_evaluategravityforces_returns_arrays():
+def test_force_returns_arrays():
     g = tstrippy.gravity
     g.addgravitycomponent("plummer", np.array([1e11, 2.0]))
     g.finalizegravity()
     x = np.array([8.0]);  y = np.zeros(1);  z = np.zeros(1)
-    ax, ay, az = g.evaluategravityforces(x, y, z)
+    ax, ay, az = g.force(x, y, z)
     assert ax.shape == (1,)
     assert ay.shape == (1,)
     assert az.shape == (1,)
 
 
-def test_evaluategravityforces_before_finalize_autofinalizes_for_analytic():
-    g = tstrippy.gravity
-    g.addgravitycomponent("plummer", np.array([1e11, 2.0]))
-    x = np.array([8.0]);  y = np.zeros(1);  z = np.zeros(1)
-    ax, ay, az = g.evaluategravityforces(x, y, z)
-    # Analytic-only configurations auto-finalize on first evaluate call.
-    assert g.gravity_finalized
-    assert ax[0] != 0.0
-    assert abs(ay[0]) < 1e-10
-    assert abs(az[0]) < 1e-10
 
-
-def test_evaluategravityforces_direction_on_axis():
+def test_force_direction_on_axis():
     """Force on +x side of a spherical potential must point in -x."""
     g = tstrippy.gravity
     g.addgravitycomponent("plummer", np.array([1e11, 2.0]))
     g.finalizegravity()
     x = np.array([8.0]);  y = np.zeros(1);  z = np.zeros(1)
-    ax, ay, az = g.evaluategravityforces(x, y, z)
+    ax, ay, az = g.force(x, y, z)
     assert ax[0] < 0.0
     assert abs(ay[0]) < 1e-10
     assert abs(az[0]) < 1e-10
 
 
-def test_evaluategravityforces_superposition():
+def test_force_superposition():
     """Two-component force is sum of individual forces."""
     g = tstrippy.gravity
     x = np.array([8.0]);  y = np.zeros(1);  z = np.zeros(1)
 
     g.addgravitycomponent("plummer",   np.array([1e11, 2.0]))
     g.finalizegravity()
-    ax1, _, _ = g.evaluategravityforces(x, y, z)
+    ax1, _, _ = g.force(x, y, z)
 
     g.cleargravity()
     g.addgravitycomponent("hernquist", np.array([5e10, 1.5]))
     g.finalizegravity()
-    ax2, _, _ = g.evaluategravityforces(x, y, z)
+    ax2, _, _ = g.force(x, y, z)
 
     g.cleargravity()
     g.addgravitycomponent("plummer",   np.array([1e11, 2.0]))
     g.addgravitycomponent("hernquist", np.array([5e10, 1.5]))
     g.finalizegravity()
-    ax_both, _, _ = g.evaluategravityforces(x, y, z)
+    ax_both, _, _ = g.force(x, y, z)
 
     assert ax_both[0] == pytest.approx(ax1[0] + ax2[0], rel=1e-10)
 
 
 # ---------------------------------------------------------------------------
-# evaluategravitypotential
+# potential
 # ---------------------------------------------------------------------------
 
-def test_evaluategravitypotential_returns_array():
+def test_potential_returns_array():
     g = tstrippy.gravity
     g.addgravitycomponent("plummer", np.array([1e11, 2.0]))
     g.finalizegravity()
     x = np.array([8.0]);  y = np.zeros(1);  z = np.zeros(1)
-    phi = g.evaluategravitypotential(x, y, z)
+    phi = g.potential(x, y, z)
     assert phi.shape == (1,)
 
 
-def test_evaluategravitypotential_negative():
+def test_potential_negative():
     """Gravitational potential is negative everywhere outside the source."""
     g = tstrippy.gravity
     g.addgravitycomponent("plummer", np.array([1e11, 2.0]))
     g.finalizegravity()
     x = np.array([8.0, 20.0]);  y = np.zeros(2);  z = np.zeros(2)
-    phi = g.evaluategravitypotential(x, y, z)
+    phi = g.potential(x, y, z)
     assert np.all(phi < 0.0)
 
 
-def test_evaluategravitypotential_decreases_with_distance():
+def test_potential_decreases_with_distance():
     """Potential becomes less negative (increases) as distance grows."""
     g = tstrippy.gravity
     g.addgravitycomponent("plummer", np.array([1e11, 2.0]))
     g.finalizegravity()
     x = np.array([5.0, 10.0, 20.0]);  y = np.zeros(3);  z = np.zeros(3)
-    phi = g.evaluategravitypotential(x, y, z)
+    phi = g.potential(x, y, z)
     assert phi[0] < phi[1] < phi[2]
 
-
-def test_evaluategravitypotential_before_finalize_autofinalizes_for_analytic():
-    g = tstrippy.gravity
-    g.addgravitycomponent("plummer", np.array([1e11, 2.0]))
-    x = np.array([8.0]);  y = np.zeros(1);  z = np.zeros(1)
-    phi = g.evaluategravitypotential(x, y, z)
-    # Analytic-only configurations auto-finalize on first evaluate call.
-    assert g.gravity_finalized
-    assert phi[0] < 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -245,8 +225,8 @@ def test_exponential_oblate_halo_force_and_potential_are_finite():
     g.finalizegravity()
 
     x = np.array([8.0]); y = np.array([0.0]); z = np.array([0.5])
-    ax, ay, az = g.evaluategravityforces(x, y, z)
-    phi = g.evaluategravitypotential(x, y, z)
+    ax, ay, az = g.force(x, y, z)
+    phi = g.potential(x, y, z)
 
     assert np.isfinite(ax[0])
     assert np.isfinite(ay[0])
@@ -263,8 +243,8 @@ def test_exponential_disk_bessel_phi_even_and_az_odd_in_z():
     y = np.zeros(2)
     z = np.array([0.4, -0.4])
 
-    ax, ay, az = g.evaluategravityforces(x, y, z)
-    phi = g.evaluategravitypotential(x, y, z)
+    ax, ay, az = g.force(x, y, z)
+    phi = g.potential(x, y, z)
 
     assert np.all(np.isfinite(ax))
     assert np.all(np.isfinite(ay))

@@ -4,9 +4,9 @@
 import os
 import tempfile
 import numpy as np
-import tstrippytest
+import tstrippy
 
-sim = tstrippytest.simulator
+sim = tstrippy.simulator
 
 
 def test_snapshot_writing():

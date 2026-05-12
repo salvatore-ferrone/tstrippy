@@ -1,14 +1,14 @@
 import numpy as np
-import tstrippytest
+import tstrippy
 
 
 def test_ibata_density_is_exposed():
-    g = tstrippytest.gravity
+    g = tstrippy.gravity
     assert hasattr(g, "ibata2024halo_density")
 
 
 def _reset_with_single_plummer():
-    g = tstrippytest.gravity
+    g = tstrippy.gravity
     g.cleargravity()
     g.addgravitycomponent("plummer", [1.0, 1.0])
     g.finalizegravity()
@@ -46,7 +46,7 @@ def test_component_sum_matches_total_force():
 
 
 def test_ibata2024halo():
-    g = tstrippytest.gravity
+    g = tstrippy.gravity
 
     x = np.array([1.0, 2.0, 3.0], dtype=float)
     y = np.array([0.0, 0.0, 0.0], dtype=float)
@@ -60,7 +60,7 @@ def test_ibata2024halo():
 
 
 def test_ibata_component_force_api_runs():
-    g = tstrippytest.gravity
+    g = tstrippy.gravity
     g.cleargravity()
     g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
     g.finalizegravity()
@@ -78,7 +78,7 @@ def test_ibata_component_force_api_runs():
 
 
 def test_ibata_total_potential_api_runs():
-    g = tstrippytest.gravity
+    g = tstrippy.gravity
     g.cleargravity()
     g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
     g.finalizegravity()
@@ -94,8 +94,8 @@ def test_ibata_total_potential_api_runs():
 
 
 def test_finalize_precomputes_sh_for_single_component():
-    g = tstrippytest.gravity
-    sh = tstrippytest.sphericalharmonicsbfe
+    g = tstrippy.gravity
+    sh = tstrippy.sphericalharmonicsbfe
 
     g.cleargravity()
     g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
@@ -105,8 +105,8 @@ def test_finalize_precomputes_sh_for_single_component():
 
 
 def test_finalize_initializes_component_phi_storage_for_multi_sh():
-    g = tstrippytest.gravity
-    sh = tstrippytest.sphericalharmonicsbfe
+    g = tstrippy.gravity
+    sh = tstrippy.sphericalharmonicsbfe
 
     g.cleargravity()
     g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
@@ -119,7 +119,7 @@ def test_finalize_initializes_component_phi_storage_for_multi_sh():
 
 
 def test_store_component_phi_copies_active_phi_table():
-    sh = tstrippytest.sphericalharmonicsbfe
+    sh = tstrippy.sphericalharmonicsbfe
 
     sh.defaultinitsphericalharmonicbasis()
     sh.initsphericalharmoniccomponentphi(2)
@@ -131,8 +131,8 @@ def test_store_component_phi_copies_active_phi_table():
 
 
 def test_finalize_populates_each_multi_sh_component_slot():
-    g = tstrippytest.gravity
-    sh = tstrippytest.sphericalharmonicsbfe
+    g = tstrippy.gravity
+    sh = tstrippy.sphericalharmonicsbfe
 
     g.cleargravity()
     g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
@@ -147,7 +147,7 @@ def test_finalize_populates_each_multi_sh_component_slot():
 
 
 def test_load_component_phi_restores_slot_into_active_phi_grid():
-    sh = tstrippytest.sphericalharmonicsbfe
+    sh = tstrippy.sphericalharmonicsbfe
 
     sh.defaultinitsphericalharmonicbasis()
     sh.initsphericalharmoniccomponentphi(2)
@@ -164,8 +164,8 @@ def test_load_component_phi_restores_slot_into_active_phi_grid():
 
 
 def test_multi_sh_potential_reads_from_stored_component_slots():
-    g = tstrippytest.gravity
-    sh = tstrippytest.sphericalharmonicsbfe
+    g = tstrippy.gravity
+    sh = tstrippy.sphericalharmonicsbfe
 
     g.cleargravity()
     g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
@@ -184,8 +184,8 @@ def test_multi_sh_potential_reads_from_stored_component_slots():
 
 
 def test_multi_sh_force_components_read_from_stored_component_slots():
-    g = tstrippytest.gravity
-    sh = tstrippytest.sphericalharmonicsbfe
+    g = tstrippy.gravity
+    sh = tstrippy.sphericalharmonicsbfe
 
     g.cleargravity()
     g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
@@ -206,8 +206,8 @@ def test_multi_sh_force_components_read_from_stored_component_slots():
 
 
 def test_multi_sh_total_force_reads_from_stored_component_slots():
-    g = tstrippytest.gravity
-    sh = tstrippytest.sphericalharmonicsbfe
+    g = tstrippy.gravity
+    sh = tstrippy.sphericalharmonicsbfe
 
     g.cleargravity()
     g.addgravitycomponent("ibata2024halo", [1.0, 1.0, 100.0, 0.8, 1.4, 3.0])
@@ -228,8 +228,8 @@ def test_multi_sh_total_force_reads_from_stored_component_slots():
 
 
 def test_interleaved_components_preserve_sh_slot_mapping_order():
-    g = tstrippytest.gravity
-    sh = tstrippytest.sphericalharmonicsbfe
+    g = tstrippy.gravity
+    sh = tstrippy.sphericalharmonicsbfe
 
     g.cleargravity()
     g.addgravitycomponent("plummer", [1.0, 1.0])
@@ -261,7 +261,7 @@ def test_interleaved_components_preserve_sh_slot_mapping_order():
 
 
 def test_ibata_exponential_force_components_match_independent_components():
-    g = tstrippytest.gravity
+    g = tstrippy.gravity
 
     x = np.array([1.0, 2.0, 3.0], dtype=float)
     y = np.array([0.0, 0.1, 0.0], dtype=float)
@@ -295,7 +295,7 @@ def test_ibata_exponential_force_components_match_independent_components():
 
 
 def test_all_component_pairs_are_commutative_and_force_consistent_on_small_grid():
-    g = tstrippytest.gravity
+    g = tstrippy.gravity
 
     def rms(a, b):
         return np.sqrt(np.mean((a.ravel() - b.ravel()) ** 2))
@@ -371,7 +371,7 @@ def test_all_component_pairs_are_commutative_and_force_consistent_on_small_grid(
 
 
 def test_component_potential_sum_matches_total_potential():
-    g = tstrippytest.gravity
+    g = tstrippy.gravity
 
     g.cleargravity()
     g.addgravitycomponent("plummer", [1e12, 14.7])

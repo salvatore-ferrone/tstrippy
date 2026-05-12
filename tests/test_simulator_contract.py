@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 
-tstrippytest = pytest.importorskip("tstrippytest")
-sim = tstrippytest.simulator
+tstrippy = pytest.importorskip("tstrippy")
+sim = tstrippy.simulator
 
 DEFAULT_MB = 1024.0
 

@@ -3,12 +3,12 @@ import math
 import numpy as np
 import pytest
 
-import tstrippytest
+import tstrippy
 
 
 def _configure_single_bessel_disk(sigma0=1.0, hR=4.0, hZ=0.8, nr=128, nz=128, nk=256):
-    g = tstrippytest.gravity
-    b = tstrippytest.besselbfe
+    g = tstrippy.gravity
+    b = tstrippy.besselbfe
 
     g.cleargravity()
     b.bessel_init(nr, nz, nk, hR, hZ)
@@ -22,7 +22,7 @@ def _disk_total_mass(sigma0, hR):
 
 
 def _direct_reference_potential(R_eval, z_eval, sigma0, hR, hZ, nR=140, nZ=120, nphi=180):
-    gconst = float(tstrippytest.gravity.gravity_g_default)
+    gconst = float(tstrippy.gravity.gravity_g_default)
 
     r_max = 12.0 * hR
     z_max = 10.0 * hZ
@@ -105,7 +105,7 @@ def test_bessel_far_field_matches_monopole_mass():
     ax, ay, az = g.force(x, y, z)
 
     mass = _disk_total_mass(sigma0, hR)
-    gconst = float(tstrippytest.gravity.gravity_g_default)
+    gconst = float(tstrippy.gravity.gravity_g_default)
     radius = x[0]
     phi_ref = -gconst * mass / radius
     ax_ref = -gconst * mass / radius**2

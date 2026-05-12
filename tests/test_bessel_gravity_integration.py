@@ -5,14 +5,14 @@ Quick test: Verify exponential_disk_bessel model is registered and can be added.
 import sys
 sys.path.insert(0, '/Users/sferrone/repos/tstrippy/TEMP')
 
-import tstrippytest
+import tstrippy
 import numpy as np
 
 print("=" * 70)
 print("Testing exponential_disk_bessel registration and basic setup")
 print("=" * 70)
 
-g = tstrippytest.gravity
+g = tstrippy.gravity
 g.cleargravity()
 
 # Try to add exponential_disk_bessel component

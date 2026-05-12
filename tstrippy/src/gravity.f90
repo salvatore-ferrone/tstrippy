@@ -1,25 +1,25 @@
 MODULE gravity
     USE sphericalharmonicsbfe, ONLY: BASIS_GRID_SET, BASIS_EXPANSION_INITIALIZED, &
-                                     sh_set_basis_g => setsphericalharmonicbasisgravityconstant, &
-                                     sh_clear_basis => clearsphericalharmonicbasis, &
-                                     sh_init_basis => initsphericalharmonicbasis, &
-                                     sh_default_init_basis => defaultinitsphericalharmonicbasis, &
-                                     sh_init_component_phi => initsphericalharmoniccomponentphi, &
-                                     sh_store_component_phi => storesphericalharmoniccomponentphi, &
-                                     sh_load_component_phi => loadsphericalharmoniccomponentphi, &
-                                     sh_project_density => project_axisym_density_generic, &
-                                     sh_compute_phi_tables => compute_phi_tables_from_rho, &
-                                     sh_eval_force => sphericalharmonicbasisforce, &
-                                     sh_eval_potential => sphericalharmonicbasispotential
+                                     setsphericalharmonicbasisgravityconstant, &
+                                     clearsphericalharmonicbasis, &
+                                     initsphericalharmonicbasis, &
+                                     defaultinitsphericalharmonicbasis, &
+                                     initsphericalharmoniccomponentphi, &
+                                     storesphericalharmoniccomponentphi, &
+                                     loadsphericalharmoniccomponentphi, &
+                                     project_axisym_density_generic, &
+                                     compute_phi_tables_from_rho, &
+                                     sphericalharmonicbasisforce, &
+                                     sphericalharmonicbasispotential
     USE besselbfe, ONLY: BESSEL_INITIALIZED, BESSEL_NCOMP, &
                          bessel_clear, &
-                         bessel_set_g => bessel_set_gravity_constant, &
-                         bessel_default_init => bessel_default_init, &
-                         bessel_init_comp => bessel_init_component_tables, &
-                         bessel_project_density => bessel_project_axisym_density_generic, &
-                         bessel_load_comp => bessel_load_component, &
-                         bessel_eval_force => bessel_eval_force, &
-                         bessel_eval_potential => bessel_eval_potential
+                         bessel_set_gravity_constant, &
+                         bessel_default_init, &
+                         bessel_init_component_tables, &
+                         bessel_project_axisym_density_generic, &
+                         bessel_load_component, &
+                         bessel_eval_force, &
+                         bessel_eval_potential
     IMPLICIT NONE
 
     REAL*8, PARAMETER, PUBLIC :: GRAVITY_G_DEFAULT = 4.30091727D-6
@@ -210,7 +210,7 @@ CONTAINS
     END FUNCTION component_is_bessel
 
     ! MODULE-STATE subroutines
-    SUBROUTINE cleargravity()
+    SUBROUTINE gravity_clear()
         IMPLICIT NONE
         CALL ensure_component_handlers_initialized()
         GRAVITY_G = GRAVITY_G_DEFAULT
@@ -219,11 +219,11 @@ CONTAINS
         GRAVITY_NCOMP = 0
         COMPONENT_HANDLER_SLOT = 0
         GRAVITY_PARAMS = 0.0D0
-        CALL sh_set_basis_g(GRAVITY_G)
+        CALL setsphericalharmonicbasisgravityconstant(GRAVITY_G)
         CALL bessel_clear()
-    END SUBROUTINE cleargravity
+    END SUBROUTINE gravity_clear
 
-    SUBROUTINE setgravityconstant(g)
+    SUBROUTINE gravity_set_gravity_constant(g)
         IMPLICIT NONE
         REAL*8, INTENT(IN) :: g
         IF (GRAVITY_FINALIZED) THEN
@@ -236,23 +236,10 @@ CONTAINS
         END IF
         GRAVITY_G = g
         GRAVITY_G_IS_DEFAULT = .FALSE.
-        CALL sh_set_basis_g(GRAVITY_G)
-    END SUBROUTINE setgravityconstant
+        CALL setsphericalharmonicbasisgravityconstant(GRAVITY_G)
+    END SUBROUTINE gravity_set_gravity_constant
 
-    SUBROUTINE clearsphericalharmonicbasis()
-        IMPLICIT NONE
-        CALL sh_clear_basis()
-    END SUBROUTINE clearsphericalharmonicbasis
-
-    SUBROUTINE initsphericalharmonicbasis(lmax, nr, r_grid)
-        IMPLICIT NONE
-        INTEGER, INTENT(IN) :: lmax, nr
-        REAL*8, INTENT(IN), DIMENSION(nr) :: r_grid
-        CALL sh_set_basis_g(GRAVITY_G)
-        CALL sh_init_basis(lmax, nr, r_grid)
-    END SUBROUTINE initsphericalharmonicbasis
-
-    SUBROUTINE addgravitycomponent(model_name, params, nparams)
+    SUBROUTINE gravity_add_component(model_name, params, nparams)
         IMPLICIT NONE
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER, INTENT(IN) :: nparams
@@ -283,9 +270,9 @@ CONTAINS
         GRAVITY_NCOMP = GRAVITY_NCOMP + 1
         COMPONENT_HANDLER_SLOT(GRAVITY_NCOMP) = i_handler
         GRAVITY_PARAMS(1:nparams, GRAVITY_NCOMP) = params(1:nparams)
-    END SUBROUTINE addgravitycomponent
+    END SUBROUTINE gravity_add_component
 
-    SUBROUTINE finalizegravity()
+    SUBROUTINE gravity_finalize()
         IMPLICIT NONE
         INTEGER :: i, n_sh, n_bessel, i_sh, i_bessel, i_sh_slot, i_handler
         IF (GRAVITY_NCOMP < 1) THEN
@@ -315,24 +302,24 @@ CONTAINS
 
         ! Microstep: eager SH table build in finalize for the single-SH-component case.
         IF (n_sh == 1) THEN
-            IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
+            IF (.NOT. BASIS_GRID_SET) CALL defaultinitsphericalharmonicbasis()
             i_handler = COMPONENT_HANDLER_SLOT(i_sh)
-            CALL sh_project_density(GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_sh), &
+            CALL project_axisym_density_generic(GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_sh), &
                                     COMPONENT_HANDLERS(i_handler)%density_proc)
-            CALL sh_compute_phi_tables()
+            CALL compute_phi_tables_from_rho()
         ELSE IF (n_sh > 1) THEN
-            IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
-            CALL sh_init_component_phi(n_sh)
+            IF (.NOT. BASIS_GRID_SET) CALL defaultinitsphericalharmonicbasis()
+            CALL initsphericalharmoniccomponentphi(n_sh)
 
             i_sh_slot = 0
             DO i = 1, GRAVITY_NCOMP
                 IF (component_is_sh(i)) THEN
                     i_sh_slot = i_sh_slot + 1
                     i_handler = COMPONENT_HANDLER_SLOT(i)
-                    CALL sh_project_density(GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i), &
+                    CALL project_axisym_density_generic(GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i), &
                                             COMPONENT_HANDLERS(i_handler)%density_proc)
-                    CALL sh_compute_phi_tables()
-                    CALL sh_store_component_phi(i_sh_slot)
+                    CALL compute_phi_tables_from_rho()
+                    CALL storesphericalharmoniccomponentphi(i_sh_slot)
                 END IF
             END DO
         END IF
@@ -340,21 +327,21 @@ CONTAINS
         ! Minimal bessel table build
         IF (n_bessel >= 1) THEN
             IF (.NOT. BESSEL_INITIALIZED) CALL bessel_default_init()
-            CALL bessel_init_comp(n_bessel)
+            CALL bessel_init_component_tables(n_bessel)
 
             i_bessel = 0
             DO i = 1, GRAVITY_NCOMP
                 IF (component_is_bessel(i)) THEN
                     i_bessel = i_bessel + 1
                     i_handler = COMPONENT_HANDLER_SLOT(i)
-                    CALL bessel_project_density(i_bessel, GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i), &
+                    CALL bessel_project_axisym_density_generic(i_bessel, GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i), &
                                                 COMPONENT_HANDLERS(i_handler)%density_proc)
                 END IF
             END DO
         END IF
 
         GRAVITY_FINALIZED = .TRUE.
-    END SUBROUTINE finalizegravity
+    END SUBROUTINE gravity_finalize
 
     SUBROUTINE ensure_sh_component_tables_loaded(i_comp, n_sh)
         IMPLICIT NONE
@@ -365,15 +352,15 @@ CONTAINS
         IF (i_handler <= 0) RETURN
 
         IF (n_sh > 1) THEN
-            CALL sh_load_component_phi(sh_slot_for_component(i_comp))
+            CALL loadsphericalharmoniccomponentphi(sh_slot_for_component(i_comp))
             RETURN
         END IF
 
         IF (.NOT. BASIS_EXPANSION_INITIALIZED) THEN
-            IF (.NOT. BASIS_GRID_SET) CALL sh_default_init_basis()
-            CALL sh_project_density(GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_comp), &
+            IF (.NOT. BASIS_GRID_SET) CALL defaultinitsphericalharmonicbasis()
+            CALL project_axisym_density_generic(GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_comp), &
                                     COMPONENT_HANDLERS(i_handler)%density_proc)
-            CALL sh_compute_phi_tables()
+            CALL compute_phi_tables_from_rho()
         END IF
     END SUBROUTINE ensure_sh_component_tables_loaded
 
@@ -396,7 +383,7 @@ CONTAINS
 
         IF (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_BESSEL) THEN
             i_bessel_slot = bessel_slot_for_component(i_comp)
-            CALL bessel_load_comp(i_bessel_slot)
+            CALL bessel_load_component(i_bessel_slot)
         END IF
 
         CALL COMPONENT_HANDLERS(i_handler)%force_proc( &
@@ -422,14 +409,14 @@ CONTAINS
 
         IF (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_BESSEL) THEN
             i_bessel_slot = bessel_slot_for_component(i_comp)
-            CALL bessel_load_comp(i_bessel_slot)
+            CALL bessel_load_component(i_bessel_slot)
         END IF
 
         CALL COMPONENT_HANDLERS(i_handler)%potential_proc( &
             GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_comp), n, x, y, z, phi_c)
     END SUBROUTINE eval_component_potential
 
-    SUBROUTINE force_components(n, x, y, z, ax_comp, ay_comp, az_comp)
+    SUBROUTINE gravity_eval_force_components(n, x, y, z, ax_comp, ay_comp, az_comp)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -454,9 +441,9 @@ CONTAINS
             ay_comp(i,:) = force_tmp(:,2)
             az_comp(i,:) = force_tmp(:,3)
         END DO
-    END SUBROUTINE force_components
+    END SUBROUTINE gravity_eval_force_components
 
-    SUBROUTINE force(n, x, y, z, ax, ay, az)
+    SUBROUTINE gravity_eval_force(n, x, y, z, ax, ay, az)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -481,9 +468,9 @@ CONTAINS
             ay = ay + force_tmp(:,2)
             az = az + force_tmp(:,3)
         END DO
-    END SUBROUTINE force
+    END SUBROUTINE gravity_eval_force
 
-    SUBROUTINE potential(n, x, y, z, phi)
+    SUBROUTINE gravity_eval_potential(n, x, y, z, phi)
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
@@ -503,9 +490,9 @@ CONTAINS
             CALL eval_component_potential(i, n_sh, n, x, y, z, phi_c)
             phi = phi + phi_c
         END DO
-    END SUBROUTINE potential
+    END SUBROUTINE gravity_eval_potential
 
-    SUBROUTINE potential_components(n, x, y, z, phi_comp)
+    SUBROUTINE gravity_eval_potential_components(n, x, y, z, phi_comp)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -526,7 +513,7 @@ CONTAINS
             CALL eval_component_potential(i, n_sh, n, x, y, z, phi_c)
             phi_comp(i,:) = phi_c
         END DO
-    END SUBROUTINE potential_components
+    END SUBROUTINE gravity_eval_potential_components
 
     SUBROUTINE sh_force_from_tables(params, n, x, y, z, force)
         IMPLICIT NONE
@@ -535,7 +522,7 @@ CONTAINS
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
 
-        CALL sh_eval_force(n, x, y, z, force(:,1), force(:,2), force(:,3))
+        CALL sphericalharmonicbasisforce(n, x, y, z, force(:,1), force(:,2), force(:,3))
     END SUBROUTINE sh_force_from_tables
 
     SUBROUTINE sh_potential_from_tables(params, n, x, y, z, phi)
@@ -545,7 +532,7 @@ CONTAINS
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
 
-        CALL sh_eval_potential(n, x, y, z, phi)
+        CALL sphericalharmonicbasispotential(n, x, y, z, phi)
     END SUBROUTINE sh_potential_from_tables
 
     SUBROUTINE bessel_force_wrapper(params, n, x, y, z, force)

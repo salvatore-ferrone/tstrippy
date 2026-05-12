@@ -13,17 +13,17 @@ Pattern:
 import sys
 sys.path.insert(0, '/Users/sferrone/repos/tstrippy/TEMP')
 
-import tstrippytest
+import tstrippy
 import numpy as np
 
 # Access bessel backend through besselbfe submodule
-bessel = tstrippytest.besselbfe
+bessel = tstrippy.besselbfe
 
 print("=" * 70)
 print("Test 1: Verify bessel_default_init() exists and works")
 print("=" * 70)
 
-g = tstrippytest.gravity
+g = tstrippy.gravity
 g.cleargravity()
 
 # This should initialize bessel backend with hardcoded defaults

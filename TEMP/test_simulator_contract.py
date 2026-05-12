@@ -95,3 +95,42 @@ def test_finalize_uses_user_provided_timestamps_when_set():
     sim.finalize()
 
     assert np.allclose(sim.timestamps, user_timestamps)
+
+
+def test_run_zero_force_produces_straight_line():
+    """With zero force, x(t) = x0 + vx*t exactly (leapfrog is exact for constant motion)."""
+    n_particles = 8
+    nskip = 1
+    nsteps = 50
+    dt = 0.1
+
+    x0 = np.arange(n_particles, dtype=float)
+    vx0 = np.ones(n_particles) * 2.0
+    zeros = np.zeros(n_particles)
+
+    sim.setinitialconditions(x0, zeros, zeros, vx0, zeros, zeros)
+    sim.setscheme("leapfrog", [0.0, dt, nsteps])
+    sim.trim_orbits(nskip)
+    sim.run()
+
+    # orbits shape: (nsaved, 7, n_particles) where vars are t,x,y,z,vx,vy,vz
+    times   = sim.orbits[:, 0, 0]   # time column, any particle
+    x_orbit = sim.orbits[:, 1, :]   # x column, all particles
+
+    expected_x = x0[np.newaxis, :] + vx0[np.newaxis, :] * times[:, np.newaxis]
+
+    assert np.allclose(x_orbit, expected_x, atol=1.0e-10)
+
+
+def test_run_orbit_snapshot_count_matches_nskip():
+    """Orbit array first dimension should equal nsteps//nskip + 1 (including t=0)."""
+    n_particles = 5
+    nsteps = 100
+    nskip = 10
+
+    _set_basic_problem(n_particles=n_particles, nsteps=nsteps)
+    sim.trim_orbits(nskip)
+    sim.run()
+
+    expected_snapshots = nsteps // nskip + 1
+    assert sim.orbits.shape[0] == expected_snapshots

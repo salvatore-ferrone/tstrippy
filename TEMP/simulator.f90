@@ -274,16 +274,48 @@ MODULE simulator
     END subroutine finalize
 
     SUBROUTINE run()
-        
-        call finalize()
+        INTEGER :: istep, iorbit
 
-        if (.not. state%finalized) then 
-            print*, "ERROR: finalize failed. Cannot Run"
-            RETURN 
-        END IF 
+        CALL finalize()
 
+        IF (.NOT. state%finalized) THEN
+            PRINT*, "ERROR: finalize failed. Cannot Run"
+            RETURN
+        END IF
 
-    END SUBROUTINE run 
+        ! Save initial conditions as the first orbit snapshot
+        iorbit = 1
+        IF (n_particles_orbit > 0) THEN
+            orbits(iorbit, 1, :) = timestamps(1)
+            orbits(iorbit, 2, :) = x(1:n_particles_orbit)
+            orbits(iorbit, 3, :) = y(1:n_particles_orbit)
+            orbits(iorbit, 4, :) = z(1:n_particles_orbit)
+            orbits(iorbit, 5, :) = vx(1:n_particles_orbit)
+            orbits(iorbit, 6, :) = vy(1:n_particles_orbit)
+            orbits(iorbit, 7, :) = vz(1:n_particles_orbit)
+            iorbit = iorbit + 1
+        END IF
+
+        ! Main integration loop
+        DO istep = 1, nsteps
+            CALL scheme()  ! advances positions/velocities and increments current_step
+
+            ! Save orbit snapshot every nskip_orbit_timestamps steps
+            IF (n_particles_orbit > 0) THEN
+                IF (MOD(istep, nskip_orbit_timestamps) == 0) THEN
+                    orbits(iorbit, 1, :) = timestamps(current_step)
+                    orbits(iorbit, 2, :) = x(1:n_particles_orbit)
+                    orbits(iorbit, 3, :) = y(1:n_particles_orbit)
+                    orbits(iorbit, 4, :) = z(1:n_particles_orbit)
+                    orbits(iorbit, 5, :) = vx(1:n_particles_orbit)
+                    orbits(iorbit, 6, :) = vy(1:n_particles_orbit)
+                    orbits(iorbit, 7, :) = vz(1:n_particles_orbit)
+                    iorbit = iorbit + 1
+                END IF
+            END IF
+        END DO
+
+    END SUBROUTINE run
 
     ! COMPUTATION AND PREPARATIONS
     SUBROUTINE build_fixed_timestamps()

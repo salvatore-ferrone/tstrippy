@@ -66,15 +66,18 @@ MODULE simulator
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
     INTEGER, PRIVATE :: NSTEPS, current_step
 
+    REAL*8, PARAMETER :: DEFAULT_ORBIT_RAM_LIMIT_MB = 1024.0D0
+    REAL*8, PARAMETER :: DEFAULT_MAX_RAM_MB = 1024.0D0
+
     ! for saving some trajectories
-    REAL*8, PUBLIC :: orbit_ram_limit_MB = 1024.0D0 ! the default
+    REAL*8, PUBLIC :: orbit_ram_limit_MB = DEFAULT_ORBIT_RAM_LIMIT_MB
     INTEGER, PRIVATE :: n_particles_orbit = 1 
     INTEGER, PRIVATE :: nskip_orbit_timestamps = 1 
     INTEGER, PRIVATE :: nvars_orbits = 7 ! time and phase space 
     REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: orbits
 
     ! some other limits
-    REAL*8, PUBLIC :: max_ram_MB = 1024.0D0
+    REAL*8, PUBLIC :: max_ram_MB = DEFAULT_MAX_RAM_MB
 
 
     CONTAINS 
@@ -104,13 +107,13 @@ MODULE simulator
         current_step = 1
         n_particles_orbit = 1
         nskip_orbit_timestamps = 1
-        orbit_ram_limit_MB = 1024.0D0
+        orbit_ram_limit_MB = DEFAULT_ORBIT_RAM_LIMIT_MB
+        max_ram_MB = DEFAULT_MAX_RAM_MB
 
         ! Reset all state flags to defaults
         state = state_t()
 
     END SUBROUTINE CLEAR
-
 
     SUBROUTINE compute_memory_particle_limit(particle_limit)
         INTEGER, INTENT(OUT) :: particle_limit

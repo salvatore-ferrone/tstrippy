@@ -43,6 +43,7 @@ MODULE simulator
         LOGICAL :: timestamps_from_user = .FALSE.
         LOGICAL :: backward_orbit = .FALSE.
         ! I/O 
+        LOGICAL :: orbits_allocated = .FALSE.
         ! other state stuff
         LOGICAL :: finalized = .FALSE.
     END TYPE 
@@ -66,10 +67,11 @@ MODULE simulator
     INTEGER, PRIVATE :: NSTEPS, current_step
 
     ! for saving some trajectories
-    REAL*8, PUBLIC :: trajectory_ram_limit_MB = 512.0D0 ! the default
-    INTEGER, PRIVATE :: ntraj_particles = 0 
-    INTEGER, PRIVATE :: nskip_trajectory = 1 
-    REAL*8, DIMENSION(:,:), ALLOCATABLE, PUBLIC :: orbits
+    REAL*8, PUBLIC :: orbit_ram_limit_MB = 1024.0D0 ! the default
+    INTEGER, PRIVATE :: n_particles_orbit = 1 
+    INTEGER, PRIVATE :: nskip_orbit_default = 1 
+    INTEGER, PRIVATE :: nvars_orbits = 7 ! time and phase space 
+    REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: orbits
 
 
     CONTAINS 
@@ -218,44 +220,6 @@ MODULE simulator
     END subroutine finalize
     
     ! CALLS MADE BY FINALIZE 
-
-    SUBROUTINE allocate_orbits(nskip)
-        INTEGER, INTENT(IN):: NSKIP
-        LOGICAL :: QUIT = .False.
-        INTEGER :: limit_bytes, bytes_per_particle, max_particles_8, nvars_saved
-
-        IF (.NOT.state%initial_conditions_set) then 
-            print*, "ERROR. The initial conditions must be set before allocating space for the orbit trajectories"
-            QUIT = .TRUE.
-        END IF 
-
-        IF (.NOT.state%scheme_set) then 
-            print*, "ERROR: the scheme must be set before allocating allocating space for the orbit trajectories"
-            QUIT = .TRUE. 
-        END IF 
-
-        if (trajectory_ram_limit_MB <= 0.0D0) THEN 
-            print*, "ERROR: trajectory_ram_limit_MB must be > 0"
-            ntraj_particles = 0
-            QUIT = .TRUE.
-        END IF 
-
-        if (QUIT) THEN 
-            RETURN 
-        END IF 
-        nvars_saved = 6 
-
-        ! get the esimated size 
-        limit_bytes = NSTEPS * nvars_saved * 8
-
-        ! limit_bytes = INT(trajectory_ram_limit_MB * 1024.0D0 * 1024.0D0)
-        ! bytes_per_particle = INT(nsaved_steps) * INT(nvars_saved) * 8_8
-
-
-
-
-    END SUBROUTINE 
-
     SUBROUTINE build_fixed_timestamps()
         INTEGER :: i
         REAL*8 :: t0, dtmag, sgn
@@ -292,6 +256,86 @@ MODULE simulator
             timestamps(i) = t0 + sgn * dtmag * DBLE(i - 1)
         END DO
     END SUBROUTINE build_fixed_timestamps    
+
+    SUBROUTINE allocate_orbits(NSKIP)
+        INTEGER, INTENT(IN):: NSKIP
+        LOGICAL :: QUIT = .False.
+        REAL*8 :: memory_estimate
+        REAL*8 :: memory_per_particle_per_step_MB = 8.0D-6
+        INTEGER :: NSTEPS_ORBITS
+        INTEGER :: NSAVED_ORBITS
+        
+        if (NSKIP.lt.1) then
+            print*, "ERROR in allocate_orbits: NSKIP must be a positive integer"
+            QUIT = .TRUE.
+        END IF 
+
+        IF (allocated(orbits)) DEALLOCATE(orbits)
+        state%orbits_allocated = .FALSE.
+        
+        IF (.NOT.state%initial_conditions_set) then 
+            print*, "ERROR in allocate_orbits: The initial conditions must be set before allocating space for the orbit trajectories"
+            QUIT = .TRUE.
+        END IF 
+
+        IF (.NOT.state%scheme_set) then 
+            print*, "ERROR in allocate_orbits: the scheme must be set before allocating space for the orbit trajectories"
+            QUIT = .TRUE. 
+        END IF 
+
+        IF (NSTEPS.lt.1) then
+            print*, "ERROR in allocate_orbits: NSTEPS (",NSTEPS,") must be >= 1. Call finalize() first."
+            QUIT = .TRUE.
+        END IF
+
+        IF (Nparticles.lt.1) then
+            print*, "ERROR in allocate_orbits: Nparticles must be >= 1"
+            QUIT = .TRUE.
+        END IF
+
+        if (orbit_ram_limit_MB <= 0.0D0) THEN 
+            print*, "ERROR in allocate_orbits: orbit_ram_limit_MB must be > 0"
+            n_particles_orbit = 0
+            QUIT = .TRUE.
+        END IF 
+
+        if (QUIT) THEN 
+            RETURN 
+        END IF 
+
+        NSTEPS_ORBITS = NSTEPS / NSKIP
+        NSAVED_ORBITS = NSTEPS_ORBITS + 1
+        
+        ! Estimate storage for all particles over all saved orbit snapshots.
+        memory_estimate = DBLE(Nparticles) * DBLE(NSAVED_ORBITS) * DBLE(nvars_orbits) * memory_per_particle_per_step_MB
+
+        IF (memory_estimate .gt. orbit_ram_limit_MB) THEN
+            n_particles_orbit = INT(orbit_ram_limit_MB  / (DBLE(nvars_orbits) * DBLE(NSAVED_ORBITS) * memory_per_particle_per_step_MB), &
+                kind=kind(n_particles_orbit) )
+        ELSE
+            n_particles_orbit = Nparticles
+        END IF
+
+        n_particles_orbit = max(0, min(n_particles_orbit, Nparticles))
+
+        ! check if no particles will be saved 
+        if (n_particles_orbit.lt.1) THEN 
+            print*, "WARNING. No orbital trajectories will be allocated."
+            print*, "   Memory allocation limit:", orbit_ram_limit_MB, "MBytes"
+            print*, "   Size of full simulation:", memory_estimate, "MBytes"
+            print*, "   Size of a single orbit:", int(memory_estimate/DBLE(Nparticles))
+            print*, "   To get a sample of orbits, call `simulator.allocate_orbits(NSKIP)`, to skip over intermediate timesteps"
+        ELSE IF (memory_estimate .gt. orbit_ram_limit_MB) THEN 
+            print*, "NOTE TO USER."
+            print*, "   Only subset of the orbital trajectories will be allocated to `simulator.orbits`"
+            print*, "   ALLOCATING: ", n_particles_orbit, "/", Nparticles, "particles"
+            print*, "   IF all orbits are desired, reduce total integration time or call `allocate_orbits(NSKIP)` to skip over intermediate timesteps"
+        end IF 
+
+        allocate(orbits(NSAVED_ORBITS,nvars_orbits,n_particles_orbit))
+        state%orbits_allocated=.TRUE.
+
+    END SUBROUTINE 
 
     ! THE NUMERICAL SCHEMES
     SUBROUTINE leapfrog()

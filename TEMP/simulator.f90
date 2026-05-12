@@ -92,6 +92,7 @@ MODULE simulator
         ! Timestamps and scheme params
         IF (ALLOCATED(timestamps))   DEALLOCATE(timestamps)
         IF (ALLOCATED(scheme_params)) DEALLOCATE(scheme_params)
+        IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
 
         ! Scheme pointer and name
         NULLIFY(scheme)
@@ -101,6 +102,9 @@ MODULE simulator
         Nparticles   = 0
         nsteps       = 0
         current_step = 1
+        n_particles_orbit = 1
+        nskip_orbit_timestamps = 1
+        orbit_ram_limit_MB = 1024.0D0
 
         ! Reset all state flags to defaults
         state = state_t()
@@ -254,16 +258,19 @@ MODULE simulator
             END IF
         END IF
 
-        if (should_return) return
-        
-        if (.not.state%orbits_allocated) THEN 
-            print*, "ALLOCATING ORBITS!"
-            CALL allocate_orbits(nskip_orbit_timestamps)
-        END IF 
-        
-
         nsteps = SIZE(timestamps) - 1
         current_step = 1
+
+        if (should_return) return
+
+        if (.not.state%orbits_allocated) THEN
+            CALL allocate_orbits(nskip_orbit_timestamps)
+            IF (.NOT. state%orbits_allocated) THEN
+                PRINT*, "ERROR: finalize failed because orbit allocation did not complete"
+                RETURN
+            END IF
+        END IF
+
         state%scheme_set = .TRUE.
         state%finalized = .TRUE.
 

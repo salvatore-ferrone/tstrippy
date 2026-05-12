@@ -44,6 +44,8 @@ MODULE simulator
         LOGICAL :: backward_orbit = .FALSE.
         ! I/O 
         LOGICAL :: orbits_allocated = .FALSE.
+        LOGICAL :: writesnapshots = .FALSE.
+        LOGICAL :: writeorbits = .FALSE.
         ! other state stuff
         LOGICAL :: finalized = .FALSE.
     END TYPE 
@@ -75,7 +77,20 @@ MODULE simulator
     INTEGER, PRIVATE :: nskip_orbit_timestamps = 1 
     INTEGER, PRIVATE :: nvars_orbits = 7 ! time and phase space 
     REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: orbits
+    
+    ! persistent file handles for direct orbit writing (no per-step open/close)
+    INTEGER, DIMENSION(:), ALLOCATABLE, PRIVATE :: orbit_file_units
 
+    ! i/o
+    INTEGER, PARAMETER :: DEFAULT_FILEUNITBASE_WRITESNAPSHOTS = 12345
+    INTEGER, PUBLIC :: FILEUNITBASE_WRITESNAPSHOTS = DEFAULT_FILEUNITBASE_WRITESNAPSHOTS
+    INTEGER, PUBLIC :: FILEUNITBASE_WRITEORBITS    = DEFAULT_FILEUNITBASE_WRITESNAPSHOTS + 1
+    INTEGER, PUBLIC :: nskip_writesnapshots = 1
+    INTEGER, PUBLIC :: nskip_writeorbits    = 1
+    CHARACTER(LEN=500), PUBLIC :: directory_snapshots = ""
+    CHARACTER(LEN=500), PUBLIC :: basename_snapshots  = ""
+    CHARACTER(LEN=500), PUBLIC :: directory_orbits    = ""
+    CHARACTER(LEN=500), PUBLIC :: basename_orbits     = ""
     ! some other limits
     REAL*8, PUBLIC :: max_ram_MB = DEFAULT_MAX_RAM_MB
 
@@ -180,7 +195,27 @@ MODULE simulator
         state%finalized = .FALSE.
     END SUBROUTINE trim_orbits
 
-    !!!! THE CALLS TO RUN THE COMPUTATION !
+    !!!! OUTPUTS
+    SUBROUTINE initwritesnapshots(nskip, directory, basename)
+        INTEGER, INTENT(IN) :: nskip
+        CHARACTER(LEN=*), INTENT(IN) :: directory, basename
+
+        directory_snapshots = TRIM(directory)
+        basename_snapshots = TRIM(basename)
+        nskip_writesnapshots = nskip
+        state%writesnapshots = .TRUE.
+    END SUBROUTINE initwritesnapshots
+
+    SUBROUTINE initwriteorbits(nskip, directory, basename)
+        INTEGER, INTENT(IN) :: nskip
+        CHARACTER(LEN=*), INTENT(IN) :: directory, basename
+
+        directory_orbits = TRIM(directory)
+        basename_orbits = TRIM(basename)
+        nskip_writeorbits = nskip
+        state%writeorbits = .TRUE.
+    END SUBROUTINE initwriteorbits
+    
     SUBROUTINE CLEAR()
         ! Positions / velocities
         IF (ALLOCATED(x))  DEALLOCATE(x)
@@ -207,6 +242,24 @@ MODULE simulator
         nskip_orbit_timestamps = 1
         orbit_ram_limit_MB = DEFAULT_ORBIT_RAM_LIMIT_MB
         max_ram_MB = DEFAULT_MAX_RAM_MB
+
+        ! I/O settings
+        nskip_writesnapshots = 1
+        nskip_writeorbits = 1
+        directory_snapshots = ""
+        basename_snapshots = ""
+        directory_orbits = ""
+        basename_orbits = ""
+        
+        ! Close and deallocate orbit file units
+        IF (ALLOCATED(orbit_file_units)) THEN
+            DO n_particles_orbit = 1, SIZE(orbit_file_units)
+                IF (orbit_file_units(n_particles_orbit) > 0) THEN
+                    CLOSE(orbit_file_units(n_particles_orbit))
+                END IF
+            END DO
+            DEALLOCATE(orbit_file_units)
+        END IF
 
         ! Reset all state flags to defaults
         state = state_t()
@@ -282,6 +335,13 @@ MODULE simulator
             PRINT*, "ERROR: finalize failed. Cannot Run"
             RETURN
         END IF
+        
+        ! Open all orbit files before loop if writing orbits (one per particle, unlimited)
+        IF (state%writeorbits .AND. Nparticles > 0) THEN
+            CALL open_orbit_files()
+            ! Write initial conditions immediately
+            CALL write_orbit_records()
+        END IF
 
         ! Save initial conditions as the first orbit snapshot
         iorbit = 1
@@ -313,9 +373,133 @@ MODULE simulator
                     iorbit = iorbit + 1
                 END IF
             END IF
+
+            ! Write snapshot if enabled
+            IF (state%writesnapshots) THEN
+                IF (MOD(istep, nskip_writesnapshots) == 0) THEN
+                    CALL write_snapshot_file(istep)
+                END IF
+            END IF
+
+            ! Write orbits directly (per-particle files, no memory limit)
+            IF (state%writeorbits .AND. ALLOCATED(orbit_file_units)) THEN
+                IF (MOD(istep, nskip_writeorbits) == 0) THEN
+                    CALL write_orbit_records()
+                END IF
+            END IF
         END DO
+        
+        ! Close all orbit files at end
+        IF (ALLOCATED(orbit_file_units)) THEN
+            CALL close_orbit_files()
+        END IF
 
     END SUBROUTINE run
+
+    SUBROUTINE write_snapshot_file(istep)
+        INTEGER, INTENT(IN) :: istep
+        CHARACTER(LEN=600) :: filepath
+        CHARACTER(LEN=20) :: step_str
+        INTEGER :: iunit
+        REAL*4, DIMENSION(:), ALLOCATABLE :: x_sp, y_sp, z_sp, vx_sp, vy_sp, vz_sp
+        REAL*4 :: time_sp
+
+        ! Construct filepath: directory/basename_ISTEP.bin
+        WRITE(step_str, '(I0.6)') istep
+        filepath = TRIM(directory_snapshots) // '/' // TRIM(basename_snapshots) // '_' // TRIM(ADJUSTL(step_str)) // '.bin'
+
+        ! Convert to single precision for compact storage
+        ALLOCATE(x_sp(Nparticles), y_sp(Nparticles), z_sp(Nparticles))
+        ALLOCATE(vx_sp(Nparticles), vy_sp(Nparticles), vz_sp(Nparticles))
+        x_sp = REAL(x(1:Nparticles), kind=4)
+        y_sp = REAL(y(1:Nparticles), kind=4)
+        z_sp = REAL(z(1:Nparticles), kind=4)
+        vx_sp = REAL(vx(1:Nparticles), kind=4)
+        vy_sp = REAL(vy(1:Nparticles), kind=4)
+        vz_sp = REAL(vz(1:Nparticles), kind=4)
+        time_sp = REAL(timestamps(current_step), kind=4)
+
+        ! Open file for writing (unformatted binary, single precision)
+        OPEN(NEWUNIT=iunit, FILE=TRIM(filepath), STATUS='REPLACE', ACTION='WRITE', FORM='UNFORMATTED')
+
+        ! Write header: nparticles, time
+        WRITE(iunit) Nparticles, time_sp
+
+        ! Write phase-space data: x, y, z, vx, vy, vz (single precision)
+        WRITE(iunit) x_sp
+        WRITE(iunit) y_sp
+        WRITE(iunit) z_sp
+        WRITE(iunit) vx_sp
+        WRITE(iunit) vy_sp
+        WRITE(iunit) vz_sp
+
+        CLOSE(iunit)
+        DEALLOCATE(x_sp, y_sp, z_sp, vx_sp, vy_sp, vz_sp)
+
+    END SUBROUTINE write_snapshot_file
+
+    SUBROUTINE open_orbit_files()
+        ! Open all orbit files once before integration loop (one per particle)
+        ! No memory limit: all Nparticles get their own file
+        ! Files remain open for the entire integration for fast writing
+        CHARACTER(LEN=600) :: filepath
+        CHARACTER(LEN=20) :: pid_str
+        INTEGER :: ipart
+        
+        IF (ALLOCATED(orbit_file_units)) DEALLOCATE(orbit_file_units)
+        ALLOCATE(orbit_file_units(Nparticles))
+        orbit_file_units = 0
+        
+        DO ipart = 1, Nparticles
+            WRITE(pid_str, '(I0.6)') ipart
+            filepath = TRIM(directory_orbits) // '/' // TRIM(basename_orbits) // '_particle_' // TRIM(ADJUSTL(pid_str)) // '.bin'
+            
+            ! Open file for unformatted sequential write
+            OPEN(NEWUNIT=orbit_file_units(ipart), FILE=TRIM(filepath), &
+                 STATUS='UNKNOWN', ACTION='WRITE', FORM='UNFORMATTED')
+        END DO
+    
+    END SUBROUTINE open_orbit_files
+    
+    SUBROUTINE close_orbit_files()
+        ! Close all orbit files at the end of integration
+        INTEGER :: ipart
+        
+        IF (ALLOCATED(orbit_file_units)) THEN
+            DO ipart = 1, SIZE(orbit_file_units)
+                IF (orbit_file_units(ipart) > 0) THEN
+                    CLOSE(orbit_file_units(ipart))
+                    orbit_file_units(ipart) = 0
+                END IF
+            END DO
+        END IF
+    
+    END SUBROUTINE close_orbit_files
+
+    SUBROUTINE write_orbit_records()
+        ! Write current state to already-open per-particle orbit files
+        ! One file per particle (unlimited, no memory constraint); each call appends one record
+        INTEGER :: ipart
+        REAL*4 :: time_sp, x_sp, y_sp, z_sp, vx_sp, vy_sp, vz_sp
+
+        IF (.NOT. ALLOCATED(orbit_file_units)) RETURN
+        
+        DO ipart = 1, Nparticles
+            ! Convert current state to single precision
+            time_sp = REAL(timestamps(current_step), kind=4)
+            x_sp = REAL(x(ipart), kind=4)
+            y_sp = REAL(y(ipart), kind=4)
+            z_sp = REAL(z(ipart), kind=4)
+            vx_sp = REAL(vx(ipart), kind=4)
+            vy_sp = REAL(vy(ipart), kind=4)
+            vz_sp = REAL(vz(ipart), kind=4)
+
+            ! Write single record to already-open unit: time, x, y, z, vx, vy, vz
+            WRITE(orbit_file_units(ipart)) time_sp, x_sp, y_sp, z_sp, vx_sp, vy_sp, vz_sp
+            FLUSH(orbit_file_units(ipart))
+        END DO
+
+    END SUBROUTINE write_orbit_records
 
     ! COMPUTATION AND PREPARATIONS
     SUBROUTINE build_fixed_timestamps()

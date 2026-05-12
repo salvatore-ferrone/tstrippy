@@ -1,6 +1,6 @@
 import numpy as np
 
-import gravitymini
+import tstrippytest
 
 
 def _composite_components():
@@ -14,7 +14,7 @@ def _composite_components():
 
 
 def _build_and_eval_force(component_list, x, y, z):
-    g = gravitymini.gravity
+    g = tstrippytest.gravity
     g.cleargravity()
 
     for model_name, params in component_list:
@@ -30,7 +30,7 @@ def _stack_force(ax, ay, az):
 
 
 def test_composite_force_component_sum_matches_net_force():
-    g = gravitymini.gravity
+    g = tstrippytest.gravity
     components = _composite_components()
 
     x = np.array([1.0, 2.5, 5.0, 9.0], dtype=float)
@@ -69,7 +69,7 @@ def test_composite_force_is_order_independent():
 
 
 def test_composite_force_matches_sum_of_independent_components():
-    g = gravitymini.gravity
+    g = tstrippytest.gravity
     components = _composite_components()
 
     x = np.array([1.0, 2.5, 5.0, 9.0], dtype=float)

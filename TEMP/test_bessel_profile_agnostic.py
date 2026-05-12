@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0, '/Users/sferrone/repos/tstrippy/TEMP')
 
 import numpy as np
-import gravitymini
+import tstrippytest
 
 def simple_density_model(params, n, x, y, z):
     """
@@ -30,7 +30,7 @@ def simple_density_model(params, n, x, y, z):
 
 def test_bessel_with_minimal_profile_params():
     """Test that bessel backend works with minimal params (no scale encoding)."""
-    g = gravitymini.gravity
+    g = tstrippytest.gravity
     g.cleargravity()
     
     # Only 2 params needed (not 3+)!

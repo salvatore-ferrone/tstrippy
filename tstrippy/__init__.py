@@ -34,6 +34,24 @@ except ModuleNotFoundError:
         "Have you built the package? Run: python -m pip install -e . --no-build-isolation"
     )
 
+try:
+    from .lib.sphericalharmonicsbfe import sphericalharmonicsbfe
+except ModuleNotFoundError:
+    mathutils = None
+    warnings.warn(
+        "Fortran module 'tstrippy.lib.sphericalharmonicsbfe' not found. "
+        "Have you built the package? Run: python -m pip install -e . --no-build-isolation"
+    )
+
+try:
+    from .lib.besselbfe import besselbfe
+except ModuleNotFoundError:
+    mathutils = None
+    warnings.warn(
+        "Fortran module 'tstrippy.lib.sphericalharmonicsbfe' not found. "
+        "Have you built the package? Run: python -m pip install -e . --no-build-isolation"
+    )      
+
 # Import pure Python modules
 from . import io
 from . import code

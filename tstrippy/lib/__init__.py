@@ -13,7 +13,7 @@ __all__ = []
 
 def __getattr__(name):
     """Provide helpful error message if someone tries to access these directly."""
-    if name in ['simulator', 'gravity', 'mathutils']:
+    if name in ['simulator', 'gravity', 'mathutils', "besselbfe", "sphericalharmonicsbfe"]:
         raise ModuleNotFoundError(
             f"Compiled Fortran module 'tstrippy.lib.{name}' not found. "
             f"Access it via 'tstrippy.{name}' instead (use the top-level import). "

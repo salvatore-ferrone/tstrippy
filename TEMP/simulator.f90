@@ -158,6 +158,8 @@ MODULE simulator
         vx = vxin 
         vy = vyin
         vz = vzin 
+        IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
+        state%orbits_allocated = .FALSE.
         state%initial_conditions_set = .TRUE.
         state%finalized = .FALSE.
     END SUBROUTINE setinitialconditions
@@ -184,7 +186,10 @@ MODULE simulator
                 RETURN 
         END SELECT
 
+        IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
+        state%orbits_allocated = .FALSE.
         state%scheme_set = .TRUE.
+        state%finalized = .FALSE.
 
     END SUBROUTINE setscheme
 
@@ -195,6 +200,8 @@ MODULE simulator
         ALLOCATE(timestamps(nt))
         timestamps = tstamps
         nsteps = nt - 1
+        IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
+        state%orbits_allocated = .FALSE.
         state%timestamps_from_user = .TRUE.
         state%finalized = .FALSE.
     END SUBROUTINE settimestamps
@@ -316,7 +323,15 @@ MODULE simulator
 
     subroutine trim_orbits(NSKIP)
         INTEGER, INTENT(IN) :: NSKIP 
+        IF (NSKIP < 1) THEN
+            PRINT*, "ERROR in trim_orbits: NSKIP must be >= 1"
+            RETURN
+        END IF
+
         nskip_orbit_timestamps = NSKIP
+        IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
+        state%orbits_allocated = .FALSE.
+        state%finalized = .FALSE.
     END SUBROUTINE trim_orbits
 
     SUBROUTINE allocate_orbits(NSKIP)

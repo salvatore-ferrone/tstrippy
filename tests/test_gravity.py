@@ -38,7 +38,7 @@ def test_cleargravity_resets_finalized():
 
 def test_cleargravity_resets_g_to_default():
     g = tstrippy.gravity
-    g.set_gravity_constant(1.0)
+    g.set_gravitational_constant(1.0)
     g.clear()
     assert g.gravity_g == pytest.approx(g.gravity_g_default, rel=1e-10)
 
@@ -49,13 +49,13 @@ def test_cleargravity_resets_g_to_default():
 
 def test_setgravityconstant_stores_value():
     g = tstrippy.gravity
-    g.set_gravity_constant(1.0)
+    g.set_gravitational_constant(1.0)
     assert g.gravity_g == pytest.approx(1.0)
 
 
 def test_setgravityconstant_marks_not_default():
     g = tstrippy.gravity
-    g.set_gravity_constant(1.0)
+    g.set_gravitational_constant(1.0)
     assert not g.gravity_g_is_default
 
 

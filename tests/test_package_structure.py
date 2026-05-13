@@ -10,6 +10,8 @@ def test_top_level_public_api():
         "simulator",
         "gravity",
         "mathutils",
+        "besselbfe",
+        "sphericalharmonicsbfe",
         "io",
         "code",
     }

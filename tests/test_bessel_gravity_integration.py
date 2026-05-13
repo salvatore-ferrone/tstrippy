@@ -2,9 +2,6 @@
 """
 Quick test: Verify exponential_disk_bessel model is registered and can be added.
 """
-import sys
-sys.path.insert(0, '/Users/sferrone/repos/tstrippy/TEMP')
-
 import tstrippy
 import numpy as np
 

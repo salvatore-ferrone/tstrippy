@@ -11,7 +11,7 @@ def _configure_single_bessel_disk(sigma0=1.0, hR=4.0, hZ=0.8, nr=128, nz=128, nk
     b = tstrippy.besselbfe
 
     g.clear()
-    b.bessel_init(nr, nz, nk, hR, hZ)
+    b.initialize(nr, nz, nk, hR, hZ)
     g.add_component("exponentialdisk", [sigma0, hR, hZ])
     g.finalize()
     return g

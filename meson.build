@@ -101,7 +101,9 @@ sphericalharmonicsbfe_build = custom_target('sphericalharmonicsbfe',
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'sphericalharmonicsbfe'],
     env: fc_env,
     install: true,
-    install_dir: module_install_dir)     
+    install_dir: module_install_dir
+    )     
+
 
 gravity_sources = [
     'tstrippy/src/mathutils.f90',
@@ -110,7 +112,6 @@ gravity_sources = [
     'tstrippy/src/gravity.f90'
 ]
 gravity_out = 'gravity' + ext_suffix
-
 gravity_build = custom_target('gravity',
     output: gravity_out,
     input: gravity_sources,

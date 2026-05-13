@@ -42,11 +42,11 @@ MODULE besselbfe
         END SUBROUTINE axisymmetric_density_model
     END INTERFACE
 
-    PRIVATE :: build_bessel_table_from_density
+    PRIVATE :: build_table
 
 CONTAINS
 
-    SUBROUTINE bessel_clear()
+    SUBROUTINE clear()
         IMPLICIT NONE
 
         BESSEL_G = BESSEL_G_DEFAULT
@@ -65,9 +65,9 @@ CONTAINS
         IF (ALLOCATED(BESSEL_TABLE_D2PHI_DRDZ)) DEALLOCATE(BESSEL_TABLE_D2PHI_DRDZ)
         IF (ALLOCATED(BESSEL_TABLE_META)) DEALLOCATE(BESSEL_TABLE_META)
         IF (ALLOCATED(BESSEL_COMPONENT_READY)) DEALLOCATE(BESSEL_COMPONENT_READY)
-    END SUBROUTINE bessel_clear
+    END SUBROUTINE clear
 
-    SUBROUTINE bessel_set_gravity_constant(g)
+    SUBROUTINE set_gravitational_constant(g)
         IMPLICIT NONE
         REAL*8, INTENT(IN) :: g
 
@@ -76,57 +76,57 @@ CONTAINS
             RETURN
         END IF
         BESSEL_G = g
-    END SUBROUTINE bessel_set_gravity_constant
+    END SUBROUTINE set_gravitational_constant
 
-    SUBROUTINE bessel_init(nr, nz, nk_build_in, r_scale, z_scale)
+    SUBROUTINE initialize(nr, nz, nk_build_in, r_scale, z_scale)
         ! Explicit initialization with all tunable parameters
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: nr, nz, nk_build_in
         REAL*8, INTENT(IN) :: r_scale, z_scale
 
         IF (nr < 2) THEN
-            WRITE(*,'(A)') "WARNING: bessel_init: nr must be >= 2"
+            WRITE(*,'(A)') "WARNING: initialize: nr must be >= 2"
             RETURN
         END IF
         IF (nz < 2) THEN
-            WRITE(*,'(A)') "WARNING: bessel_init: nz must be >= 2"
+            WRITE(*,'(A)') "WARNING: initialize: nz must be >= 2"
             RETURN
         END IF
         IF (nk_build_in < 4) THEN
-            WRITE(*,'(A)') "WARNING: bessel_init: nk_build must be >= 4"
+            WRITE(*,'(A)') "WARNING: initialize: nk_build must be >= 4"
             RETURN
         END IF
         IF (r_scale <= 0.0D0) THEN
-            WRITE(*,'(A)') "WARNING: bessel_init: r_scale must be positive"
+            WRITE(*,'(A)') "WARNING: initialize: r_scale must be positive"
             RETURN
         END IF
         IF (z_scale <= 0.0D0) THEN
-            WRITE(*,'(A)') "WARNING: bessel_init: z_scale must be positive"
+            WRITE(*,'(A)') "WARNING: initialize: z_scale must be positive"
             RETURN
         END IF
 
-        CALL bessel_clear()
+        CALL clear()
         BESSEL_TABLE_NR = nr
         BESSEL_TABLE_NZ = nz
         NK_BUILD = nk_build_in
         BESSEL_R_SCALE = r_scale
         BESSEL_Z_SCALE = z_scale
         BESSEL_INITIALIZED = .TRUE.
-    END SUBROUTINE bessel_init
+    END SUBROUTINE initialize
 
-    SUBROUTINE bessel_default_init()
+    SUBROUTINE default_initialize()
         ! Default initialization using hardcoded parameter defaults
         IMPLICIT NONE
-        CALL bessel_init(BESSEL_TABLE_NR_DEFAULT, BESSEL_TABLE_NZ_DEFAULT, &
+        CALL initialize(BESSEL_TABLE_NR_DEFAULT, BESSEL_TABLE_NZ_DEFAULT, &
                          NK_BUILD_DEFAULT, BESSEL_R_SCALE_DEFAULT, BESSEL_Z_SCALE_DEFAULT)
-    END SUBROUTINE bessel_default_init
+    END SUBROUTINE default_initialize
 
-    SUBROUTINE bessel_init_component_tables(ncomp)
+    SUBROUTINE allocate_component_tables(ncomp)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: ncomp
 
         IF (ncomp < 1) THEN
-            WRITE(*,'(A)') "WARNING: bessel_init_component_tables: ncomp must be >= 1"
+            WRITE(*,'(A)') "WARNING: allocate_table: ncomp must be >= 1"
             RETURN
         END IF
 
@@ -145,9 +145,9 @@ CONTAINS
         BESSEL_TABLE_D2PHI_DRDZ = 0.0D0
         BESSEL_TABLE_META = 0.0D0
         BESSEL_COMPONENT_READY = .FALSE.
-    END SUBROUTINE bessel_init_component_tables
+    END SUBROUTINE allocate_component_tables
 
-    SUBROUTINE bessel_project_axisym_density_generic(component_index, params, density_model)
+    SUBROUTINE project_density(component_index, density_model, params)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -155,15 +155,15 @@ CONTAINS
         REAL*8, DIMENSION(1) :: x0, y0, z0, rho0
 
         IF (.NOT. BESSEL_INITIALIZED) THEN
-            WRITE(*,'(A)') "WARNING: bessel_project_axisym_density_generic: call bessel_init_component_tables first"
+            WRITE(*,'(A)') "WARNING: project_density: call allocate_table first"
             RETURN
         END IF
         IF (component_index < 1 .OR. component_index > BESSEL_NCOMP) THEN
-            WRITE(*,'(A)') "WARNING: bessel_project_axisym_density_generic: invalid component_index"
+            WRITE(*,'(A)') "WARNING: project_density: invalid component_index"
             RETURN
         END IF
         IF (SIZE(params) < 1) THEN
-            WRITE(*,'(A)') "WARNING: bessel_project_axisym_density_generic: params must be non-empty"
+            WRITE(*,'(A)') "WARNING: project_density: params must be non-empty"
             RETURN
         END IF
 
@@ -174,14 +174,14 @@ CONTAINS
         z0(1) = 0.0D0
         CALL density_model(params, 1, x0, y0, z0, rho0)
         IF (rho0(1) < 0.0D0) THEN
-            WRITE(*,'(A)') "WARNING: bessel_project_axisym_density_generic: density_model returned rho<0 at origin"
+            WRITE(*,'(A)') "WARNING: project_density: density_model returned rho<0 at origin"
         END IF
 
-        CALL build_bessel_table_from_density(component_index, params, density_model)
+        CALL build_table(component_index, density_model, params)
         BESSEL_COMPONENT_READY(component_index) = .TRUE.
-    END SUBROUTINE bessel_project_axisym_density_generic
+    END SUBROUTINE project_density
 
-    SUBROUTINE bessel_load_component(component_index)
+    SUBROUTINE load_component(component_index)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: component_index
 
@@ -199,29 +199,31 @@ CONTAINS
         END IF
 
         BESSEL_ACTIVE_COMP = component_index
-    END SUBROUTINE bessel_load_component
+    END SUBROUTINE load_component
 
-    SUBROUTINE bessel_eval_force(n, x, y, z, ax, ay, az)
+    SUBROUTINE force(n, x, y, z, ax, ay, az)
+        ! wrappers
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: ax, ay, az
         REAL*8, DIMENSION(n) :: phi_tmp
 
-        CALL bessel_eval_component(n, x, y, z, ax, ay, az, phi_tmp)
-    END SUBROUTINE bessel_eval_force
+        CALL component_force_potential(n, x, y, z, ax, ay, az, phi_tmp)
+    END SUBROUTINE force
 
-    SUBROUTINE bessel_eval_potential(n, x, y, z, phi)
+    SUBROUTINE potential(n, x, y, z, phi)
+        ! wrapper 
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
         REAL*8, DIMENSION(n) :: ax_tmp, ay_tmp, az_tmp
 
-        CALL bessel_eval_component(n, x, y, z, ax_tmp, ay_tmp, az_tmp, phi)
-    END SUBROUTINE bessel_eval_potential
+        CALL component_force_potential(n, x, y, z, ax_tmp, ay_tmp, az_tmp, phi)
+    END SUBROUTINE potential
 
-    SUBROUTINE bessel_eval_component(n, x, y, z, ax, ay, az, phi)
+    SUBROUTINE component_force_potential(n, x, y, z, ax, ay, az, phi)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN),  DIMENSION(n) :: x, y, z
@@ -336,9 +338,9 @@ CONTAINS
                 ay(i) = 0.0D0
             END IF
         END DO
-    END SUBROUTINE bessel_eval_component
+    END SUBROUTINE component_force_potential
 
-    SUBROUTINE build_bessel_table_from_density(component_index, params, density_model)
+    SUBROUTINE build_table(component_index, density_model, params)
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -504,6 +506,6 @@ CONTAINS
                 END IF
             END DO
         END DO
-    END SUBROUTINE build_bessel_table_from_density
+    END SUBROUTINE build_table
 
 END MODULE besselbfe

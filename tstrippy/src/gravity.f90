@@ -11,17 +11,16 @@ MODULE gravity
                                      compute_phi_tables_from_rho, &
                                      sphericalharmonicbasisforce, &
                                      sphericalharmonicbasispotential
-    USE besselbfe, ONLY: BESSEL_INITIALIZED, BESSEL_NCOMP, &
-                         bessel_clear, &
-                         bessel_set_gravity_constant, &
-                         bessel_default_init, &
-                         bessel_init_component_tables, &
-                         bessel_project_axisym_density_generic, &
-                         bessel_load_component, &
-                         bessel_eval_force, &
-                         bessel_eval_potential
+    USE besselbfe,  bessel_clear                        => clear, &
+                    bessel_initialize                   => initialize, &
+                    bessel_force                        => force, &
+                    bessel_potential                    => potential, &
+                    bessel_set_gravitational_constant   => set_gravitational_constant, &
+                    bessel_allocate_component_tables    => allocate_component_tables, &
+                    bessel_project_density              => project_density, &
+                    bessel_default_initialize           => default_initialize, &
+                    bessel_load_component               => load_component
     IMPLICIT NONE
-
     REAL*8, PARAMETER, PUBLIC :: GRAVITY_G_DEFAULT = 4.30091727D-6
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_MAX_NCOMP = 16
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_MAX_PARAMS = 16
@@ -108,6 +107,7 @@ CONTAINS
         COMPONENT_HANDLERS_INITIALIZED = .TRUE.
     END SUBROUTINE ensure_component_handlers_initialized
 
+    !! SUBROUINES FOR ORGANIZING THE FORCE POINTERS 
     SUBROUTINE register_handler_analytic(model_name, nparams, force_proc, potential_proc)
         IMPLICIT NONE
         CHARACTER(LEN=*), INTENT(IN) :: model_name
@@ -219,25 +219,26 @@ CONTAINS
         GRAVITY_NCOMP = 0
         COMPONENT_HANDLER_SLOT = 0
         GRAVITY_PARAMS = 0.0D0
-        CALL setsphericalharmonicbasisgravityconstant(GRAVITY_G)
+        CALL clearsphericalharmonicbasis()
         CALL bessel_clear()
     END SUBROUTINE clear
 
-    SUBROUTINE set_gravity_constant(g)
+    SUBROUTINE set_gravitational_constant(g)
         IMPLICIT NONE
         REAL*8, INTENT(IN) :: g
         IF (GRAVITY_FINALIZED) THEN
-            WRITE(*,'(A)') "WARNING: setgravityconstant: cannot change G after finalizegravity"
+            WRITE(*,'(A)') "WARNING: set_gravitational_constant: cannot change G after finalizegravity"
             RETURN
         END IF
         IF (g <= 0.0D0) THEN
-            WRITE(*,'(A)') "WARNING: setgravityconstant: G must be positive"
+            WRITE(*,'(A)') "WARNING: set_gravitational_constant: G must be positive"
             RETURN
         END IF
         GRAVITY_G = g
         GRAVITY_G_IS_DEFAULT = .FALSE.
         CALL setsphericalharmonicbasisgravityconstant(GRAVITY_G)
-    END SUBROUTINE set_gravity_constant
+        call bessel_set_gravitational_constant(GRAVITY_G)
+    END SUBROUTINE set_gravitational_constant
 
     SUBROUTINE add_component(model_name, params, nparams)
         IMPLICIT NONE
@@ -326,16 +327,17 @@ CONTAINS
 
         ! Minimal bessel table build
         IF (n_bessel >= 1) THEN
-            IF (.NOT. BESSEL_INITIALIZED) CALL bessel_default_init()
-            CALL bessel_init_component_tables(n_bessel)
+            IF (.NOT. BESSEL_INITIALIZED) CALL bessel_default_initialize()
+            CALL bessel_allocate_component_tables(n_bessel)
 
             i_bessel = 0
             DO i = 1, GRAVITY_NCOMP
                 IF (component_is_bessel(i)) THEN
                     i_bessel = i_bessel + 1
                     i_handler = COMPONENT_HANDLER_SLOT(i)
-                    CALL bessel_project_axisym_density_generic(i_bessel, GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i), &
-                                                COMPONENT_HANDLERS(i_handler)%density_proc)
+                    CALL bessel_project_density(i_bessel, &
+                                                COMPONENT_HANDLERS(i_handler)%density_proc, &
+                                                GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i) )
                 END IF
             END DO
         END IF
@@ -535,30 +537,6 @@ CONTAINS
         CALL sphericalharmonicbasispotential(n, x, y, z, phi)
     END SUBROUTINE sh_potential_from_tables
 
-    SUBROUTINE bessel_force_wrapper(params, n, x, y, z, force)
-        IMPLICIT NONE
-        REAL*8, INTENT(IN), DIMENSION(:) :: params
-        INTEGER, INTENT(IN) :: n
-        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
-        REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
-        REAL*8, DIMENSION(n) :: ax, ay, az
-
-        CALL bessel_eval_force(n, x, y, z, ax, ay, az)
-        force(:,1) = ax
-        force(:,2) = ay
-        force(:,3) = az
-    END SUBROUTINE bessel_force_wrapper
-
-    SUBROUTINE bessel_potential_wrapper(params, n, x, y, z, phi)
-        IMPLICIT NONE
-        REAL*8, INTENT(IN), DIMENSION(:) :: params
-        INTEGER, INTENT(IN) :: n
-        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
-        REAL*8, INTENT(OUT), DIMENSION(n) :: phi
-
-        CALL bessel_eval_potential(n, x, y, z, phi)
-    END SUBROUTINE bessel_potential_wrapper
-
     ! Spherical harmonics interfacing subroutines
     INTEGER FUNCTION count_sh_components()
         IMPLICIT NONE
@@ -570,6 +548,7 @@ CONTAINS
                 count_sh_components = count_sh_components + 1
             END IF
         END DO
+    
     END FUNCTION count_sh_components
 
     INTEGER FUNCTION sh_slot_for_component(i_comp)
@@ -586,6 +565,31 @@ CONTAINS
             END IF
         END DO
     END FUNCTION sh_slot_for_component
+
+    !!! Subroutines for interfacing with besselbfe
+    SUBROUTINE bessel_force_wrapper(params, n, x, y, z, force)
+        IMPLICIT NONE
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
+        REAL*8, DIMENSION(n) :: ax, ay, az
+
+        CALL bessel_force(n, x, y, z, ax, ay, az)
+        force(:,1) = ax
+        force(:,2) = ay
+        force(:,3) = az
+    END SUBROUTINE bessel_force_wrapper
+
+    SUBROUTINE bessel_potential_wrapper(params, n, x, y, z, phi)
+        IMPLICIT NONE
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n) :: phi
+
+        CALL bessel_potential(n, x, y, z, phi)
+    END SUBROUTINE bessel_potential_wrapper
 
     INTEGER FUNCTION count_bessel_components()
         IMPLICIT NONE

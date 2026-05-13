@@ -12,7 +12,7 @@ MODULE gravity
                                      sphericalharmonicbasisforce, &
                                      sphericalharmonicbasispotential
     USE besselbfe,  bessel_clear                        => clear, &
-                    bessel_initialize                   => initialize, &
+                    backend_bessel_initialize           => initialize, &
                     bessel_force                        => force, &
                     bessel_potential                    => potential, &
                     bessel_set_gravitational_constant   => set_gravitational_constant, &
@@ -227,7 +227,7 @@ CONTAINS
         IMPLICIT NONE
         REAL*8, INTENT(IN) :: g
         IF (GRAVITY_FINALIZED) THEN
-            WRITE(*,'(A)') "WARNING: set_gravitational_constant: cannot change G after finalizegravity"
+            WRITE(*,'(A)') "WARNING: set_gravitational_constant: cannot change G after finalize"
             RETURN
         END IF
         IF (g <= 0.0D0) THEN
@@ -248,7 +248,7 @@ CONTAINS
         INTEGER :: i_handler
 
         IF (GRAVITY_FINALIZED) THEN
-            WRITE(*,'(A)') "WARNING: addgravitycomponent: cannot add components after finalizegravity"
+            WRITE(*,'(A)') "WARNING: addgravitycomponent: cannot add components after finalize"
             RETURN
         END IF
         IF (GRAVITY_NCOMP >= GRAVITY_MAX_NCOMP) THEN
@@ -277,7 +277,7 @@ CONTAINS
         IMPLICIT NONE
         INTEGER :: i, n_sh, n_bessel, i_sh, i_bessel, i_sh_slot, i_handler
         IF (GRAVITY_NCOMP < 1) THEN
-            WRITE(*,'(A)') "WARNING: finalizegravity: no components registered"
+            WRITE(*,'(A)') "WARNING: finalize: no components registered"
             RETURN
         END IF
 
@@ -288,7 +288,7 @@ CONTAINS
         DO i = 1, GRAVITY_NCOMP
             i_handler = COMPONENT_HANDLER_SLOT(i)
             IF (i_handler < 1 .OR. i_handler > N_COMPONENT_HANDLERS) THEN
-                WRITE(*,'(A)') "WARNING: finalizegravity: component slot is uninitialized"
+                WRITE(*,'(A)') "WARNING: finalize: component slot is uninitialized"
                 RETURN
             END IF
             IF (component_is_sh(i)) THEN
@@ -431,7 +431,7 @@ CONTAINS
         az_comp = 0.0D0
 
         IF (.NOT. GRAVITY_FINALIZED) THEN
-            WRITE(*,'(A)') "WARNING: evaluategravityforcecomponents: call finalizegravity first"
+            WRITE(*,'(A)') "WARNING: evaluategravityforcecomponents: call finalize first"
             RETURN
         END IF
 
@@ -458,7 +458,7 @@ CONTAINS
         az = 0.0D0
 
         IF (.NOT. GRAVITY_FINALIZED) THEN
-            WRITE(*,'(A)') "WARNING: evaluategravityforces: call finalizegravity first"
+            WRITE(*,'(A)') "WARNING: evaluategravityforces: call finalize first"
             RETURN
         END IF
 
@@ -482,7 +482,7 @@ CONTAINS
         phi = 0.0D0
 
         IF (.NOT. GRAVITY_FINALIZED) THEN
-            WRITE(*,'(A)') "WARNING: evaluategravitypotential: call finalizegravity first"
+            WRITE(*,'(A)') "WARNING: evaluategravitypotential: call finalize first"
             RETURN
         END IF
 
@@ -505,7 +505,7 @@ CONTAINS
         phi_comp = 0.0D0
 
         IF (.NOT. GRAVITY_FINALIZED) THEN
-            WRITE(*,'(A)') "WARNING: evaluategravitypotentialcomponents: call finalizegravity first"
+            WRITE(*,'(A)') "WARNING: evaluategravitypotentialcomponents: call finalize first"
             RETURN
         END IF
 
@@ -566,7 +566,14 @@ CONTAINS
         END DO
     END FUNCTION sh_slot_for_component
 
-    !!! Subroutines for interfacing with besselbfe
+    SUBROUTINE bessel_initialize(nr, nz, nk_build_in, r_scale, z_scale)
+        ! wrapper for overwriting the bessel default hyperparams
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: nr, nz, nk_build_in
+        REAL*8, INTENT(IN) :: r_scale, z_scale
+        CALL backend_bessel_initialize(nr, nz, nk_build_in, r_scale, z_scale)
+    end subroutine
+
     SUBROUTINE bessel_force_wrapper(params, n, x, y, z, force)
         IMPLICIT NONE
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -880,7 +887,6 @@ CONTAINS
         CALL miyamotonagai_potential(thickdisk, N, x, y, z, phi_d2)
         phi = phi_h + phi_d1 + phi_d2
     END SUBROUTINE pouliasis2017pii_potential
-
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     !!!! DENSITY ONLY PROFILES !!!!

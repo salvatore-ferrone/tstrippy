@@ -31,6 +31,8 @@ MODULE besselbfe
     REAL*8, ALLOCATABLE, PRIVATE :: BESSEL_TABLE_DPHI_DZ(:, :, :)
     REAL*8, ALLOCATABLE, PRIVATE :: BESSEL_TABLE_D2PHI_DRDZ(:, :, :)
     REAL*8, ALLOCATABLE, PRIVATE :: BESSEL_TABLE_META(:, :)
+    REAL*8, ALLOCATABLE, PRIVATE :: BESSEL_COMPONENT_R_SCALE(:)
+    REAL*8, ALLOCATABLE, PRIVATE :: BESSEL_COMPONENT_Z_SCALE(:)
     LOGICAL, ALLOCATABLE, PRIVATE :: BESSEL_COMPONENT_READY(:)
 
     ABSTRACT INTERFACE
@@ -64,6 +66,8 @@ CONTAINS
         IF (ALLOCATED(BESSEL_TABLE_DPHI_DZ)) DEALLOCATE(BESSEL_TABLE_DPHI_DZ)
         IF (ALLOCATED(BESSEL_TABLE_D2PHI_DRDZ)) DEALLOCATE(BESSEL_TABLE_D2PHI_DRDZ)
         IF (ALLOCATED(BESSEL_TABLE_META)) DEALLOCATE(BESSEL_TABLE_META)
+        IF (ALLOCATED(BESSEL_COMPONENT_R_SCALE)) DEALLOCATE(BESSEL_COMPONENT_R_SCALE)
+        IF (ALLOCATED(BESSEL_COMPONENT_Z_SCALE)) DEALLOCATE(BESSEL_COMPONENT_Z_SCALE)
         IF (ALLOCATED(BESSEL_COMPONENT_READY)) DEALLOCATE(BESSEL_COMPONENT_READY)
     END SUBROUTINE clear
 
@@ -78,11 +82,10 @@ CONTAINS
         BESSEL_G = g
     END SUBROUTINE set_gravitational_constant
 
-    SUBROUTINE initialize(nr, nz, nk_build_in, r_scale, z_scale)
-        ! Explicit initialization with all tunable parameters
+    SUBROUTINE initialize(nr, nz, nk_build_in)
+        ! Explicit initialization for table/grid resolution controls.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: nr, nz, nk_build_in
-        REAL*8, INTENT(IN) :: r_scale, z_scale
 
         IF (nr < 2) THEN
             WRITE(*,'(A)') "WARNING: initialize: nr must be >= 2"
@@ -96,29 +99,19 @@ CONTAINS
             WRITE(*,'(A)') "WARNING: initialize: nk_build must be >= 4"
             RETURN
         END IF
-        IF (r_scale <= 0.0D0) THEN
-            WRITE(*,'(A)') "WARNING: initialize: r_scale must be positive"
-            RETURN
-        END IF
-        IF (z_scale <= 0.0D0) THEN
-            WRITE(*,'(A)') "WARNING: initialize: z_scale must be positive"
-            RETURN
-        END IF
-
         CALL clear()
         BESSEL_TABLE_NR = nr
         BESSEL_TABLE_NZ = nz
         NK_BUILD = nk_build_in
-        BESSEL_R_SCALE = r_scale
-        BESSEL_Z_SCALE = z_scale
+        BESSEL_R_SCALE = BESSEL_R_SCALE_DEFAULT
+        BESSEL_Z_SCALE = BESSEL_Z_SCALE_DEFAULT
         BESSEL_INITIALIZED = .TRUE.
     END SUBROUTINE initialize
 
     SUBROUTINE default_initialize()
         ! Default initialization using hardcoded parameter defaults
         IMPLICIT NONE
-        CALL initialize(BESSEL_TABLE_NR_DEFAULT, BESSEL_TABLE_NZ_DEFAULT, &
-                         NK_BUILD_DEFAULT, BESSEL_R_SCALE_DEFAULT, BESSEL_Z_SCALE_DEFAULT)
+        CALL initialize(BESSEL_TABLE_NR_DEFAULT, BESSEL_TABLE_NZ_DEFAULT, NK_BUILD_DEFAULT)
     END SUBROUTINE default_initialize
 
     SUBROUTINE allocate_component_tables(ncomp)
@@ -137,6 +130,8 @@ CONTAINS
         ALLOCATE(BESSEL_TABLE_DPHI_DZ(BESSEL_TABLE_NR, BESSEL_TABLE_NZ, BESSEL_NCOMP))
         ALLOCATE(BESSEL_TABLE_D2PHI_DRDZ(BESSEL_TABLE_NR, BESSEL_TABLE_NZ, BESSEL_NCOMP))
         ALLOCATE(BESSEL_TABLE_META(BESSEL_META_FIELDS, BESSEL_NCOMP))
+        ALLOCATE(BESSEL_COMPONENT_R_SCALE(BESSEL_NCOMP))
+        ALLOCATE(BESSEL_COMPONENT_Z_SCALE(BESSEL_NCOMP))
         ALLOCATE(BESSEL_COMPONENT_READY(BESSEL_NCOMP))
 
         BESSEL_TABLE_PHI = 0.0D0
@@ -144,8 +139,32 @@ CONTAINS
         BESSEL_TABLE_DPHI_DZ = 0.0D0
         BESSEL_TABLE_D2PHI_DRDZ = 0.0D0
         BESSEL_TABLE_META = 0.0D0
+        BESSEL_COMPONENT_R_SCALE = BESSEL_R_SCALE
+        BESSEL_COMPONENT_Z_SCALE = BESSEL_Z_SCALE
         BESSEL_COMPONENT_READY = .FALSE.
     END SUBROUTINE allocate_component_tables
+
+    SUBROUTINE set_component_scales(component_index, r_scale, z_scale)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: component_index
+        REAL*8, INTENT(IN) :: r_scale, z_scale
+
+        IF (component_index < 1 .OR. component_index > BESSEL_NCOMP) THEN
+            WRITE(*,'(A)') "WARNING: set_component_scales: invalid component_index"
+            RETURN
+        END IF
+        IF (r_scale <= 0.0D0) THEN
+            WRITE(*,'(A)') "WARNING: set_component_scales: r_scale must be positive"
+            RETURN
+        END IF
+        IF (z_scale <= 0.0D0) THEN
+            WRITE(*,'(A)') "WARNING: set_component_scales: z_scale must be positive"
+            RETURN
+        END IF
+
+        BESSEL_COMPONENT_R_SCALE(component_index) = r_scale
+        BESSEL_COMPONENT_Z_SCALE(component_index) = z_scale
+    END SUBROUTINE set_component_scales
 
     SUBROUTINE project_density(component_index, density_model, params)
         IMPLICIT NONE
@@ -359,9 +378,9 @@ CONTAINS
         REAL*8, DIMENSION(NK_BUILD, BESSEL_TABLE_NZ) :: rho_kz, zconv_kz
         REAL*8, DIMENSION(NK_BUILD) :: k_grid, quad_w, mu_q, w_q
 
-        ! Use public module-level domain scales (profile-agnostic)
-        r_scale = MAX(BESSEL_R_SCALE, 1.0D-8)
-        z_scale = MAX(BESSEL_Z_SCALE, 1.0D-8)
+        ! Use per-component domain scales to support mixed-scale multi-component models.
+        r_scale = MAX(BESSEL_COMPONENT_R_SCALE(component_index), 1.0D-8)
+        z_scale = MAX(BESSEL_COMPONENT_Z_SCALE(component_index), 1.0D-8)
 
         logR_min = LOG(1.0D-3 * r_scale)
         logR_max = LOG(2.0D2 * r_scale)

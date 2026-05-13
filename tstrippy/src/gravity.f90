@@ -17,6 +17,7 @@ MODULE gravity
                     bessel_potential                    => potential, &
                     bessel_set_gravitational_constant   => set_gravitational_constant, &
                     bessel_allocate_component_tables    => allocate_component_tables, &
+                    backend_bessel_set_component_scales => set_component_scales, &
                     bessel_project_density              => project_density, &
                     bessel_default_initialize           => default_initialize, &
                     bessel_load_component               => load_component
@@ -28,6 +29,9 @@ MODULE gravity
     INTEGER, PARAMETER, PRIVATE :: BACKEND_ANALYTIC = 1
     INTEGER, PARAMETER, PRIVATE :: BACKEND_SH = 2
     INTEGER, PARAMETER, PRIVATE :: BACKEND_BESSEL = 3
+    REAL*8, PARAMETER, PRIVATE :: BESSEL_DEFAULT_R_SCALE = 2.0D0
+    REAL*8, PARAMETER, PRIVATE :: BESSEL_DEFAULT_Z_SCALE = 1.0D0
+    REAL*8, PARAMETER, PRIVATE :: BESSEL_DEFAULT_SCALE_DIVISOR = 3.0D0
 
     ABSTRACT INTERFACE
         SUBROUTINE force_eval_iface(params, n, x, y, z, force)
@@ -67,6 +71,9 @@ MODULE gravity
     INTEGER, PUBLIC :: GRAVITY_NCOMP = 0
     REAL*8, DIMENSION(GRAVITY_MAX_PARAMS, GRAVITY_MAX_NCOMP), PUBLIC :: GRAVITY_PARAMS = 0.0D0
     INTEGER, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: COMPONENT_HANDLER_SLOT = 0
+    LOGICAL, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: BESSEL_SCALE_OVERRIDE_SET = .FALSE.
+    REAL*8, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: BESSEL_SCALE_OVERRIDE_R = 0.0D0
+    REAL*8, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: BESSEL_SCALE_OVERRIDE_Z = 0.0D0
 
     INTEGER, PARAMETER, PRIVATE :: MAX_COMPONENT_HANDLERS = 16
     TYPE(component_handler_t), DIMENSION(MAX_COMPONENT_HANDLERS), PRIVATE :: COMPONENT_HANDLERS
@@ -219,6 +226,9 @@ CONTAINS
         GRAVITY_NCOMP = 0
         COMPONENT_HANDLER_SLOT = 0
         GRAVITY_PARAMS = 0.0D0
+        BESSEL_SCALE_OVERRIDE_SET = .FALSE.
+        BESSEL_SCALE_OVERRIDE_R = 0.0D0
+        BESSEL_SCALE_OVERRIDE_Z = 0.0D0
         CALL clearsphericalharmonicbasis()
         CALL bessel_clear()
     END SUBROUTINE clear
@@ -276,6 +286,7 @@ CONTAINS
     SUBROUTINE finalize()
         IMPLICIT NONE
         INTEGER :: i, n_sh, n_bessel, i_sh, i_bessel, i_sh_slot, i_handler
+        REAL*8 :: bessel_r_scale, bessel_z_scale
         IF (GRAVITY_NCOMP < 1) THEN
             WRITE(*,'(A)') "WARNING: finalize: no components registered"
             RETURN
@@ -335,6 +346,25 @@ CONTAINS
                 IF (component_is_bessel(i)) THEN
                     i_bessel = i_bessel + 1
                     i_handler = COMPONENT_HANDLER_SLOT(i)
+
+                    ! Auto-select per-component table scales from model params for
+                    ! exponentialdisk-style profiles: params=(Sigma0, hR, hZ).
+                    ! ASSUMES THAT R SCALE LENGTH IS THE SECOND PARAMETER 
+                    ! ASSUMES THAT Z SCALE LENGTH IS THE THIRD PARAMETER !! 
+                    ! RESPECT THE CALLING SEQUENCE !
+                    bessel_r_scale = BESSEL_DEFAULT_R_SCALE / BESSEL_DEFAULT_SCALE_DIVISOR
+                    bessel_z_scale = BESSEL_DEFAULT_Z_SCALE / BESSEL_DEFAULT_SCALE_DIVISOR
+                    IF (COMPONENT_HANDLERS(i_handler)%nparams >= 3) THEN
+                        IF (GRAVITY_PARAMS(2, i) > 0.0D0) bessel_r_scale = GRAVITY_PARAMS(2, i) / BESSEL_DEFAULT_SCALE_DIVISOR
+                        IF (GRAVITY_PARAMS(3, i) > 0.0D0) bessel_z_scale = GRAVITY_PARAMS(3, i) / BESSEL_DEFAULT_SCALE_DIVISOR
+                    END IF
+
+                    IF (BESSEL_SCALE_OVERRIDE_SET(i_bessel)) THEN
+                        bessel_r_scale = BESSEL_SCALE_OVERRIDE_R(i_bessel)
+                        bessel_z_scale = BESSEL_SCALE_OVERRIDE_Z(i_bessel)
+                    END IF
+                    CALL backend_bessel_set_component_scales(i_bessel, bessel_r_scale, bessel_z_scale)
+
                     CALL bessel_project_density(i_bessel, &
                                                 COMPONENT_HANDLERS(i_handler)%density_proc, &
                                                 GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i) )
@@ -566,13 +596,42 @@ CONTAINS
         END DO
     END FUNCTION sh_slot_for_component
 
-    SUBROUTINE bessel_initialize(nr, nz, nk_build_in, r_scale, z_scale)
-        ! wrapper for overwriting the bessel default hyperparams
+    SUBROUTINE bessel_initialize(nr, nz, nk_build_in)
+        ! Wrapper for setting bessel grid/spectral resolution controls.
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: nr, nz, nk_build_in
+        CALL backend_bessel_initialize(nr, nz, nk_build_in)
+    END SUBROUTINE bessel_initialize
+
+    SUBROUTINE bessel_set_component_scales(component_index, r_scale, z_scale)
+        ! Optional user override for per-component bessel domain scales.
+        IMPLICIT NONE
+        INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN) :: r_scale, z_scale
-        CALL backend_bessel_initialize(nr, nz, nk_build_in, r_scale, z_scale)
-    end subroutine
+
+        IF (component_index < 1 .OR. component_index > GRAVITY_MAX_NCOMP) THEN
+            WRITE(*,'(A)') "WARNING: bessel_set_component_scales: invalid component_index"
+            RETURN
+        END IF
+        IF (r_scale <= 0.0D0) THEN
+            WRITE(*,'(A)') "WARNING: bessel_set_component_scales: r_scale must be positive"
+            RETURN
+        END IF
+        IF (z_scale <= 0.0D0) THEN
+            WRITE(*,'(A)') "WARNING: bessel_set_component_scales: z_scale must be positive"
+            RETURN
+        END IF
+
+        ! Allow pre-finalize configuration by storing overrides by bessel slot.
+        IF (.NOT. GRAVITY_FINALIZED) THEN
+            BESSEL_SCALE_OVERRIDE_SET(component_index) = .TRUE.
+            BESSEL_SCALE_OVERRIDE_R(component_index) = r_scale
+            BESSEL_SCALE_OVERRIDE_Z(component_index) = z_scale
+            RETURN
+        END IF
+
+        CALL backend_bessel_set_component_scales(component_index, r_scale, z_scale)
+    END SUBROUTINE bessel_set_component_scales
 
     SUBROUTINE bessel_force_wrapper(params, n, x, y, z, force)
         IMPLICIT NONE

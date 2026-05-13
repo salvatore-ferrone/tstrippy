@@ -4,10 +4,11 @@ Validates that bessel backend now uses spherical-harmonics-style init pattern.
 
 Pattern:
   - set_gravitational_constant(g) - set G separately
-  - initialize(nr, nz, nk_build, r_scale, z_scale) - explicit init with all params
+    - initialize(nr, nz, nk_build) - explicit numeric-resolution init
   - default_initialize() - init with hardcoded defaults
   - clear() - reset to defaults
   - allocate_component_tables(ncomp) - allocate component storage (after init)
+    - set_component_scales(icomp, r_scale, z_scale) - optional per-component scale override
   - project_density(icomp, params, density_func) - fill table
 """
 import sys
@@ -42,28 +43,27 @@ except Exception as e:
     raise
 
 print("\n" + "=" * 70)
-print("Test 2: Explicit bessel_init with custom parameters")
+print("Test 2: Explicit bessel_init + per-component scales")
 print("=" * 70)
 
 bessel.clear()
 print(f"After clear: BESSEL_INITIALIZED = {bessel.bessel_initialized}")
 
-# Initialize with custom parameters (matching SH pattern)
+# Initialize numeric controls, then set per-component scales.
 try:
-    bessel.initialize(256, 256, 512, 2.0, 3.0)
-    print(f"✓ bessel_init(256, 256, 512, 2.0, 3.0) succeeded")
+    bessel.initialize(256, 256, 512)
+    bessel.allocate_component_tables(1)
+    bessel.set_component_scales(1, 2.0, 3.0)
+    print(f"✓ bessel_init(256, 256, 512) + set_component_scales(1, 2.0, 3.0) succeeded")
     print(f"  BESSEL_TABLE_NR: {bessel.bessel_table_nr} (expected 256)")
     print(f"  BESSEL_TABLE_NZ: {bessel.bessel_table_nz} (expected 256)")
     print(f"  NK_BUILD: {bessel.nk_build} (expected 512)")
-    print(f"  BESSEL_R_SCALE: {bessel.bessel_r_scale} (expected 2.0)")
-    print(f"  BESSEL_Z_SCALE: {bessel.bessel_z_scale} (expected 3.0)")
+    print("  BESSEL component scales set via set_component_scales(1, 2.0, 3.0)")
     print(f"  BESSEL_INITIALIZED: {bessel.bessel_initialized} (expected True)")
     
     assert bessel.bessel_table_nr == 256
     assert bessel.bessel_table_nz == 256
     assert bessel.nk_build == 512
-    assert np.isclose(bessel.bessel_r_scale, 2.0)
-    assert np.isclose(bessel.bessel_z_scale, 3.0)
     assert bessel.bessel_initialized == True
 except Exception as e:
     print(f"✗ FAILED: {e}")
@@ -108,7 +108,8 @@ print("SUCCESS: Bessel backend now uses SH-style init pattern!")
 print("=" * 70)
 print("Usage pattern:")
 print("  1. bessel.bessel_set_gravity_constant(g)")
-print("  2. bessel.bessel_init(nr, nz, nk, r_scale, z_scale)")
+print("  2. bessel.bessel_init(nr, nz, nk)")
 print("     OR bessel.bessel_default_init()")
 print("  3. bessel.allocate_component_tables(ncomp)")
-print("  4. bessel.project_density(...)")
+print("  4. bessel.set_component_scales(icomp, r_scale, z_scale)  # optional")
+print("  5. bessel.project_density(...)")

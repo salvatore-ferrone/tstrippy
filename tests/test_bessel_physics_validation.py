@@ -21,6 +21,30 @@ def _disk_total_mass(sigma0, hR):
     return 2.0 * math.pi * sigma0 * hR**2
 
 
+def _configure_two_bessel_disks(
+    sigma0_1=2.0,
+    hR_1=4.0,
+    hZ_1=2.0,
+    sigma0_2=1.0,
+    hR_2=6.0,
+    hZ_2=0.5,
+    nr=256,
+    nz=256,
+    nk=256,
+    scale_divisor=2.0,
+):
+    g = tstrippy.gravity
+
+    g.clear()
+    g.bessel_initialize(nr, nz, nk)
+    g.add_component("exponentialdisk", [sigma0_1, hR_1, hZ_1])
+    g.add_component("exponentialdisk", [sigma0_2, hR_2, hZ_2])
+    g.bessel_set_component_scales(1, hR_1 / scale_divisor, hZ_1 / scale_divisor)
+    g.bessel_set_component_scales(2, hR_2 / scale_divisor, hZ_2 / scale_divisor)
+    g.finalize()
+    return g
+
+
 def _direct_reference_potential(R_eval, z_eval, sigma0, hR, hZ, nR=140, nZ=120, nphi=180):
     gconst = float(tstrippy.gravity.gravity_g_default)
 
@@ -114,6 +138,68 @@ def test_bessel_far_field_matches_monopole_mass():
     np.testing.assert_allclose(ax[0], ax_ref, rtol=2.5e-1, atol=1e-6)
     np.testing.assert_allclose(ay[0], 0.0, atol=1e-12)
     np.testing.assert_allclose(az[0], 0.0, atol=1e-12)
+
+
+def test_bessel_far_field_force_aligns_with_negative_rhat():
+    sigma0 = 1.0
+    hR = 4.0
+    hZ = 0.8
+    g = _configure_single_bessel_disk(sigma0=sigma0, hR=hR, hZ=hZ, nr=192, nz=160, nk=384)
+
+    # Probe several increasing radii on a fixed oblique ray so both radial and
+    # vertical force components are exercised.
+    radii = np.array([20.0, 40.0, 80.0, 120.0], dtype=float)
+    theta = 0.35  # polar angle from midplane in the R-z meridional plane
+    x = radii * np.cos(theta)
+    y = np.zeros_like(x)
+    z = radii * np.sin(theta)
+
+    ax, ay, az = g.force(x, y, z)
+    force = np.column_stack((ax, ay, az))
+    pos = np.column_stack((x, y, z))
+
+    minus_rhat = -pos / np.linalg.norm(pos, axis=1, keepdims=True)
+    force_norm = np.linalg.norm(force, axis=1)
+
+    assert np.all(force_norm > 0.0)
+
+    cos_align = np.sum(force * minus_rhat, axis=1) / force_norm
+
+    # Must be attractive everywhere along the sampled far-field ray.
+    assert np.all(cos_align > 0.0)
+
+    # Alignment should improve (or at least not degrade materially) with radius.
+    assert np.all(np.diff(cos_align) >= -2.0e-2)
+
+    # Last point should be strongly radial in the far field.
+    assert cos_align[-1] > 0.98
+
+
+def test_bessel_far_field_force_aligns_with_negative_rhat_for_two_disks():
+    g = _configure_two_bessel_disks()
+
+    # Mirror the mixed-component scenario and verify attractive far-field
+    # direction on an oblique ray.
+    radii = np.array([60.0, 120.0, 220.0, 320.0], dtype=float)
+    theta = 0.30
+    x = radii * np.cos(theta)
+    y = np.zeros_like(x)
+    z = radii * np.sin(theta)
+
+    ax, ay, az = g.force(x, y, z)
+    force = np.column_stack((ax, ay, az))
+    pos = np.column_stack((x, y, z))
+
+    minus_rhat = -pos / np.linalg.norm(pos, axis=1, keepdims=True)
+    force_norm = np.linalg.norm(force, axis=1)
+
+    assert np.all(force_norm > 0.0)
+
+    cos_align = np.sum(force * minus_rhat, axis=1) / force_norm
+
+    assert np.all(cos_align > 0.0)
+    assert np.all(np.diff(cos_align) >= -3.0e-2)
+    assert cos_align[-1] > 0.95
 
 
 def test_bessel_matches_direct_thick_disk_reference():

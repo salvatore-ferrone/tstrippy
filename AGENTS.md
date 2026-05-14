@@ -61,15 +61,22 @@ If a new gravity component or renamed evaluator is added in gravity, verify simu
 - Memory safety: `bessel_clear()` called in `cleargravity()` for proper lifecycle cleanup
 - Validation: Integration test passes; no crashes; deterministic outputs; smoke tests green
 
-**Phase 4 In Progress (2026-05-08 onwards)**: Physics validation and convergence analysis.
+**Phase 4 In Progress (updated 2026-05-14)**: Physics validation and convergence analysis.
 
-Current known issue: bessel backend produces valid deterministic values but correctness not yet verified.
+Current status:
+- Bessel backend is deterministic and stable in integration tests.
+- Far-field closure normalization bug was fixed in `besselbfe.f90`:
+   - corrected table mass quadrature,
+   - added analytic closure mass for `exponentialdisk` (`M=2*pi*Sigma0*hR^2`).
+- Diagnostic suite and plotting scripts now include inferred-mass and residual-map checks.
 
-Next steps:
-1. Run convergence sweeps on table resolution (BESSEL_TABLE_NR, BESSEL_TABLE_NZ, NK_BUILD)
-2. Validate against reference solutions (analytic exponential disk or high-res Legendre baseline)
-3. Check potential-gradient consistency and orbit conservation
-4. Tune parameters if needed for accuracy
+Current known issue:
+- Poisson residual-map tails remain elevated in parts of the interior masked domain; further numerical-quality work is still pending.
+
+Practical next steps:
+1. Pause deep Bessel algorithm changes unless a blocking regression appears.
+2. Prioritize simulator completion and orbit-level energy-conservation gates.
+3. Keep Bessel diagnostics as regression guards while simulator work proceeds.
 
 ## Notebook Workflow For Phase 4
 Validation notebooks: [docs/source/bessel_functions_expansion.ipynb](docs/source/bessel_functions_expansion.ipynb)

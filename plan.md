@@ -1,5 +1,31 @@
 # TSTRIPPY Development Plan
-Date: 2026-05-05, Updated 2026-05-08
+Date: 2026-05-05, Updated 2026-05-14
+
+## Session Status (2026-05-14)
+
+**Bessel Phase 4: major far-field normalization issue fixed; residual tails still pending**
+
+✅ **Completed this session**:
+- Added diagnostic plotting workflow under `tests/diagnostics/` with:
+  - far-field directionality curves,
+  - inferred-mass curves,
+  - masked Poisson residual map.
+- Added/kept reusable regression diagnostics in `tests/test_bessel_physics_validation.py`.
+- Fixed far-field closure mass normalization in `tstrippy/src/besselbfe.f90`:
+  1. corrected table-based mass quadrature in both R and z,
+  2. added analytic closure mass for `exponentialdisk` (`M=2*pi*Sigma0*hR^2`).
+- Rebuilt and validated:
+  - `conda run -n tstrippy ./build.sh`
+  - `conda run -n tstrippy pytest tests/test_bessel_physics_validation.py -q`
+  - all 9 tests passing.
+
+⚠️ **Current technical debt**:
+- Poisson residual-map tails remain elevated (interior masked p95 still nontrivial), indicating remaining truncation/interpolation/solver-quality work.
+- Far-field inferred-mass asymptote is now closure-normalized for exponential disk; this is good for runtime stability, but no longer a pure check of raw transform accuracy at large radius.
+
+▶ **Recommended next milestone (agreed pivot)**:
+- Freeze Bessel for now and prioritize simulator completion.
+- Add orbit-level energy-conservation diagnostics (`E=T+Phi`) as primary physics sanity gate for integrated trajectories.
 
 ## Session Status (2026-05-08)
 

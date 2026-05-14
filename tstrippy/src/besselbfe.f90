@@ -402,8 +402,9 @@ CONTAINS
         REAL*8 :: kval, t, mu, kmax, k_scale
         REAL*8 :: r_scale, z_scale, inner1, inner2, d_inner1, d_inner2
         REAL*8 :: e_abs1, e_abs2, e_even1, e_even2, sgn1, sgn2
-        REAL*8 :: dr_loc, zint, mass_est
-        REAL*8, DIMENSION(BESSEL_TABLE_NR) :: r_nodes, int_nodes
+        REAL*8 :: dr_loc, zint, mass_est, mass_table_est
+        REAL*8 :: sigma0, hR_model
+        REAL*8, DIMENSION(BESSEL_TABLE_NR) :: r_nodes, int_nodes, zint_nodes, rzint_nodes
         REAL*8, DIMENSION(BESSEL_TABLE_NZ) :: z_nodes, x_line, y_line, rho_line
         REAL*8, DIMENSION(BESSEL_TABLE_NR, BESSEL_TABLE_NZ) :: rho_nodes
         REAL*8, DIMENSION(NK_BUILD, BESSEL_TABLE_NZ) :: rho_kz, zconv_kz, zconv_dz_kz
@@ -532,15 +533,33 @@ CONTAINS
 
         ! Estimate total mass from sampled density table using even-z symmetry:
         ! M = 4*pi * int_0^inf [ R * int_0^inf rho(R,z) dz ] dR
-        mass_est = 0.0D0
-        DO iR = 1, BESSEL_TABLE_NR - 1
+        ! Use trapezoidal integration consistently in both z and R.
+        DO iR = 1, BESSEL_TABLE_NR
             zint = 0.0D0
             DO iZ = 1, BESSEL_TABLE_NZ - 1
                 zint = zint + 0.5D0 * (rho_nodes(iR, iZ) + rho_nodes(iR, iZ+1)) * (z_nodes(iZ+1) - z_nodes(iZ))
             END DO
-            mass_est = mass_est + 0.5D0 * (r_nodes(iR) + r_nodes(iR+1)) * zint * (r_nodes(iR+1) - r_nodes(iR))
+            zint_nodes(iR) = zint
+            rzint_nodes(iR) = r_nodes(iR) * zint_nodes(iR)
         END DO
-        BESSEL_TABLE_META(4, component_index) = 4.0D0 * pi * mass_est
+
+        mass_table_est = 0.0D0
+        DO iR = 1, BESSEL_TABLE_NR - 1
+            mass_table_est = mass_table_est + 0.5D0 * (rzint_nodes(iR) + rzint_nodes(iR+1)) * (r_nodes(iR+1) - r_nodes(iR))
+        END DO
+        mass_est = 4.0D0 * pi * mass_table_est
+
+        ! For exponentialdisk params=(Sigma0, hR, hZ), enforce exact total-mass
+        ! normalization for far-field monopole closure.
+        IF (SIZE(params) >= 3) THEN
+            sigma0 = params(1)
+            hR_model = params(2)
+            IF (sigma0 > 0.0D0 .AND. hR_model > 0.0D0) THEN
+                mass_est = 2.0D0 * pi * sigma0 * hR_model * hR_model
+            END IF
+        END IF
+
+        BESSEL_TABLE_META(4, component_index) = MAX(mass_est, 0.0D0)
 
         DO iR = 1, BESSEL_TABLE_NR
             DO iZ = 1, BESSEL_TABLE_NZ

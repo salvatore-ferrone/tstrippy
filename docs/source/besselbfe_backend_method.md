@@ -190,10 +190,23 @@ $$
 To suppress non-physical far-field oscillations from finite-domain and finite-$k$ truncation effects, the backend blends to monopole closure:
 
 $$
-\Phi_{\mathrm{mono}} = -\frac{G M_{\mathrm{est}}}{r},
+\Phi_{\mathrm{mono}} = -\frac{G M_{\mathrm{cl}}}{r},
 \qquad
-\mathbf{a}_{\mathrm{mono}} = -\frac{G M_{\mathrm{est}}}{r^3}\mathbf{r}.
+\mathbf{a}_{\mathrm{mono}} = -\frac{G M_{\mathrm{cl}}}{r^3}\mathbf{r}.
 $$
+
+where $M_{\mathrm{cl}}$ is the closure mass used for asymptotic matching.
+
+Current policy:
+
+1. For `exponentialdisk` parameterization (`params=(\Sigma_0, h_R, h_Z)`), use analytic mass
+   $$
+   M_{\mathrm{cl}} = 2\pi\Sigma_0 h_R^2.
+   $$
+2. Otherwise, fall back to table-integrated mass estimate
+   $$
+   M_{\mathrm{cl}} \approx 4\pi\int_0^\infty R\left[\int_0^\infty \rho(R,z)\,dz\right]dR.
+   $$
 
 Blend is smoothstep in spherical radius $r=\sqrt{R^2+z^2}$:
 
@@ -260,7 +273,86 @@ Recommended checks for each model configuration:
    \Phi \sim -\frac{GM}{r},\quad a_r\sim -\frac{GM}{r^2}.
    $$
 
-## 13. Mapping to implementation symbols
+## 13. Added diagnostics: mass curves and residual maps
+
+Two diagnostics are now treated as first-class physics checks in the test suite.
+
+### 13.1 Far-field inferred mass curves
+
+For samples along a far-field ray (fixed polar angle $\theta$), define
+
+$$
+M_\Phi(r) = -\frac{r\,\Phi(r)}{G},
+\qquad
+M_a(r) = -\frac{r^2 a_r(r)}{G},
+$$
+
+where
+
+$$
+a_r = \mathbf{a}\cdot\hat{\mathbf r}.
+$$
+
+In the asymptotic regime, both should converge to the same total mass:
+
+$$
+M_\Phi(r) \to M_{\mathrm{tot}},
+\qquad
+M_a(r) \to M_{\mathrm{tot}}.
+$$
+
+Practical interpretation:
+
+1. If $M_\Phi$ and $M_a$ diverge at large $r$, potential-force consistency is degraded.
+2. If both converge but to the wrong value, normalization or closure mass estimate is biased.
+3. If either becomes negative in the far field, force directionality is likely corrupted.
+
+### 13.2 Interior Poisson residual map
+
+Compute the cylindrical Laplacian from the tabulated/query potential:
+
+$$
+\nabla^2\Phi =
+\frac{\partial^2\Phi}{\partial R^2}
++ \frac{1}{R}\frac{\partial\Phi}{\partial R}
++ \frac{\partial^2\Phi}{\partial z^2},
+$$
+
+and compare against the source term:
+
+$$
+\mathcal{R}(R,z)=\nabla^2\Phi(R,z)-4\pi G\rho(R,z).
+$$
+
+A normalized residual map is then
+
+$$
+\epsilon(R,z)=\frac{|\mathcal{R}(R,z)|}{\max(|4\pi G\rho(R,z)|,\epsilon_0)}.
+$$
+
+This map helps separate two failure modes:
+
+1. Interior solver inconsistency (large residual in core/intermediate region).
+2. Boundary/truncation closure error (residual increase primarily near table edges).
+
+In practice, tests should report robust statistics (median, 95th percentile) over an interior mask rather than a single-point threshold.
+
+## 14. Practical roadmap and open numerical risks
+
+The current backend is stabilized enough for deterministic use, but the next upgrades are clear:
+
+1. **Potential-consistent far-field matching**
+   - Move from direct force blending toward a matched asymptotic potential with force obtained by differentiation.
+2. **Multipole closure beyond monopole**
+   - Add at least quadrupole correction for flattened mass distributions.
+3. **Vertical solve upgrade**
+   - Replace $O(N_k N_z^2)$ Green-convolution loops with per-$k$ tridiagonal ODE solves with explicit boundary conditions.
+4. **Radial transform upgrade**
+   - Replace fixed bounded quadrature with FFTLog-style Hankel machinery for improved dynamic range and far-field fidelity.
+
+The diagnostics in Section 13 are the acceptance harness for all four upgrades.
+
+## 15. Mapping to implementation symbols
 
 Primary file: `tstrippy/src/besselbfe.f90`
 

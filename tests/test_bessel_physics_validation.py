@@ -21,6 +21,67 @@ def _disk_total_mass(sigma0, hR):
     return 2.0 * math.pi * sigma0 * hR**2
 
 
+def _expdisk_density(R, z, sigma0, hR, hZ):
+    return (sigma0 / (2.0 * hZ)) * np.exp(-R / hR) * np.exp(-np.abs(z) / hZ)
+
+
+def _far_field_inferred_masses(g, radii, theta):
+    gconst = float(tstrippy.gravity.gravity_g_default)
+
+    x = radii * np.cos(theta)
+    y = np.zeros_like(x)
+    z = radii * np.sin(theta)
+
+    phi = g.potential(x, y, z)
+    ax, ay, az = g.force(x, y, z)
+
+    pos = np.column_stack((x, y, z))
+    rhat = pos / np.linalg.norm(pos, axis=1, keepdims=True)
+    acc = np.column_stack((ax, ay, az))
+    a_r = np.sum(acc * rhat, axis=1)
+
+    m_phi = -radii * phi / gconst
+    m_a = -(radii**2) * a_r / gconst
+    return m_phi, m_a
+
+
+def _poisson_residual_map(g, sigma0, hR, hZ):
+    gconst = float(tstrippy.gravity.gravity_g_default)
+
+    R = np.linspace(0.6, 8.0, 33)
+    Z = np.linspace(-3.0, 3.0, 49)
+    RR, ZZ = np.meshgrid(R, Z, indexing="ij")
+
+    x = RR.ravel()
+    y = np.zeros_like(x)
+    z = ZZ.ravel()
+
+    phi = g.potential(x, y, z).reshape(RR.shape)
+
+    dR = R[1] - R[0]
+    dZ = Z[1] - Z[0]
+
+    phi_rr = (phi[2:, 1:-1] - 2.0 * phi[1:-1, 1:-1] + phi[:-2, 1:-1]) / (dR**2)
+    phi_r = (phi[2:, 1:-1] - phi[:-2, 1:-1]) / (2.0 * dR)
+    phi_zz = (phi[1:-1, 2:] - 2.0 * phi[1:-1, 1:-1] + phi[1:-1, :-2]) / (dZ**2)
+
+    R_inner = RR[1:-1, 1:-1]
+    Z_inner = ZZ[1:-1, 1:-1]
+
+    laplacian = phi_rr + (phi_r / R_inner) + phi_zz
+    rho = _expdisk_density(R_inner, Z_inner, sigma0, hR, hZ)
+    source = 4.0 * math.pi * gconst * rho
+
+    residual = laplacian - source
+    rel = np.abs(residual) / np.maximum(np.abs(source), 1.0e-12)
+
+    return {
+        "residual": residual,
+        "rel": rel,
+        "source": source,
+    }
+
+
 def _configure_two_bessel_disks(
     sigma0_1=2.0,
     hR_1=4.0,
@@ -200,6 +261,53 @@ def test_bessel_far_field_force_aligns_with_negative_rhat_for_two_disks():
     assert np.all(cos_align > 0.0)
     assert np.all(np.diff(cos_align) >= -3.0e-2)
     assert cos_align[-1] > 0.95
+
+
+def test_bessel_far_field_inferred_mass_curves_are_consistent():
+    sigma0 = 1.0
+    hR = 4.0
+    hZ = 0.8
+    g = _configure_single_bessel_disk(sigma0=sigma0, hR=hR, hZ=hZ, nr=192, nz=160, nk=384)
+
+    radii = np.array([30.0, 50.0, 80.0, 120.0, 180.0], dtype=float)
+    theta = 0.33
+    m_phi, m_a = _far_field_inferred_masses(g, radii, theta)
+
+    m_true = _disk_total_mass(sigma0, hR)
+
+    # Both estimators should remain positive and approach true enclosed mass.
+    assert np.all(m_phi > 0.0)
+    assert np.all(m_a > 0.0)
+
+    np.testing.assert_allclose(m_phi[-1], m_true, rtol=5.0e-2, atol=1.0e-6)
+    np.testing.assert_allclose(m_a[-1], m_true, rtol=5.0e-2, atol=1.0e-6)
+
+    # The two asymptotic mass estimators should agree with one another.
+    np.testing.assert_allclose(m_phi[-2:], m_a[-2:], rtol=2.0e-2, atol=1.0e-6)
+
+
+def test_bessel_interior_poisson_residual_map_is_bounded():
+    sigma0 = 1.0
+    hR = 4.0
+    hZ = 0.8
+    g = _configure_single_bessel_disk(sigma0=sigma0, hR=hR, hZ=hZ, nr=192, nz=160, nk=384)
+
+    diag = _poisson_residual_map(g, sigma0, hR, hZ)
+    rel = diag["rel"]
+    source = np.abs(diag["source"])
+
+    # Ignore an outer belt where truncation/interpolation closure dominates.
+    rel_core_grid = rel[3:-3, 3:-3]
+    source_core = source[3:-3, 3:-3]
+
+    # Restrict residual statistics to cells where source strength is meaningful.
+    source_mask = source_core > 1.0e-3 * np.nanmax(source_core)
+    rel_core = rel_core_grid[source_mask]
+
+    assert rel_core.size > 0
+
+    assert np.nanmedian(rel_core) < 9.0e-1
+    assert np.nanpercentile(rel_core, 95.0) < 3.5
 
 
 def test_bessel_matches_direct_thick_disk_reference():

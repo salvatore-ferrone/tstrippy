@@ -21,13 +21,13 @@ rm -rf builddir
 # so now, the commands below in the meson file select the fortran compiler based on the conda environment
 
 # Configure
-meson setup builddir 
+meson setup builddir || { echo "BUILD FAILED: meson setup"; exit 1; }
     # --native-file <(echo "[binaries]"; echo "fortran = 'gfortran'")
 
 
 # Build
-meson compile -C builddir
-meson install -C builddir/
+meson compile -C builddir || { echo "BUILD FAILED: meson compile"; exit 1; }
+meson install -C builddir/ || { echo "BUILD FAILED: meson install"; exit 1; }
 
 echo ""
 
@@ -55,7 +55,6 @@ echo "| |   |______|   | || |   '.____.'   | || |    '.__.'    | | "
 echo "| |              | || |              | || |              | | "
 echo "| '--------------' || '--------------' || '--------------' | "
 echo " '----------------'  '----------------'  '----------------'  "
-echo ""
 echo "  __                        .__                                             "
 echo "_/  |_  ____     __________ |  |___  __ ____                                "
 echo "\   __\/  _ \   /  ___/  _ \|  |\  \/ // __ \                               "
@@ -63,16 +62,16 @@ echo " |  | (  <_> )  \___ (  <_> )  |_\   /\  ___/                             
 echo " |__|  \____/  /____  >____/|____/\_/  \___  >                              "
 echo "                    \/                     \/                               "
 echo "  ___ ___                .__.__   __              /\                        "
-echo " /   |   \_____    _____ |__|  |_/  |_  ____   ___)/  ______                "
-echo "/    ~    \__  \  /     \|  |  |\   __\/  _ \ /    \ /  ___/                "
-echo "\    Y    // __ \|  Y Y  \  |  |_|  | (  <_> )   |  \\___ \                 "
-echo " \___|_  /(____  /__|_|  /__|____/__|  \____/|___|  /____  >                "
+echo " /   |   \_____    _____ |__|  |_/  |_  ____   ___)/   ______                "
+echo "/    ~    \__  \  /     \|  |  |\   __\/  _ \ /    \  /  ___/                "
+echo "\    Y    // __ \|  Y Y  \  |  |_|  | (  <_> )   |  \ \___ \                 "
+echo " \___|_  /(____  /__|_|  /__|____/__|  \____/|___|  /  ____ >                "
 echo "       \/      \/      \/                         \/     \/                 "
-echo "___________                    __  .__                                      "
-echo "\_   _____/ ________ _______ _/  |_|__| ____   ____   ______                "
-echo " |    __)_ / ____/  |  \__  \\   __\  |/  _ \ /    \ /  ___/                "
-echo " |        < <_|  |  |  // __ \|  | |  (  <_> )   |  \\___ \                 "
-echo "/_______  /\__   |____/(____  /__| |__|\____/|___|  /____  >                "
+echo "___________                      __  .__.                                      "
+echo "\_   _____/ ________ _______  __/  |_|__| ____   ____    ______                "
+echo " |    __)_ / ____/  |  \__  \ \_____\|  |/  _ \ /    \  /  ___/                "
+echo " |        < <_|  |  |  // __ \ |  |  |  (  <_> )   |  \ \___ \                 "
+echo "/_______  /\__   |____/(____  / __|  |__|\____/|___|  /  ____ >                "
 echo "        \/    |__|          \/                    \/     \/                 "
 
 echo "BUILD SUCCESS"

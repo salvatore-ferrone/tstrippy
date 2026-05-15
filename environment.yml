@@ -9,6 +9,7 @@ dependencies:
   - gfortran>=11  # Critical for running the compiled code
   - meson # will get rid of this once the meson package is available on conda-forge
   - pytest
+  - hdf5
   - pip
   # - pip:
     # - git+https://github.com/salvatore-ferrone/tstrippy.git

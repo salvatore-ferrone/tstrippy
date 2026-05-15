@@ -67,6 +67,8 @@ MODULE simulator
     
     INTEGER, PUBLIC :: Nparticles
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: x,y,z,vx,vy,vz
+    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: x_initial, y_initial, z_initial
+    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: vx_initial, vy_initial, vz_initial
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
     INTEGER, PRIVATE :: NSTEPS, current_step
 
@@ -100,6 +102,10 @@ MODULE simulator
     LOGICAL, PUBLIC :: RUN_SUCCESS         = .FALSE.
     LOGICAL, PUBLIC :: DID_WRITE_SNAPSHOTS = .FALSE.
     LOGICAL, PUBLIC :: DID_WRITE_ORBITS    = .FALSE.
+    LOGICAL, PUBLIC :: BACKWARD_ORBIT_ENABLED = .FALSE.
+    CHARACTER(LEN=64), PUBLIC :: SCHEME_METHOD = ""
+    INTEGER, PUBLIC :: SCHEME_NPARAMS = 0
+    REAL*8, DIMENSION(16), PUBLIC :: SCHEME_PARAMETERS = 0.0D0
 
     CONTAINS 
     !!!!! CALLS WHERE THE USER INTERFACES WITH THE MODULE
@@ -136,6 +142,22 @@ MODULE simulator
         vx = vxin 
         vy = vyin
         vz = vzin 
+
+        IF (ALLOCATED(x_initial))  DEALLOCATE(x_initial)
+        IF (ALLOCATED(y_initial))  DEALLOCATE(y_initial)
+        IF (ALLOCATED(z_initial))  DEALLOCATE(z_initial)
+        IF (ALLOCATED(vx_initial)) DEALLOCATE(vx_initial)
+        IF (ALLOCATED(vy_initial)) DEALLOCATE(vy_initial)
+        IF (ALLOCATED(vz_initial)) DEALLOCATE(vz_initial)
+        ALLOCATE(x_initial(Nparticles), y_initial(Nparticles), z_initial(Nparticles))
+        ALLOCATE(vx_initial(Nparticles), vy_initial(Nparticles), vz_initial(Nparticles))
+        x_initial = xin
+        y_initial = yin
+        z_initial = zin
+        vx_initial = vxin
+        vy_initial = vyin
+        vz_initial = vzin
+
         IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
         IF (ALLOCATED(orbits_timestamps)) DEALLOCATE(orbits_timestamps)
         state%orbits_allocated = .FALSE.
@@ -152,6 +174,12 @@ MODULE simulator
         ALLOCATE(scheme_params(SIZE(params)))
         scheme_params = params
         scheme_name = TRIM(name)
+        SCHEME_METHOD = TRIM(name)
+        SCHEME_PARAMETERS = 0.0D0
+        SCHEME_NPARAMS = MIN(nparams, SIZE(SCHEME_PARAMETERS))
+        IF (SCHEME_NPARAMS > 0) THEN
+            SCHEME_PARAMETERS(1:SCHEME_NPARAMS) = params(1:SCHEME_NPARAMS)
+        END IF
 
         SELECT CASE (TRIM(NAME))
             CASE ("leapfrog")
@@ -162,6 +190,9 @@ MODULE simulator
                 PRINT*, "ERROR: unknown scheme:, ", TRIM(name)
                 NULLIFY(scheme)
                 state%scheme_set = .false.
+                SCHEME_METHOD = ""
+                SCHEME_NPARAMS = 0
+                SCHEME_PARAMETERS = 0.0D0
                 RETURN 
         END SELECT
 
@@ -189,6 +220,7 @@ MODULE simulator
 
     SUBROUTINE setbackwardorbit()
         state%backward_orbit = .TRUE.
+        BACKWARD_ORBIT_ENABLED = .TRUE.
         state%finalized = .FALSE.
     END SUBROUTINE setbackwardorbit
 
@@ -214,6 +246,12 @@ MODULE simulator
         IF (ALLOCATED(vx)) DEALLOCATE(vx)
         IF (ALLOCATED(vy)) DEALLOCATE(vy)
         IF (ALLOCATED(vz)) DEALLOCATE(vz)
+        IF (ALLOCATED(x_initial))  DEALLOCATE(x_initial)
+        IF (ALLOCATED(y_initial))  DEALLOCATE(y_initial)
+        IF (ALLOCATED(z_initial))  DEALLOCATE(z_initial)
+        IF (ALLOCATED(vx_initial)) DEALLOCATE(vx_initial)
+        IF (ALLOCATED(vy_initial)) DEALLOCATE(vy_initial)
+        IF (ALLOCATED(vz_initial)) DEALLOCATE(vz_initial)
 
         ! Timestamps and scheme params
         IF (ALLOCATED(timestamps))   DEALLOCATE(timestamps)
@@ -256,6 +294,10 @@ MODULE simulator
         RUN_SUCCESS         = .FALSE.
         DID_WRITE_SNAPSHOTS = .FALSE.
         DID_WRITE_ORBITS    = .FALSE.
+        BACKWARD_ORBIT_ENABLED = .FALSE.
+        SCHEME_METHOD = ""
+        SCHEME_NPARAMS = 0
+        SCHEME_PARAMETERS = 0.0D0
         ! Reset all state flags to defaults
         state = state_t()
 

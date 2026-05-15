@@ -106,6 +106,17 @@ MODULE simulator
     CHARACTER(LEN=64), PUBLIC :: SCHEME_METHOD = ""
     INTEGER, PUBLIC :: SCHEME_NPARAMS = 0
     REAL*8, DIMENSION(16), PUBLIC :: SCHEME_PARAMETERS = 0.0D0
+    ! Timing outputs (all in seconds)
+    REAL*8, PUBLIC :: TIMER_RUN_SECONDS = 0.0D0
+    REAL*8, PUBLIC :: TIMER_FINALIZE_SECONDS = 0.0D0
+    REAL*8, PUBLIC :: TIMER_SCHEME_SECONDS = 0.0D0
+    REAL*8, PUBLIC :: TIMER_WRITE_SNAPSHOTS_SECONDS = 0.0D0
+    REAL*8, PUBLIC :: TIMER_WRITE_ORBITS_SECONDS = 0.0D0
+    ! Private timing state (for run)
+    INTEGER(KIND=8), PRIVATE :: c_run_start, c_run_end, c_scheme_accum, c_scheme_start
+    INTEGER(KIND=8), PRIVATE :: c_write_snap_accum, c_write_snap_start
+    INTEGER(KIND=8), PRIVATE :: c_write_orb_accum, c_write_orb_start
+    INTEGER(KIND=8), PRIVATE :: rate_clock, cmax_clock
 
     CONTAINS 
     !!!!! CALLS WHERE THE USER INTERFACES WITH THE MODULE
@@ -298,6 +309,17 @@ MODULE simulator
         SCHEME_METHOD = ""
         SCHEME_NPARAMS = 0
         SCHEME_PARAMETERS = 0.0D0
+        ! Reset timers
+        TIMER_RUN_SECONDS = 0.0D0
+        TIMER_FINALIZE_SECONDS = 0.0D0
+        TIMER_SCHEME_SECONDS = 0.0D0
+        TIMER_WRITE_SNAPSHOTS_SECONDS = 0.0D0
+        TIMER_WRITE_ORBITS_SECONDS = 0.0D0
+        c_run_start = 0
+        c_run_end = 0
+        c_scheme_accum = 0
+        c_write_snap_accum = 0
+        c_write_orb_accum = 0
         ! Reset all state flags to defaults
         state = state_t()
 
@@ -305,7 +327,10 @@ MODULE simulator
 
     SUBROUTINE finalize()
         LOGICAL :: should_return = .FALSE.
+        INTEGER(KIND=8) :: c_fin_start, c_fin_end
         state%finalized = .FALSE.
+
+        CALL system_clock(c_fin_start, rate_clock, cmax_clock)
 
         IF (.NOT. state%initial_conditions_set) THEN
             PRINT*, "ERROR: initial conditions are not set"
@@ -361,10 +386,23 @@ MODULE simulator
         state%scheme_set = .TRUE.
         state%finalized = .TRUE.
 
+        CALL system_clock(c_fin_end, rate_clock, cmax_clock)
+        IF (c_fin_end >= c_fin_start) THEN
+            TIMER_FINALIZE_SECONDS = DBLE(c_fin_end - c_fin_start) / DBLE(rate_clock)
+        ELSE
+            TIMER_FINALIZE_SECONDS = DBLE((cmax_clock - c_fin_start) + c_fin_end + 1_8) / DBLE(rate_clock)
+        END IF
+
     END subroutine finalize
 
     SUBROUTINE run()
         INTEGER :: istep, iorbit
+        INTEGER(KIND=8) :: c_scheme_end, c_snap_start, c_snap_end, c_orb_start, c_orb_end
+
+        CALL system_clock(c_run_start, rate_clock, cmax_clock)
+        c_scheme_accum = 0
+        c_write_snap_accum = 0
+        c_write_orb_accum = 0
 
         CALL finalize()
 
@@ -415,7 +453,10 @@ MODULE simulator
 
         ! Main integration loop
         DO istep = 1, nsteps
+            CALL system_clock(c_scheme_start)
             CALL scheme()  ! advances positions/velocities and increments current_step
+            CALL system_clock(c_scheme_end)
+            c_scheme_accum = c_scheme_accum + (c_scheme_end - c_scheme_start)
 
             ! Save orbit snapshot every nskip_orbit_timestamps steps
             IF (n_particles_orbit > 0) THEN
@@ -434,14 +475,20 @@ MODULE simulator
             ! Write snapshot if enabled
             IF (state%writesnapshots) THEN
                 IF (MOD(istep, nskip_writesnapshots) == 0) THEN
+                    CALL system_clock(c_snap_start)
                     CALL write_snapshot_file(istep)
+                    CALL system_clock(c_snap_end)
+                    c_write_snap_accum = c_write_snap_accum + (c_snap_end - c_snap_start)
                 END IF
             END IF
 
             ! Write orbits directly (per-particle files, no memory limit)
             IF (state%writeorbits .AND. ALLOCATED(orbit_file_units)) THEN
                 IF (MOD(istep, nskip_writeorbits) == 0) THEN
+                    CALL system_clock(c_orb_start)
                     CALL write_orbit_records()
+                    CALL system_clock(c_orb_end)
+                    c_write_orb_accum = c_write_orb_accum + (c_orb_end - c_orb_start)
                 END IF
             END IF
         END DO
@@ -477,6 +524,20 @@ MODULE simulator
         print*, " |     \   /    |    \    |   \|        \  \     /   |        \ |    |   \ "
         print*, " \___  /   \_______  /____|_  /_______  /   \___/   /_______  / |____|_  / "
         print*, "     \/            \/       \/        \/                    \/         \/  "
+
+        ! Finalize timing measurements
+        CALL system_clock(c_run_end)
+
+        ! Calculate elapsed times (handle clock wraparound)
+        IF (c_run_end >= c_run_start) THEN
+            TIMER_RUN_SECONDS = DBLE(c_run_end - c_run_start) / DBLE(rate_clock)
+        ELSE
+            TIMER_RUN_SECONDS = DBLE((cmax_clock - c_run_start) + c_run_end + 1_8) / DBLE(rate_clock)
+        END IF
+
+        TIMER_SCHEME_SECONDS = DBLE(c_scheme_accum) / DBLE(rate_clock)
+        TIMER_WRITE_SNAPSHOTS_SECONDS = DBLE(c_write_snap_accum) / DBLE(rate_clock)
+        TIMER_WRITE_ORBITS_SECONDS = DBLE(c_write_orb_accum) / DBLE(rate_clock)
 
     END SUBROUTINE run
 

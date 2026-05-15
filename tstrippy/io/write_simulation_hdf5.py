@@ -64,7 +64,7 @@ def write_simulation_hdf5(simulator, filename,
     os.makedirs(out_dir, exist_ok=True)
 
     with h5py.File(filename, "w") as f:
-        _write_meta_group(f)
+        _write_meta_group(f, simulator)
         _write_config_group(f, simulator)
         _write_snapshots_group(f, simulator, delete_temp_binaries)
         _write_orbits_group(f, simulator, objectnames, delete_temp_binaries)
@@ -74,11 +74,28 @@ def write_simulation_hdf5(simulator, filename,
 # Group writers
 # ---------------------------------------------------------------------------
 
-def _write_meta_group(f):
+def _write_meta_group(f, simulator):
+    import platform
     grp = f.create_group("meta")
     grp.attrs["schema_version"] = SCHEMA_VERSION
     grp.attrs["created_utc"] = datetime.datetime.utcnow().isoformat()
     grp.attrs["code"] = "tstrippy"
+
+    # Timing data
+    timing_grp = grp.create_group("timing")
+    timing_grp.create_dataset("run_seconds", data=float(simulator.timer_run_seconds))
+    timing_grp.create_dataset("finalize_seconds", data=float(simulator.timer_finalize_seconds))
+    timing_grp.create_dataset("scheme_seconds", data=float(simulator.timer_scheme_seconds))
+    timing_grp.create_dataset("write_snapshots_seconds", data=float(simulator.timer_write_snapshots_seconds))
+    timing_grp.create_dataset("write_orbits_seconds", data=float(simulator.timer_write_orbits_seconds))
+
+    # Machine info
+    machine_grp = grp.create_group("machine")
+    machine_grp.create_dataset("architecture", data=platform.machine().encode('ascii'))
+    machine_grp.create_dataset("processor", data=platform.processor().encode('ascii'))
+    machine_grp.create_dataset("system", data=platform.system().encode('ascii'))
+    machine_grp.create_dataset("release", data=platform.release().encode('ascii'))
+    machine_grp.create_dataset("hostname", data=platform.node().encode('ascii'))
 
 
 def _write_config_group(f, simulator):

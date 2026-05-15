@@ -49,6 +49,7 @@ MODULE simulator
         ! other state stuff
         LOGICAL :: finalized = .FALSE.
         LOGICAL :: DONTRUN = .FALSE.
+        LOGICAL :: run_success = .FALSE.
     END TYPE 
 
     ! Define scheme interface
@@ -399,7 +400,8 @@ MODULE simulator
         IF (ALLOCATED(orbit_file_units)) THEN
             CALL close_orbit_files()
         END IF
-
+        state%run_success = .TRUE.
+        print*, ""
         print*, ""
         print*, "  /$$$$$$  /$$   /$$  /$$$$$$  /$$$$$$$$  /$$$$$$   /$$$$$$ "
         print*, " /$$__  $$| $$  | $$ /$$__  $$| $$_____/ /$$__  $$ /$$__  $$"

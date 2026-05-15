@@ -73,6 +73,7 @@ MODULE gravity
     INTEGER, PUBLIC :: GRAVITY_NCOMP = 0
     REAL*8, DIMENSION(GRAVITY_MAX_PARAMS, GRAVITY_MAX_NCOMP), PUBLIC :: GRAVITY_PARAMS = 0.0D0
     INTEGER, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: COMPONENT_HANDLER_SLOT = 0
+    CHARACTER(LEN=32), DIMENSION(GRAVITY_MAX_NCOMP), PUBLIC :: COMPONENT_MODEL_NAMES = ''
     LOGICAL, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: BESSEL_SCALE_OVERRIDE_SET = .FALSE.
     REAL*8, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: BESSEL_SCALE_OVERRIDE_R = 0.0D0
     REAL*8, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: BESSEL_SCALE_OVERRIDE_Z = 0.0D0
@@ -227,6 +228,7 @@ CONTAINS
         GRAVITY_FINALIZED = .FALSE.
         GRAVITY_NCOMP = 0
         COMPONENT_HANDLER_SLOT = 0
+        COMPONENT_MODEL_NAMES = ''
         GRAVITY_PARAMS = 0.0D0
         BESSEL_SCALE_OVERRIDE_SET = .FALSE.
         BESSEL_SCALE_OVERRIDE_R = 0.0D0
@@ -283,6 +285,7 @@ CONTAINS
         GRAVITY_NCOMP = GRAVITY_NCOMP + 1
         COMPONENT_HANDLER_SLOT(GRAVITY_NCOMP) = i_handler
         GRAVITY_PARAMS(1:nparams, GRAVITY_NCOMP) = params(1:nparams)
+        COMPONENT_MODEL_NAMES(GRAVITY_NCOMP) = TRIM(model_name)
     END SUBROUTINE add_component
 
     SUBROUTINE finalize()
@@ -1016,5 +1019,28 @@ CONTAINS
         rho = rho0 * exp( -(R/hR) - abs(z)/hZ)
 
     end subroutine exponentialdisk_density     
+
+    ! PUBLIC ACCESSORS for Python/IO layer
+    SUBROUTINE getcomponentmodelname(i_comp, name)
+        INTEGER, INTENT(IN) :: i_comp
+        CHARACTER(LEN=32), INTENT(OUT) :: name
+        INTEGER :: i_handler
+        IF (i_comp < 1 .OR. i_comp > GRAVITY_NCOMP) THEN
+            name = ""
+            RETURN
+        END IF
+        i_handler = COMPONENT_HANDLER_SLOT(i_comp)
+        name = TRIM(COMPONENT_HANDLERS(i_handler)%model_name)
+    END SUBROUTINE getcomponentmodelname
+
+    SUBROUTINE getcomponentnparams(i_comp, nparams_out)
+        INTEGER, INTENT(IN) :: i_comp
+        INTEGER, INTENT(OUT) :: nparams_out
+        IF (i_comp < 1 .OR. i_comp > GRAVITY_NCOMP) THEN
+            nparams_out = 0
+            RETURN
+        END IF
+        nparams_out = COMPONENT_HANDLERS(COMPONENT_HANDLER_SLOT(i_comp))%nparams
+    END SUBROUTINE getcomponentnparams
 
 END MODULE gravity

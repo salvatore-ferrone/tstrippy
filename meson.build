@@ -133,6 +133,7 @@ py.install_sources(
         'tstrippy/io/baumgardt_gcs.py',    
         'tstrippy/io/potential_parameters.py',
         'tstrippy/io/reference_frames.py',
+        'tstrippy/io/write_simulation_hdf5.py',
     ),
     subdir: python_install_subdir / 'io'
 )

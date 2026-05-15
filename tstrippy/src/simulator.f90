@@ -48,6 +48,7 @@ MODULE simulator
         LOGICAL :: writeorbits = .FALSE.
         ! other state stuff
         LOGICAL :: finalized = .FALSE.
+        LOGICAL :: DONTRUN = .FALSE.
     END TYPE 
 
     ! Define scheme interface
@@ -321,6 +322,26 @@ MODULE simulator
             RETURN
         END IF
         
+        if (state%DONTRUN) then
+            print*, "---------"
+            print*, "ERROR IN simulator.RUN()"
+            print*, "  ________    _____      _____  ___________ "
+            print*, " /  _____/   /  _  \    /     \ \_   _____/ "
+            print*, "/   \  ___  /  /_\  \  /  \ /  \ |    __)_  "
+            print*, "\    \_\  \/    |    \/    Y    \|        \ "
+            print*, " \______  /\____|__  /\____|__  /_______  / "
+            print*, "        \/         \/         \/        \/  "
+            print*, "____________   _________________________    "
+            print*, "\_____  \   \ /   /\_   _____/\______   \   "
+            print*, " /   |   \   Y   /  |    __)_  |       _/   "
+            print*, "/    |    \     /   |        \ |    |   \   "
+            print*, "\_______  /\___/   /_______  / |____|_  /   "
+            print*, "        \/                 \/         \/    "
+            print*, "The guard DONTRUN is True. Aborting run!"
+            print*, "---------"
+            return 
+        end if 
+        
         ! Open all orbit files before loop if writing orbits (one per particle, unlimited)
         IF (state%writeorbits .AND. Nparticles > 0) THEN
             CALL open_orbit_files()
@@ -379,12 +400,38 @@ MODULE simulator
             CALL close_orbit_files()
         END IF
 
+        print*, "-------------RUN SUCESSFUL------------------"
+        print*, "_________________________________________.____________________________.___."
+        print*, "\__    ___/   _____/\__    ___/\______   \   \______   \______   \__  |   |"
+        print*, "  |    |  \_____  \   |    |    |       _/   ||     ___/|     ___//   |   |"
+        print*, "  |    |  /        \  |    |    |    |   \   ||    |    |    |    \____   |"
+        print*, "  |____| /_______  /  |____|    |____|_  /___||____|    |____|    / ______|"
+        print*, "                 \/                    \/                         \/       "
+        print*, ""
+        print*, "___________________ _________________________   _________________________  "
+        print*, "\_   _____/\_____  \\______   \_   _____/\   \ /   /\_   _____/\______   \ "
+        print*, " |    __)   /   |   \|       _/|    __)_  \   Y   /  |    __)_  |       _/ "
+        print*, " |     \   /    |    \    |   \|        \  \     /   |        \ |    |   \ "
+        print*, " \___  /   \_______  /____|_  /_______  /   \___/   /_______  / |____|_  / "
+        print*, "     \/            \/       \/        \/                    \/         \/  "
+
     END SUBROUTINE run
 
     !!!! OUTPUTS
     SUBROUTINE initwritesnapshots(nskip, directory, basename)
         INTEGER, INTENT(IN) :: nskip
         CHARACTER(LEN=*), INTENT(IN) :: directory, basename
+        LOGICAL :: dir_exists
+
+        INQUIRE(FILE=directory, EXIST = dir_exists)
+
+        if (.NOT.dir_exists) then             
+            print*, "WANRING: initwritesnapshots. The directory", directory, "doesn't exist "
+            print*, "   Create the directory manually before executing the code"
+            print*, "           --- ABORTING ---"
+            state%DONTRUN = .TRUE.
+            RETURN
+        end if 
 
         directory_snapshots = TRIM(directory)
         basename_snapshots = TRIM(basename)

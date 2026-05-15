@@ -1,4 +1,12 @@
 MODULE simulator
+    USE gravity, ONLY: gravity_clear => clear, &
+                       gravity_set_gravitational_constant => set_gravitational_constant, &
+                       gravity_add_component => add_component, &
+                       gravity_finalize => finalize, &
+                       gravity_force => force, &
+                       gravity_potential => potential, &
+                       GRAVITY_FINALIZED, &
+                       GRAVITY_NCOMP
     ! UX: 
     ! (1) set necessary values and physics module (order independent): 
     !   1a. simulator.set_initial_conditions(x,y,z,vx,vy,vz)
@@ -30,7 +38,7 @@ MODULE simulator
 
 
     ! A derived type for orchestating the module 
-    TYPE :: state_t
+    TYPE, PRIVATE :: state_t
         ! REQUIRED
         LOGICAL :: initial_conditions_set = .FALSE.  ! the initial conditions have been entered
         LOGICAL :: gravity_finalized = .FALSE.       ! gravity module is configured and finalized
@@ -118,8 +126,37 @@ MODULE simulator
     INTEGER(KIND=8), PRIVATE :: c_write_orb_accum, c_write_orb_start
     INTEGER(KIND=8), PRIVATE :: rate_clock, cmax_clock
 
+    ! PUBLIC :: simulator_cleargravitycomponents, simulator_set_gravitational_constant
+    ! PUBLIC :: simulator_add_component, simulator_finalizegravity
+    ! PUBLIC :: simulator_force, simulator_potential
+
     CONTAINS 
     !!!!! CALLS WHERE THE USER INTERFACES WITH THE MODULE
+    SUBROUTINE cleargravitycomponents()
+        CALL gravity_clear()
+        state%gravity_finalized = .FALSE.
+        state%finalized = .FALSE.
+    END SUBROUTINE cleargravitycomponents
+
+    SUBROUTINE set_gravitational_constant(g)
+        REAL*8, INTENT(IN) :: g
+
+        CALL gravity_set_gravitational_constant(g)
+        state%gravity_finalized = GRAVITY_FINALIZED
+        state%finalized = .FALSE.
+    END SUBROUTINE set_gravitational_constant
+
+    SUBROUTINE add_component(model_name, params, nparams)
+        CHARACTER(LEN=*), INTENT(IN) :: model_name
+        INTEGER, INTENT(IN) :: nparams
+        REAL*8, DIMENSION(nparams), INTENT(IN) :: params
+
+        CALL gravity_add_component(model_name, params, nparams)
+        state%gravity_finalized = GRAVITY_FINALIZED
+        state%finalized = .FALSE.
+    END SUBROUTINE add_component
+
+
     SUBROUTINE setinitialconditions(N,xin,yin,zin,vxin,vyin,vzin)
         INTEGER, INTENT(in) :: N 
         INTEGER :: max_particles
@@ -322,6 +359,8 @@ MODULE simulator
         c_write_orb_accum = 0
         ! Reset all state flags to defaults
         state = state_t()
+        ! clear the modules
+        call gravity_clear()
 
     END SUBROUTINE clear
 
@@ -341,6 +380,19 @@ MODULE simulator
             PRINT*, "ERROR: integration scheme not configured"
             should_return = .TRUE.
         END IF
+
+        IF (GRAVITY_NCOMP < 1) THEN
+            PRINT*, "ERROR: gravity is not configured"
+            should_return = .TRUE.
+        ELSE IF (.NOT. GRAVITY_FINALIZED) THEN
+            CALL gravity_finalize()
+            IF (.NOT. GRAVITY_FINALIZED) THEN
+                PRINT*, "ERROR: gravity finalize failed"
+                should_return = .TRUE.
+            END IF
+        END IF
+
+        state%gravity_finalized = GRAVITY_FINALIZED
 
         ! Resolve timestamps: build if user did not provide them
         IF (.NOT. state%timestamps_from_user) THEN
@@ -820,10 +872,7 @@ MODULE simulator
         ytemp = y + 0.5D0 * dt_step * vy
         ztemp = z + 0.5D0 * dt_step * vz
 
-        ! Placeholder until force registry is wired.
-        fx = 0.0D0
-        fy = 0.0D0
-        fz = 0.0D0
+        CALL gravity_force(Nparticles, xtemp, ytemp, ztemp, fx, fy, fz)
 
         vx = vx + dt_step * fx
         vy = vy + dt_step * fy
@@ -869,3 +918,4 @@ MODULE simulator
 
 
 END MODULE simulator
+

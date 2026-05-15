@@ -4,11 +4,14 @@ import pytest
 
 tstrippy = pytest.importorskip("tstrippy")
 sim = tstrippy.simulator
+gravity = tstrippy.gravity
 
 DEFAULT_MB = 1024.0
 
 
 def _set_basic_problem(n_particles=32, nsteps=100):
+    _configure_plummer_gravity()
+
     x = np.linspace(0.0, 1.0, n_particles)
     y = np.linspace(1.0, 2.0, n_particles)
     z = np.linspace(2.0, 3.0, n_particles)
@@ -23,12 +26,22 @@ def _set_basic_problem(n_particles=32, nsteps=100):
 @pytest.fixture(autouse=True)
 def _reset_simulator_state():
     sim.clear()
+    sim.cleargravitycomponents()
+    gravity.clear()
     sim.max_ram_mb = DEFAULT_MB
     sim.orbit_ram_limit_mb = DEFAULT_MB
     yield
     sim.clear()
+    sim.cleargravitycomponents()
+    gravity.clear()
     sim.max_ram_mb = DEFAULT_MB
     sim.orbit_ram_limit_mb = DEFAULT_MB
+
+
+def _configure_plummer_gravity(mass=1.0, scale_radius=1.0, g=1.0):
+    sim.cleargravitycomponents()
+    sim.set_gravitational_constant(g)
+    sim.add_component("plummer", np.array([mass, scale_radius]))
 
 
 def test_clear_restores_defaults_and_deallocates_arrays():
@@ -75,7 +88,7 @@ def test_finalize_builds_timestamps_and_allocates_orbits():
     assert sim.timestamps.shape == (nsteps + 1,)
 
     expected_saved_steps = nsteps // nskip + 1
-    assert sim.orbits.shape == (expected_saved_steps, 7, n_particles)
+    assert sim.orbits.shape == (expected_saved_steps, 6, n_particles)
 
 
 def test_orbit_memory_guard_can_reduce_allocated_particles_to_zero():
@@ -97,11 +110,11 @@ def test_finalize_uses_user_provided_timestamps_when_set():
     assert np.allclose(sim.timestamps, user_timestamps)
 
 
-def test_run_zero_force_produces_straight_line():
-    """With zero force, x(t) = x0 + vx*t exactly (leapfrog is exact for constant motion)."""
+
+
+def test_run_without_gravity_refuses_to_start():
     n_particles = 8
-    nskip = 1
-    nsteps = 50
+    nsteps = 5
     dt = 0.1
 
     x0 = np.arange(n_particles, dtype=float)
@@ -110,16 +123,12 @@ def test_run_zero_force_produces_straight_line():
 
     sim.setinitialconditions(x0, zeros, zeros, vx0, zeros, zeros)
     sim.setscheme("leapfrog", [0.0, dt, nsteps])
-    sim.trim_orbits(nskip)
     sim.run()
 
-    # orbits shape: (nsaved, 7, n_particles) where vars are t,x,y,z,vx,vy,vz
-    times   = sim.orbits[:, 0, 0]   # time column, any particle
-    x_orbit = sim.orbits[:, 1, :]   # x column, all particles
+    assert not sim.run_success
+    assert np.allclose(sim.x, x0)
+    assert np.allclose(sim.vx, vx0)
 
-    expected_x = x0[np.newaxis, :] + vx0[np.newaxis, :] * times[:, np.newaxis]
-
-    assert np.allclose(x_orbit, expected_x, atol=1.0e-10)
 
 
 def test_run_orbit_snapshot_count_matches_nskip():

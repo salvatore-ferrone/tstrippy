@@ -96,6 +96,10 @@ MODULE simulator
     CHARACTER(LEN=500), PUBLIC :: basename_orbits     = ""
     ! some other limits
     REAL*8, PUBLIC :: max_ram_MB = DEFAULT_MAX_RAM_MB
+    ! flat public state for Python inspection after run()
+    LOGICAL, PUBLIC :: RUN_SUCCESS         = .FALSE.
+    LOGICAL, PUBLIC :: DID_WRITE_SNAPSHOTS = .FALSE.
+    LOGICAL, PUBLIC :: DID_WRITE_ORBITS    = .FALSE.
 
     CONTAINS 
     !!!!! CALLS WHERE THE USER INTERFACES WITH THE MODULE
@@ -248,6 +252,10 @@ MODULE simulator
             DEALLOCATE(orbit_file_units)
         END IF
 
+        ! Reset flat public flags
+        RUN_SUCCESS         = .FALSE.
+        DID_WRITE_SNAPSHOTS = .FALSE.
+        DID_WRITE_ORBITS    = .FALSE.
         ! Reset all state flags to defaults
         state = state_t()
 
@@ -401,6 +409,9 @@ MODULE simulator
             CALL close_orbit_files()
         END IF
         state%run_success = .TRUE.
+        RUN_SUCCESS = .TRUE.
+        DID_WRITE_SNAPSHOTS = state%writesnapshots
+        DID_WRITE_ORBITS    = state%writeorbits
         print*, ""
         print*, ""
         print*, "  /$$$$$$  /$$   /$$  /$$$$$$  /$$$$$$$$  /$$$$$$   /$$$$$$ "

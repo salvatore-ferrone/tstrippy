@@ -262,22 +262,22 @@ CONTAINS
         INTEGER :: i_handler
 
         IF (GRAVITY_FINALIZED) THEN
-            WRITE(*,'(A)') "WARNING: addgravitycomponent: cannot add components after finalize"
+            WRITE(*,'(A)') "WARNING: add_component: cannot add components after finalize"
             RETURN
         END IF
         IF (GRAVITY_NCOMP >= GRAVITY_MAX_NCOMP) THEN
-            WRITE(*,'(A)') "WARNING: addgravitycomponent: maximum number of components reached"
+            WRITE(*,'(A)') "WARNING: add_component: maximum number of components reached"
             RETURN
         END IF
 
         i_handler = handler_index_from_name(model_name)
         IF (i_handler <= 0) THEN
-            WRITE(*,'(A)') "WARNING: addgravitycomponent: unknown model_name", model_name
+            WRITE(*,'(A)') "WARNING: add_component: unknown model_name", model_name
             RETURN
         END IF
 
         IF (nparams /= COMPONENT_HANDLERS(i_handler)%nparams) THEN
-            WRITE(*,'(A,I0,A,I0)') "WARNING: addgravitycomponent: expected", COMPONENT_HANDLERS(i_handler)%nparams, &
+            WRITE(*,'(A,I0,A,I0)') "WARNING: add_component: expected", COMPONENT_HANDLERS(i_handler)%nparams, &
                                    " params, got", nparams
             RETURN
         END IF

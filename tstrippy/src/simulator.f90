@@ -75,8 +75,9 @@ MODULE simulator
     REAL*8, PUBLIC :: orbit_ram_limit_MB = DEFAULT_ORBIT_RAM_LIMIT_MB
     INTEGER, PRIVATE :: n_particles_orbit = 1 
     INTEGER, PRIVATE :: nskip_orbit_timestamps = 1 
-    INTEGER, PRIVATE :: nvars_orbits = 7 ! time and phase space 
+    INTEGER, PRIVATE :: nvars_orbits = 6 ! phase space 
     REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: orbits
+    REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: orbits_timestamps
     
     ! persistent file handles for direct orbit writing (no per-step open/close)
     INTEGER, DIMENSION(:), ALLOCATABLE, PRIVATE :: orbit_file_units
@@ -130,6 +131,7 @@ MODULE simulator
         vy = vyin
         vz = vzin 
         IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
+        IF (ALLOCATED(orbits_timestamps)) DEALLOCATE(orbits_timestamps)
         state%orbits_allocated = .FALSE.
         state%initial_conditions_set = .TRUE.
         state%finalized = .FALSE.
@@ -158,6 +160,7 @@ MODULE simulator
         END SELECT
 
         IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
+        IF (ALLOCATED(orbits_timestamps)) DEALLOCATE(orbits_timestamps)
         state%orbits_allocated = .FALSE.
         state%scheme_set = .TRUE.
         state%finalized = .FALSE.
@@ -172,6 +175,7 @@ MODULE simulator
         timestamps = tstamps
         nsteps = nt - 1
         IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
+        IF (ALLOCATED(orbits_timestamps)) DEALLOCATE(orbits_timestamps)
         state%orbits_allocated = .FALSE.
         state%timestamps_from_user = .TRUE.
         state%finalized = .FALSE.
@@ -191,6 +195,7 @@ MODULE simulator
 
         nskip_orbit_timestamps = NSKIP
         IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
+        IF (ALLOCATED(orbits_timestamps)) DEALLOCATE(orbits_timestamps)
         state%orbits_allocated = .FALSE.
         state%finalized = .FALSE.
     END SUBROUTINE trim_orbits
@@ -208,6 +213,7 @@ MODULE simulator
         IF (ALLOCATED(timestamps))   DEALLOCATE(timestamps)
         IF (ALLOCATED(scheme_params)) DEALLOCATE(scheme_params)
         IF (ALLOCATED(orbits)) DEALLOCATE(orbits)
+        IF (ALLOCATED(orbits_timestamps)) DEALLOCATE(orbits_timestamps)
 
         ! Scheme pointer and name
         NULLIFY(scheme)
@@ -325,13 +331,13 @@ MODULE simulator
         ! Save initial conditions as the first orbit snapshot
         iorbit = 1
         IF (n_particles_orbit > 0) THEN
-            orbits(iorbit, 1, :) = timestamps(1)
-            orbits(iorbit, 2, :) = x(1:n_particles_orbit)
-            orbits(iorbit, 3, :) = y(1:n_particles_orbit)
-            orbits(iorbit, 4, :) = z(1:n_particles_orbit)
-            orbits(iorbit, 5, :) = vx(1:n_particles_orbit)
-            orbits(iorbit, 6, :) = vy(1:n_particles_orbit)
-            orbits(iorbit, 7, :) = vz(1:n_particles_orbit)
+            orbits_timestamps(iorbit) = timestamps(1)
+            orbits(iorbit, 1, :) = x(1:n_particles_orbit)
+            orbits(iorbit, 2, :) = y(1:n_particles_orbit)
+            orbits(iorbit, 3, :) = z(1:n_particles_orbit)
+            orbits(iorbit, 4, :) = vx(1:n_particles_orbit)
+            orbits(iorbit, 5, :) = vy(1:n_particles_orbit)
+            orbits(iorbit, 6, :) = vz(1:n_particles_orbit)
             iorbit = iorbit + 1
         END IF
 
@@ -342,13 +348,13 @@ MODULE simulator
             ! Save orbit snapshot every nskip_orbit_timestamps steps
             IF (n_particles_orbit > 0) THEN
                 IF (MOD(istep, nskip_orbit_timestamps) == 0) THEN
-                    orbits(iorbit, 1, :) = timestamps(current_step)
-                    orbits(iorbit, 2, :) = x(1:n_particles_orbit)
-                    orbits(iorbit, 3, :) = y(1:n_particles_orbit)
-                    orbits(iorbit, 4, :) = z(1:n_particles_orbit)
-                    orbits(iorbit, 5, :) = vx(1:n_particles_orbit)
-                    orbits(iorbit, 6, :) = vy(1:n_particles_orbit)
-                    orbits(iorbit, 7, :) = vz(1:n_particles_orbit)
+                    orbits_timestamps(iorbit) = timestamps(current_step)
+                    orbits(iorbit, 1, :) = x(1:n_particles_orbit)
+                    orbits(iorbit, 2, :) = y(1:n_particles_orbit)
+                    orbits(iorbit, 3, :) = z(1:n_particles_orbit)
+                    orbits(iorbit, 4, :) = vx(1:n_particles_orbit)
+                    orbits(iorbit, 5, :) = vy(1:n_particles_orbit)
+                    orbits(iorbit, 6, :) = vz(1:n_particles_orbit)
                     iorbit = iorbit + 1
                 END IF
             END IF
@@ -566,6 +572,7 @@ MODULE simulator
         END IF 
 
         IF (allocated(orbits)) DEALLOCATE(orbits)
+        IF (allocated(orbits_timestamps)) DEALLOCATE(orbits_timestamps)
         state%orbits_allocated = .FALSE.
         
         IF (.NOT.state%initial_conditions_set) then 
@@ -623,6 +630,7 @@ MODULE simulator
         end IF 
 
         allocate(orbits(NSAVED_ORBITS,nvars_orbits,n_particles_orbit))
+        allocate(orbits_timestamps(NSAVED_ORBITS))
         state%orbits_allocated=.TRUE.
 
     END SUBROUTINE allocate_orbits

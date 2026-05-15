@@ -1,6 +1,17 @@
 """tstrippy/io/__init__.py"""
-from . import baumgardt_gcs
-from . import potential_parameters
-from . import reference_frames
+try:
+    from . import baumgardt_gcs
+except Exception:
+    pass
+try:
+    from . import potential_parameters
+except Exception:
+    pass
+try:
+    from . import reference_frames
+except Exception:
+    pass
+from .write_simulation_hdf5 import write_simulation_hdf5, read_snapshot_binary, read_orbit_binary
 
-__all__ = ["baumgardt_gcs", "potential_parameters", "reference_frames"]
+__all__ = ["baumgardt_gcs", "potential_parameters", "reference_frames",
+           "write_simulation_hdf5", "read_snapshot_binary", "read_orbit_binary"]

@@ -21,13 +21,13 @@ rm -rf builddir
 # so now, the commands below in the meson file select the fortran compiler based on the conda environment
 
 # Configure
-meson setup builddir || { echo "BUILD FAILED: meson setup"; exit 1; }
+meson setup builddir || { echo "BUILD FAILED: meson setup. Good luck debugging!"; exit 1; }
     # --native-file <(echo "[binaries]"; echo "fortran = 'gfortran'")
 
 
 # Build
-meson compile -C builddir || { echo "BUILD FAILED: meson compile"; exit 1; }
-meson install -C builddir/ || { echo "BUILD FAILED: meson install"; exit 1; }
+meson compile -C builddir || { echo "BUILD FAILED: meson compile. Good luck debugging!"; exit 1; }
+meson install -C builddir/ || { echo "BUILD FAILED: meson install. Good luck debugging!"; exit 1; }
 
 echo ""
 

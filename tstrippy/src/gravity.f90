@@ -21,7 +21,9 @@ MODULE gravity
                     bessel_project_density              => project_density, &
                     bessel_default_initialize           => default_initialize, &
                     bessel_load_component               => load_component
+    
     IMPLICIT NONE
+    
     REAL*8, PARAMETER, PUBLIC :: GRAVITY_G_DEFAULT = 4.30091727D-6
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_MAX_NCOMP = 16
     INTEGER, PARAMETER, PUBLIC :: GRAVITY_MAX_PARAMS = 16
@@ -91,7 +93,7 @@ MODULE gravity
 CONTAINS
 
     SUBROUTINE ensure_component_handlers_initialized()
-        IMPLICIT NONE
+
 
         IF (COMPONENT_HANDLERS_INITIALIZED) RETURN
 
@@ -116,7 +118,7 @@ CONTAINS
 
     !! SUBROUINES FOR ORGANIZING THE FORCE POINTERS 
     SUBROUTINE register_handler_analytic(model_name, nparams, force_proc, potential_proc)
-        IMPLICIT NONE
+        
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER, INTENT(IN) :: nparams
         PROCEDURE(force_eval_iface) :: force_proc
@@ -136,7 +138,7 @@ CONTAINS
     END SUBROUTINE register_handler_analytic
 
     SUBROUTINE register_handler_sh(model_name, nparams, density_proc)
-        IMPLICIT NONE
+        
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER, INTENT(IN) :: nparams
         PROCEDURE(density_eval_iface) :: density_proc
@@ -156,7 +158,7 @@ CONTAINS
     END SUBROUTINE register_handler_sh
 
     SUBROUTINE register_handler_bessel(model_name, nparams, density_proc)
-        IMPLICIT NONE
+        
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER, INTENT(IN) :: nparams
         PROCEDURE(density_eval_iface) :: density_proc
@@ -176,7 +178,7 @@ CONTAINS
     END SUBROUTINE register_handler_bessel
 
     INTEGER FUNCTION handler_index_from_name(model_name)
-        IMPLICIT NONE
+        
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER :: i
 
@@ -191,7 +193,7 @@ CONTAINS
     END FUNCTION handler_index_from_name
 
     LOGICAL FUNCTION component_is_sh(i_comp)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: i_comp
         INTEGER :: i_handler
 
@@ -204,7 +206,7 @@ CONTAINS
     END FUNCTION component_is_sh
 
     LOGICAL FUNCTION component_is_bessel(i_comp)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: i_comp
         INTEGER :: i_handler
 
@@ -218,7 +220,7 @@ CONTAINS
 
     ! MODULE-STATE subroutines
     SUBROUTINE clear()
-        IMPLICIT NONE
+        
         CALL ensure_component_handlers_initialized()
         GRAVITY_G = GRAVITY_G_DEFAULT
         GRAVITY_G_IS_DEFAULT = .TRUE.
@@ -234,7 +236,7 @@ CONTAINS
     END SUBROUTINE clear
 
     SUBROUTINE set_gravitational_constant(g)
-        IMPLICIT NONE
+        
         REAL*8, INTENT(IN) :: g
         IF (GRAVITY_FINALIZED) THEN
             WRITE(*,'(A)') "WARNING: set_gravitational_constant: cannot change G after finalize"
@@ -251,7 +253,7 @@ CONTAINS
     END SUBROUTINE set_gravitational_constant
 
     SUBROUTINE add_component(model_name, params, nparams)
-        IMPLICIT NONE
+        
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER, INTENT(IN) :: nparams
         REAL*8, INTENT(IN), DIMENSION(nparams) :: params
@@ -284,7 +286,7 @@ CONTAINS
     END SUBROUTINE add_component
 
     SUBROUTINE finalize()
-        IMPLICIT NONE
+        
         INTEGER :: i, n_sh, n_bessel, i_sh, i_bessel, i_sh_slot, i_handler
         REAL*8 :: bessel_r_scale, bessel_z_scale
         IF (GRAVITY_NCOMP < 1) THEN
@@ -376,7 +378,7 @@ CONTAINS
     END SUBROUTINE finalize
 
     SUBROUTINE ensure_sh_component_tables_loaded(i_comp, n_sh)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: i_comp, n_sh
         INTEGER :: i_handler
 
@@ -397,7 +399,7 @@ CONTAINS
     END SUBROUTINE ensure_sh_component_tables_loaded
 
     SUBROUTINE eval_component_force(i_comp, n_sh, n, x, y, z, force_c)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: i_comp, n_sh, n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n,3) :: force_c
@@ -423,7 +425,7 @@ CONTAINS
     END SUBROUTINE eval_component_force
 
     SUBROUTINE eval_component_potential(i_comp, n_sh, n, x, y, z, phi_c)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: i_comp, n_sh, n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi_c
@@ -449,7 +451,7 @@ CONTAINS
     END SUBROUTINE eval_component_potential
 
     SUBROUTINE force_components(n, x, y, z, ax_comp, ay_comp, az_comp)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(16, n) :: ax_comp, ay_comp, az_comp
@@ -476,7 +478,7 @@ CONTAINS
     END SUBROUTINE force_components
 
     SUBROUTINE force(n, x, y, z, ax, ay, az)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: ax, ay, az
@@ -525,7 +527,7 @@ CONTAINS
     END SUBROUTINE potential
 
     SUBROUTINE potential_components(n, x, y, z, phi_comp)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(16, n) :: phi_comp
@@ -548,7 +550,7 @@ CONTAINS
     END SUBROUTINE potential_components
 
     SUBROUTINE sh_force_from_tables(params, n, x, y, z, force)
-        IMPLICIT NONE
+        
         REAL*8, INTENT(IN), DIMENSION(:) :: params
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -558,7 +560,7 @@ CONTAINS
     END SUBROUTINE sh_force_from_tables
 
     SUBROUTINE sh_potential_from_tables(params, n, x, y, z, phi)
-        IMPLICIT NONE
+        
         REAL*8, INTENT(IN), DIMENSION(:) :: params
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -569,7 +571,7 @@ CONTAINS
 
     ! Spherical harmonics interfacing subroutines
     INTEGER FUNCTION count_sh_components()
-        IMPLICIT NONE
+        
         INTEGER :: i
 
         count_sh_components = 0
@@ -582,7 +584,7 @@ CONTAINS
     END FUNCTION count_sh_components
 
     INTEGER FUNCTION sh_slot_for_component(i_comp)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: i_comp
         INTEGER :: i
 
@@ -598,14 +600,14 @@ CONTAINS
 
     SUBROUTINE bessel_initialize(nr, nz, nk_build_in)
         ! Wrapper for setting bessel grid/spectral resolution controls.
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: nr, nz, nk_build_in
         CALL backend_bessel_initialize(nr, nz, nk_build_in)
     END SUBROUTINE bessel_initialize
 
     SUBROUTINE bessel_set_component_scales(component_index, r_scale, z_scale)
         ! Optional user override for per-component bessel domain scales.
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: component_index
         REAL*8, INTENT(IN) :: r_scale, z_scale
 
@@ -634,7 +636,7 @@ CONTAINS
     END SUBROUTINE bessel_set_component_scales
 
     SUBROUTINE bessel_force_wrapper(params, n, x, y, z, force)
-        IMPLICIT NONE
+        
         REAL*8, INTENT(IN), DIMENSION(:) :: params
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -648,7 +650,7 @@ CONTAINS
     END SUBROUTINE bessel_force_wrapper
 
     SUBROUTINE bessel_potential_wrapper(params, n, x, y, z, phi)
-        IMPLICIT NONE
+        
         REAL*8, INTENT(IN), DIMENSION(:) :: params
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -658,7 +660,7 @@ CONTAINS
     END SUBROUTINE bessel_potential_wrapper
 
     INTEGER FUNCTION count_bessel_components()
-        IMPLICIT NONE
+        
         INTEGER :: i
 
         count_bessel_components = 0
@@ -670,7 +672,7 @@ CONTAINS
     END FUNCTION count_bessel_components
 
     INTEGER FUNCTION bessel_slot_for_component(i_comp)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: i_comp
         INTEGER :: i
 
@@ -690,7 +692,7 @@ CONTAINS
 
     ! SPHERES
     SUBROUTINE plummer_force(params, n, x, y, z, force)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -709,7 +711,7 @@ CONTAINS
     END SUBROUTINE plummer_force
 
     SUBROUTINE plummer_potential(params, n, x, y, z, phi)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -724,7 +726,7 @@ CONTAINS
     END SUBROUTINE plummer_potential
 
     SUBROUTINE hernquist_force(params, n, x, y, z, force)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -744,7 +746,7 @@ CONTAINS
     END SUBROUTINE hernquist_force
 
     SUBROUTINE hernquist_potential(params, n, x, y, z, phi)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -759,7 +761,7 @@ CONTAINS
     END SUBROUTINE hernquist_potential
 
     SUBROUTINE allensantillianhalo_force(params, N, x, y, z, force)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -793,7 +795,7 @@ CONTAINS
     END SUBROUTINE allensantillianhalo_force
 
     SUBROUTINE allensantillianhalo_potential(params, N, x, y, z, phi)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -823,7 +825,7 @@ CONTAINS
 
     ! DISKS
     SUBROUTINE miyamotonagai_force(params, N, x, y, z, force)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -845,7 +847,7 @@ CONTAINS
     END SUBROUTINE miyamotonagai_force
 
     SUBROUTINE miyamotonagai_potential(params, N, x, y, z, phi)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -863,7 +865,7 @@ CONTAINS
 
     ! TRIAXIAL 
     SUBROUTINE longmuralibar_force(params, N, x, y, z, force)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -888,7 +890,7 @@ CONTAINS
     END SUBROUTINE longmuralibar_force
 
     SUBROUTINE longmuralibar_potential(params, N, x, y, z, phi)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -908,7 +910,7 @@ CONTAINS
     
     ! COMPOSITE
     SUBROUTINE pouliasis2017pii_force(params, N, x, y, z, force)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -928,7 +930,7 @@ CONTAINS
     END SUBROUTINE pouliasis2017pii_force
 
     SUBROUTINE pouliasis2017pii_potential(params, N, x, y, z, phi)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: N
         REAL*8, INTENT(IN), DIMENSION(N) :: x, y, z
         REAL*8, INTENT(IN), DIMENSION(:) :: params
@@ -954,7 +956,7 @@ CONTAINS
     !!!! AXIS SYMMETRIC !!!
     ! HALOS (spherical harmonics)
     SUBROUTINE exponentialoblatehalo_density(params, n, x, y, z, rho)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
@@ -972,7 +974,7 @@ CONTAINS
     END SUBROUTINE exponentialoblatehalo_density
 
     SUBROUTINE ibata2024halo_density(params, n, x, y, z, rho)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN),  DIMENSION(:) :: params
         REAL*8, INTENT(IN),  DIMENSION(n) :: x, y, z
@@ -997,7 +999,7 @@ CONTAINS
 
     ! DISKS (bessel functions)
     SUBROUTINE exponentialdisk_density(params, n, x, y, z, rho)
-        IMPLICIT NONE
+        
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z

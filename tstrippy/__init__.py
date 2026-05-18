@@ -7,32 +7,21 @@ import warnings
 
 # Try to import Fortran modules (they're compiled into lib/)
 # If they don't exist, provide helpful error messages
-try:
-    from .lib.simulator import simulator
-except ModuleNotFoundError:
-    simulator = None
-    warnings.warn(
-        "Fortran module 'tstrippy.lib.simulator' not found. "
-        "Have you built the package? Run: python -m pip install -e . --no-build-isolation"
-    )
+def _load_fortran_entry(module_name, attr_name):
+    try:
+        mod = import_module(f"{__name__}.lib.{module_name}")
+        return getattr(mod, attr_name)
+    except (ModuleNotFoundError, AttributeError):
+        warnings.warn(
+            f"Fortran module 'tstrippy.lib.{module_name}' not found. "
+            "Have you built the package? Run: conda run -n tstrippy ./build.sh"
+        )
+        return None
 
-try:
-    from .lib.gravity import gravity
-except ModuleNotFoundError:
-    gravity = None
-    warnings.warn(
-        "Fortran module 'tstrippy.lib.gravity' not found. "
-        "Have you built the package? Run: python -m pip install -e . --no-build-isolation"
-    )
 
-try:
-    from .lib.mathutils import mathutils
-except ModuleNotFoundError:
-    mathutils = None
-    warnings.warn(
-        "Fortran module 'tstrippy.lib.mathutils' not found. "
-        "Have you built the package? Run: python -m pip install -e . --no-build-isolation"
-    )
+simulator = _load_fortran_entry("simulator", "simulator")
+gravity = _load_fortran_entry("gravity", "gravity")
+mathutils = _load_fortran_entry("mathutils", "mathutils")
 
 try:
     _gravity_ext = import_module(f"{__name__}.lib.gravity")
@@ -43,7 +32,7 @@ except (ModuleNotFoundError, AttributeError):
     besselbfe = None
     warnings.warn(
         "Fortran backend modules are not available from 'tstrippy.lib.gravity'. "
-        "Have you built the package? Run: python -m pip install -e . --no-build-isolation"
+        "Have you built the package? Run: conda run -n tstrippy ./build.sh"
     )
 
 # Import pure Python modules

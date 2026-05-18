@@ -131,7 +131,7 @@ py.install_sources(
     files(
         'tstrippy/io/__init__.py',
         'tstrippy/io/mwgcs.py',    
-        'tstrippy/io/potential_parameters.py',
+        'tstrippy/io/milkyway_models.py',
         'tstrippy/io/reference_frames.py',
         'tstrippy/io/write_simulation_hdf5.py',
     ),

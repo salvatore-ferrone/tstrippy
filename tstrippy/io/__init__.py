@@ -7,10 +7,10 @@ except Exception as exc:
     mwgcs = None
     warnings.warn(f"Failed to import tstrippy.io.mwgcs: {exc}")
 try:
-    from . import potential_parameters
+    from . import milkyway_models
 except Exception as exc:
-    potential_parameters = None
-    warnings.warn(f"Failed to import tstrippy.io.potential_parameters: {exc}")
+    milkyway_models = None
+    warnings.warn(f"Failed to import tstrippy.io.milkyway_models: {exc}")
 try:
     from . import reference_frames
 except Exception as exc:
@@ -18,5 +18,5 @@ except Exception as exc:
     warnings.warn(f"Failed to import tstrippy.io.reference_frames: {exc}")
 from .write_simulation_hdf5 import write_simulation_hdf5, read_snapshot_binary, read_orbit_binary
 
-__all__ = ["mwgcs", "potential_parameters", "reference_frames",
+__all__ = ["mwgcs", "milkyway_models", "reference_frames",
            "write_simulation_hdf5", "read_snapshot_binary", "read_orbit_binary"]

@@ -32,7 +32,6 @@ def pouliasis2017pii():
             print(exc)
             
     myparams= []
-    myparams.append(G)
     myparams.append(potential_parameters['components'][0]["parameters"]['M'])
     myparams.append(potential_parameters['components'][0]["parameters"]['a'])
     myparams.append(potential_parameters['components'][0]["parameters"]['exp'])

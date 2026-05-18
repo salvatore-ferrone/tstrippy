@@ -201,6 +201,41 @@ def _rng(seed=None, rng=None):
     return np.random.default_rng(seed)
 
 
+def _icrs_means(clusters=None):
+    idx = _resolve_clusters(clusters, table="kinematics")
+    cat = _get_table("kinematics")["columns"]
+    means = np.column_stack(
+        [
+            np.asarray(cat["ra"])[idx],
+            np.asarray(cat["dec"])[idx],
+            np.asarray(cat["rsun"])[idx],
+            np.asarray(cat["mualpha"])[idx],
+            np.asarray(cat["mu_delta"])[idx],
+            np.asarray(cat["rv"])[idx],
+        ]
+    )
+    return idx, means
+
+
+def _covariance_for_index(i):
+    cat = _get_table("kinematics")["columns"]
+
+    s_dist = float(cat["delta_r"][i])
+    s_pmra = float(cat["del_mu"][i])
+    s_pmdec = float(cat["del_mu_2"][i])
+    s_rv = float(cat["erv"][i])
+    corr = float(cat["corr"][i])
+
+    cov = np.zeros((6, 6), dtype=float)
+    cov[2, 2] = s_dist * s_dist
+    cov[3, 3] = s_pmra * s_pmra
+    cov[4, 4] = s_pmdec * s_pmdec
+    cov[5, 5] = s_rv * s_rv
+    cov[3, 4] = corr * s_pmra * s_pmdec
+    cov[4, 3] = cov[3, 4]
+    return cov
+
+
 def names():
     """Return all cluster names from the kinematics catalog."""
     return list(_get_cache()["kinematics"]["columns"]["cluster"].astype(str))
@@ -246,22 +281,13 @@ def structural(clusters=None, fields=None):
 
 
 def icrs(clusters=None):
-    """Return ICRS phase-space arrays from kinematics.
+    """Return astropy-ready ICRS matrix from kinematics.
 
-    Returned units are documented only in metadata (no attached unit objects):
-    ra/dec in deg, distance in kpc, pm in mas/yr, rv in km/s.
+    Output shape is (N, 6) with columns in this order:
+    [ra_deg, dec_deg, distance_kpc, pm_ra_masyr, pm_dec_masyr, rv_kms].
     """
-    idx = _resolve_clusters(clusters, table="kinematics")
-    cat = _get_table("kinematics")["columns"]
-    return {
-        "name": cat["cluster"][idx].astype(str),
-        "ra": np.asarray(cat["ra"])[idx],
-        "dec": np.asarray(cat["dec"])[idx],
-        "distance": np.asarray(cat["rsun"])[idx],
-        "pm_ra": np.asarray(cat["mualpha"])[idx],
-        "pm_dec": np.asarray(cat["mu_delta"])[idx],
-        "rv": np.asarray(cat["rv"])[idx],
-    }
+    _, means = _icrs_means(clusters)
+    return means
 
 
 def covariance(cluster):
@@ -269,23 +295,7 @@ def covariance(cluster):
     idx = _resolve_clusters(cluster, table="kinematics")
     if idx.size != 1:
         raise ValueError("covariance expects exactly one cluster")
-    i = int(idx[0])
-    cat = _get_table("kinematics")["columns"]
-
-    s_dist = float(cat["delta_r"][i])
-    s_pmra = float(cat["del_mu"][i])
-    s_pmdec = float(cat["del_mu_2"][i])
-    s_rv = float(cat["erv"][i])
-    corr = float(cat["corr"][i])
-
-    cov = np.zeros((6, 6), dtype=float)
-    cov[2, 2] = s_dist * s_dist
-    cov[3, 3] = s_pmra * s_pmra
-    cov[4, 4] = s_pmdec * s_pmdec
-    cov[5, 5] = s_rv * s_rv
-    cov[3, 4] = corr * s_pmra * s_pmdec
-    cov[4, 3] = cov[3, 4]
-    return cov
+    return _covariance_for_index(int(idx[0]))
 
 
 def icrs_sample(n_samples, clusters=None, seed=None, rng=None):
@@ -297,21 +307,11 @@ def icrs_sample(n_samples, clusters=None, seed=None, rng=None):
         raise ValueError("n_samples must be >= 1")
 
     samples = []
-    data = icrs(clusters)
-    means = np.column_stack(
-        [
-            data["ra"],
-            data["dec"],
-            data["distance"],
-            data["pm_ra"],
-            data["pm_dec"],
-            data["rv"],
-        ]
-    )
+    idx, means = _icrs_means(clusters)
 
     gen = _rng(seed=seed, rng=rng)
     for i in range(means.shape[0]):
-        c = covariance(str(data["name"][i]))
+        c = _covariance_for_index(int(idx[i]))
         samples.append(gen.multivariate_normal(mean=means[i], cov=c, size=n_samples))
 
     out = np.stack(samples, axis=1)

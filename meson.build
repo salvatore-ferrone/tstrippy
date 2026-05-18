@@ -130,7 +130,7 @@ py.install_sources(
 py.install_sources(
     files(
         'tstrippy/io/__init__.py',
-        'tstrippy/io/baumgardt_gcs.py',    
+        'tstrippy/io/mwgcs.py',    
         'tstrippy/io/potential_parameters.py',
         'tstrippy/io/reference_frames.py',
         'tstrippy/io/write_simulation_hdf5.py',
@@ -150,7 +150,8 @@ py.install_sources(
 
 # And data files
 install_data(
-    files('tstrippy/data/2023-03-28-merged.fits',
+    files('tstrippy/data/mwgcs-kinematics',
+          'tstrippy/data/mwgcs-structural',
           'tstrippy/data/MWrefframeFerrone2023.yaml',
           'tstrippy/data/pouliasis2017pii.yaml',
           'tstrippy/data/unit_basis.yaml'),

@@ -20,8 +20,9 @@ def test_icrs_and_case_insensitive_lookup():
     a = mwgcs.icrs("NGC_104")
     b = mwgcs.icrs("ngc104")
 
-    for key in ("ra", "dec", "distance", "pm_ra", "pm_dec", "rv"):
-        np.testing.assert_allclose(a[key], b[key])
+    assert a.shape == (1, 6)
+    assert b.shape == (1, 6)
+    np.testing.assert_allclose(a, b)
 
 
 def test_covariance_shape_and_sanity():

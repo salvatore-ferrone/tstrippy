@@ -1,31 +1,14 @@
 name: pouliasis2017pii
 components:
   - name: allensantillianhalo
-    parameters:
-      a: 14
-      M: 208800000000.0
-      exp: 2.02
-      cutoffradius: 100
-    units:
-      a: kpc
-      M: Msun
-      exp: ''
-      cutoffradius: kpc
+    parameters: [208800000000.0, 14, 2.02, 100]
+    parameter_names: [M, a, exp, cutoffradius]
+    parameter_units: [Msun, kpc, "", kpc]
   - name: miyamotonagai
-    parameters:
-      a: 4.8
-      b: 0.25
-      M: 37119999999.99999
-    units:
-      a: kpc
-      b: kpc
-      M: Msun
+    parameters: [37119999999.99999, 4.8, 0.25]
+    parameter_names: [M, a, b]
+    parameter_units: [Msun, kpc, kpc]
   - name: miyamotonagai
-    parameters:
-      a: 2.0
-      b: 0.8
-      M: 39439999999.99999
-    units:
-      a: kpc
-      b: kpc
-      M: Msun
+    parameters: [39439999999.99999, 2.0, 0.8]
+    parameter_names: [M, a, b]
+    parameter_units: [Msun, kpc, kpc]

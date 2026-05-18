@@ -30,18 +30,29 @@ def pouliasis2017pii():
             potential_parameters = yaml.safe_load(potential)
         except yaml.YAMLError as exc:
             print(exc)
-            
-    myparams= []
-    myparams.append(potential_parameters['components'][0]["parameters"]['M'])
-    myparams.append(potential_parameters['components'][0]["parameters"]['a'])
-    myparams.append(potential_parameters['components'][0]["parameters"]['exp'])
-    myparams.append(potential_parameters['components'][0]["parameters"]['cutoffradius'])
-    myparams.append(potential_parameters['components'][1]["parameters"]['M'])
-    myparams.append(potential_parameters['components'][1]["parameters"]['a'])
-    myparams.append(potential_parameters['components'][1]["parameters"]['b'])
-    myparams.append(potential_parameters['components'][2]["parameters"]['M'])
-    myparams.append(potential_parameters['components'][2]["parameters"]['a'])
-    myparams.append(potential_parameters['components'][2]["parameters"]['b'])
-    return myparams
+
+    components = []
+    for component in potential_parameters['components']:
+        parameters = component.get('parameters', [])
+        if isinstance(parameters, dict):
+            # Convert ordered mapping to the runtime-friendly list format.
+            parameter_names = component.get('parameter_names')
+            if parameter_names is None:
+                parameter_names = list(parameters.keys())
+            parameters = [parameters[name] for name in parameter_names]
+        components.append({
+            'name': component['name'],
+            'parameters': parameters,
+            'parameter_names': component.get('parameter_names', []),
+            'parameter_units': component.get('parameter_units', []),
+        })
+
+    return components
+
+
+def pouliasis2017pii_flat():
+    """Return the historical flat parameter list used by older call sites."""
+    components = pouliasis2017pii()
+    return [value for component in components for value in component['parameters']]
 
     

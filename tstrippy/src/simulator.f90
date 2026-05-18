@@ -79,11 +79,16 @@ MODULE simulator
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: vx_initial, vy_initial, vz_initial
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
     INTEGER, PRIVATE :: NSTEPS, current_step
+    REAL*8, PUBLIC :: currenttime
 
+    REAL*8, PRIVATE :: yoshida_w, yoshida_c1, yoshida_c2, yoshida_c3, yoshida_c4
+    REAL*8, PRIVATE :: yoshida_d1, yoshida_d2, yoshida_d3, yoshida_d4    
+
+
+    ! for saving some trajectories
     REAL*8, PARAMETER :: DEFAULT_ORBIT_RAM_LIMIT_MB = 1024.0D0
     REAL*8, PARAMETER :: DEFAULT_MAX_RAM_MB = 1024.0D0
 
-    ! for saving some trajectories
     REAL*8, PUBLIC :: orbit_ram_limit_MB = DEFAULT_ORBIT_RAM_LIMIT_MB
     INTEGER, PRIVATE :: n_particles_orbit = 1 
     INTEGER, PRIVATE :: nskip_orbit_timestamps = 1 
@@ -91,10 +96,11 @@ MODULE simulator
     REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: orbits
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: orbits_timestamps
     
+    !!!!! i/o
+    
     ! persistent file handles for direct orbit writing (no per-step open/close)
     INTEGER, DIMENSION(:), ALLOCATABLE, PRIVATE :: orbit_file_units
 
-    ! i/o
     INTEGER, PARAMETER :: DEFAULT_FILEUNITBASE_WRITESNAPSHOTS = 12345
     INTEGER, PUBLIC :: FILEUNITBASE_WRITESNAPSHOTS = DEFAULT_FILEUNITBASE_WRITESNAPSHOTS
     INTEGER, PUBLIC :: FILEUNITBASE_WRITEORBITS    = DEFAULT_FILEUNITBASE_WRITESNAPSHOTS + 1
@@ -125,6 +131,7 @@ MODULE simulator
     INTEGER(KIND=8), PRIVATE :: c_write_snap_accum, c_write_snap_start
     INTEGER(KIND=8), PRIVATE :: c_write_orb_accum, c_write_orb_start
     INTEGER(KIND=8), PRIVATE :: rate_clock, cmax_clock
+
 
     ! PUBLIC :: simulator_cleargravitycomponents, simulator_set_gravitational_constant
     ! PUBLIC :: simulator_add_component, simulator_finalizegravity
@@ -233,6 +240,7 @@ MODULE simulator
             CASE ("leapfrog")
                 scheme=>leapfrog
             CASE ("forest_ruth")
+                CALL compute_yoshida_coefficients()
                 scheme=> forest_ruth
             CASE DEFAULT
                 PRINT*, "ERROR: unknown scheme:, ", TRIM(name)
@@ -886,10 +894,73 @@ MODULE simulator
     END SUBROUTINE leapfrog
 
     SUBROUTINE forest_ruth()
+        REAL*8, DIMENSION(Nparticles) :: fx, fy, fz
+        REAL*8 :: dt_step
 
-        print*, "to complete"
+        IF (current_step > nsteps) RETURN
+
+        dt_step = timestamps(current_step + 1) - timestamps(current_step)
+        
+        currenttime = timestamps(current_step)
+
+        ! DRIFT
+        x = x + yoshida_c1 * dt_step * vx
+        y = y + yoshida_c1 * dt_step * vy
+        z = z + yoshida_c1 * dt_step * vz
+        ! KICK 
+        currenttime = currenttime + yoshida_c1*dt_step 
+        call gravity_force(Nparticles, x, y, z, fx, fy, fz)
+        vx = vx + yoshida_d1*fx*dt_step
+        vy = vy + yoshida_d1*fy*dt_step
+        vz = vz + yoshida_d1*fz*dt_step
+        ! DRIFT
+        x = x + yoshida_c2 * dt_step * vx
+        y = y + yoshida_c2 * dt_step * vy
+        z = z + yoshida_c2 * dt_step * vz
+        ! KICK 
+        currenttime = currenttime + yoshida_c2*dt_step 
+        call gravity_force(Nparticles, x, y, z, fx, fy, fz)
+        vx = vx + yoshida_d2*fx*dt_step
+        vy = vy + yoshida_d2*fy*dt_step
+        vz = vz + yoshida_d2*fz*dt_step
+        ! DRIFT
+        x = x + yoshida_c3 * dt_step * vx
+        y = y + yoshida_c3 * dt_step * vy
+        z = z + yoshida_c3 * dt_step * vz
+        ! KICK 
+        currenttime = currenttime + yoshida_c3*dt_step 
+        call gravity_force(Nparticles, x, y, z, fx, fy, fz)
+        vx = vx + yoshida_d3*fx*dt_step
+        vy = vy + yoshida_d3*fy*dt_step
+        vz = vz + yoshida_d3*fz*dt_step
+        ! DRIFT
+        x = x + yoshida_c4 * dt_step * vx
+        y = y + yoshida_c4 * dt_step * vy
+        z = z + yoshida_c4 * dt_step * vz
+        ! KICK 
+        currenttime = currenttime + yoshida_c4*dt_step 
+        call gravity_force(Nparticles, x, y, z, fx, fy, fz)
+        vx = vx + yoshida_d4*fx*dt_step
+        vy = vy + yoshida_d4*fy*dt_step
+        vz = vz + yoshida_d4*fz*dt_step
+
+        current_step = current_step + 1 
+
 
     END SUBROUTINE forest_ruth
+
+
+    SUBROUTINE compute_yoshida_coefficients()
+        yoshida_w = sqrt(2.0D0**(1.0D0/3.0D0) + 2.0D0**(-1.0D0/3.0D0) -1.0D0 )/6.0D0 ! D0 is for double precision
+        yoshida_c1 =  yoshida_w + 0.5D0
+        yoshida_c2 = -yoshida_w
+        yoshida_c3 = -yoshida_w
+        yoshida_c4 =  yoshida_w + 0.5D0    
+        yoshida_d1 =  2.0D0*yoshida_w+1.0D0
+        yoshida_d2 = -4.0D0*yoshida_w-1.0D0
+        yoshida_d3 =  2.0D0*yoshida_w+1.0D0
+        yoshida_d4 =  0.0D0        
+    END SUBROUTINE 
 
     ! HELPER FUNCTIONS 
     LOGICAL FUNCTION is_strictly_increasing(t)

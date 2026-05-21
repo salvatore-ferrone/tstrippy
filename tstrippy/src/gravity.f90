@@ -776,8 +776,8 @@ CONTAINS
 
         M = params(1)
         scale_length = params(2)
-        exp = params(3)
-        cutoffradius = params(4)
+        cutoffradius = params(3)
+        exp = params(4)
 
         r = SQRT(x*x + y*y + z*z)
         d = r / scale_length
@@ -810,8 +810,8 @@ CONTAINS
 
         M = params(1)
         scale_length = params(2)
-        exp = params(3)
-        cutoffradius = params(4)
+        cutoffradius = params(3)
+        exp = params(4)
 
         r = SQRT(x*x + y*y + z*z)
         d = r / scale_length

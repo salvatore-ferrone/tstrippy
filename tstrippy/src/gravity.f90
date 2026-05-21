@@ -113,6 +113,7 @@ CONTAINS
                                  exponentialoblatehalo_density)
         CALL register_handler_sh("ibata2024halo", 6, ibata2024halo_density)
         CALL register_handler_bessel("exponentialdisk", 3, exponentialdisk_density)
+        CALL register_handler_bessel("mcmilan2017disk", 4, mcmilan2017disk_density)
 
         COMPONENT_HANDLERS_INITIALIZED = .TRUE.
     END SUBROUTINE ensure_component_handlers_initialized
@@ -1019,6 +1020,28 @@ CONTAINS
         rho = rho0 * exp( -(R/hR) - abs(z)/hZ)
 
     end subroutine exponentialdisk_density     
+
+    SUBROUTINE mcmilan2017disk_density(params, n, x, y, z, rho)
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n) :: rho
+        REAL*8 :: sigma0, hR, hZ, Rm, rho0! Rm is radius of the hole
+        REAL*8, DIMENSION(n) :: R
+
+        sigma0  = params(1)
+        hR      = params(2)
+        hZ      = params(3)
+        Rm      = params(4)
+        
+        R = sqrt(x**2 + y**2)
+
+        rho0 = sigma0 / (4*hz)
+
+        rho = rho0*exp ( -(Rm/R) - (R/hR) ) * (1 / cosh( z / (2*hz) ))**2
+
+
+    end subroutine mcmilan2017disk_density
 
     ! PUBLIC ACCESSORS for Python/IO layer
     SUBROUTINE getcomponentmodelname(i_comp, name)

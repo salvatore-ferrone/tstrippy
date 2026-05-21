@@ -411,7 +411,7 @@ MODULE simulator
         END IF
 
         IF (GRAVITY_NCOMP < 1) THEN
-            PRINT*, "ERROR: gravity is not configured"
+            PRINT*, "ERROR: gravity is not configured. GRAVITY_NCOMP", GRAVITY_NCOMP
             should_return = .TRUE.
         ELSE IF (.NOT. GRAVITY_FINALIZED) THEN
             CALL gravity_finalize()

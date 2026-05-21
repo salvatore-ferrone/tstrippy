@@ -70,22 +70,24 @@ def test_io_namespace_structure():
 
     assert isinstance(tstrippy.io, types.ModuleType)
     assert set(tstrippy.io.__all__) == {
-        "baumgardt_gcs",
-        "potential_parameters",
+        "mwgcs",
+        "milkyway_models",
         "reference_frames",
+        "write_simulation_hdf5",
     }
 
-    assert isinstance(tstrippy.io.baumgardt_gcs, types.ModuleType)
-    assert isinstance(tstrippy.io.potential_parameters, types.ModuleType)
+    assert isinstance(tstrippy.io.mwgcs, types.ModuleType)
+    assert isinstance(tstrippy.io.milkyway_models, types.ModuleType)
     assert isinstance(tstrippy.io.reference_frames, types.ModuleType)
+    assert isinstance(tstrippy.io.write_simulation_hdf5, types.ModuleType)
 
 
 def test_direct_import_paths():
     modules = {
         "tstrippy",
         "tstrippy.io",
-        "tstrippy.io.baumgardt_gcs",
-        "tstrippy.io.potential_parameters",
+        "tstrippy.io.mwgcs",
+        "tstrippy.io.milkyway_models",
         "tstrippy.io.reference_frames",
         "tstrippy.code",
         "tstrippy.code.bfe",
@@ -106,17 +108,19 @@ def test_sys_modules_registration():
     _ = tstrippy.code.bfe
     _ = tstrippy.code.sampling
     _ = tstrippy.code.orbits
-    _ = tstrippy.io.baumgardt_gcs
-    _ = tstrippy.io.potential_parameters
+    _ = tstrippy.io.mwgcs
+    _ = tstrippy.io.milkyway_models
+    _ = tstrippy.io.write_simulation_hdf5
     _ = tstrippy.io.reference_frames
 
     expected = {
         "tstrippy",
         "tstrippy.lib",
         "tstrippy.io",
-        "tstrippy.io.baumgardt_gcs",
-        "tstrippy.io.potential_parameters",
+        "tstrippy.io.mwgcs",
+        "tstrippy.io.milkyway_models",
         "tstrippy.io.reference_frames",
+        "tstrippy.io.write_simulation_hdf5",
         "tstrippy.code",
         "tstrippy.code.bfe",
         "tstrippy.code.sampling",

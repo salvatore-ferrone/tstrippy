@@ -1,5 +1,29 @@
 # TSTRIPPY Development Plan
-Date: 2026-05-05, Updated 2026-05-14
+Date: 2026-05-05, Updated 2026-05-21
+
+## Session Status (2026-05-21)
+
+**Simulator/Hostcluster contract lock: table-first per-parameter override path**
+
+✅ **Completed this session**:
+- Aligned simulator-facing hostcluster API toward `configure_*` naming.
+- Locked host model lifecycle requirement: model must be configured before parameter overrides.
+- Locked per-parameter override semantics with index-based parameter targeting.
+- Locked precedence semantics: per-parameter `table > law > constant`.
+- Locked update semantics: latest override wins with warning (no hard failure).
+- Locked model-reset semantics: reconfiguring model returns to constant baseline until overrides are re-applied.
+
+⚠️ **Current implementation scope**:
+- Table override path is prioritized and testable first.
+- Law override path is wired for extensibility but can remain non-evaluating until the next slice.
+
+▶ **Immediate next milestone**:
+- Add hostcluster contract tests before physics kernels:
+  1. finalize fails without kinematics/model,
+  2. invalid `param_index` warnings,
+  3. table monotonic-time validation,
+  4. override replacement behavior,
+  5. model reset clears overrides.
 
 ## Session Status (2026-05-14)
 

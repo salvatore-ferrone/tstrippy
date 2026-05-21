@@ -306,17 +306,24 @@ Hostcluster should be implemented as three internal layers:
 
 ### Time-Varying Structure Policy
 
-Hostcluster should provide one parameter provider with three modes:
+Hostcluster uses a constant baseline parameter vector plus optional per-parameter overrides:
 
-1. **constant**: fixed parameter vector.
-2. **law**: named analytic law with law-specific coefficients (for example, double-exponential mass evolution).
-3. **table**: user-provided parameter history interpolated in time.
+1. **constant baseline** via `configure_hostcluster_model(model_name, params)`.
+2. **per-parameter law override** via `configure_hostcluster_model_param_law(param_index, law_name, law_parameters)`.
+3. **per-parameter table override** via `configure_hostcluster_model_param_table(param_index, times, values)`.
 
-Recommended precedence when multiple are configured:
+Current implementation priority is table overrides first, with law wiring present but law evaluation deferred.
+
+Per-parameter runtime precedence:
 
 - `table > law > constant`
 
-This keeps time evolution backend-agnostic and allows adding new models without changing simulator logic.
+Policy notes:
+
+1. `param_index` is index-based for now (no name-based parameter targeting yet).
+2. `times` for table overrides must be strictly monotonic.
+3. Latest override for a parameter wins; replace with warning, do not hard-fail.
+4. Reconfiguring the model resets overrides and returns parameters to constant baseline until new overrides are set.
 
 ### Backend Registration Contract
 
@@ -338,12 +345,13 @@ Initial backend set:
 
 Simulator should expose wrapper calls for hostcluster setup:
 
-1. `init_hostcluster_kinematics(...)`
-2. `set_hostcluster_backend(model_name)`
-3. `set_hostcluster_structure_constant(params)`
-4. `set_hostcluster_structure_law(law_name, law_params)`
-5. `set_hostcluster_structure_table(times, param_table)`
+1. `configure_hostcluster_kinematics(...)`
+2. `configure_hostcluster_model(model_name, params)`
+3. `configure_hostcluster_model_param_law(param_index, law_name, law_parameters)`
+4. `configure_hostcluster_model_param_table(param_index, times, values)`
 6. `finalize_hostcluster()`
+
+Backward-compatibility wrappers can remain temporarily, but new code should use the `configure_*` names above.
 
 Force orchestration step behavior:
 
@@ -406,10 +414,10 @@ Preferred behavior:
 
 ### Phase 3: Time-Varying Structure
 
-1. Implement `constant` mode.
-2. Implement `law` mode (double exponential first).
-3. Implement `table` mode interpolation.
-4. Add equivalence tests where law/table reduce to constant behavior.
+1. Implement constant baseline parameter model.
+2. Implement per-parameter table overrides and interpolation first.
+3. Add law override storage and lifecycle hooks (evaluation can be deferred).
+4. Add equivalence tests where table-only setup reduces to constant behavior.
 
 ### Phase 4: Bound/Unbound Tracking
 

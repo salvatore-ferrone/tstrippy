@@ -9,11 +9,10 @@ MODULE simulator
                        GRAVITY_NCOMP
     USE hostcluster, ONLY: hostcluster_clear => clear, &
                            hostcluster_add => add_hostcluster, &
-                           hostcluster_init_kinematics => init_hostcluster_kinematics, &
-                           hostcluster_set_backend => set_hostcluster_backend, &
-                           hostcluster_set_constant => set_hostcluster_structure_constant, &
-                           hostcluster_set_law => set_hostcluster_structure_law, &
-                           hostcluster_set_table => set_hostcluster_structure_table, &
+                           hostcluster_configure_kinematics => configure_hostcluster_kinematics, &
+                           hostcluster_configure_model => configure_hostcluster_model, &
+                           hostcluster_configure_param_law => configure_hostcluster_model_param_law, &
+                           hostcluster_configure_param_table => configure_hostcluster_model_param_table, &
                            hostcluster_finalize => finalize_hostcluster, &
                            hostcluster_update_state => update_hostcluster_state, &
                            hostcluster_force_on_particles => force_hostcluster_on_particles, &
@@ -665,56 +664,52 @@ MODULE simulator
         state%finalized = .FALSE.
     END SUBROUTINE add_hostcluster
 
-    SUBROUTINE init_hostcluster_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
+    SUBROUTINE configure_hostcluster_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
         INTEGER, INTENT(IN) :: ntimes
         REAL*8, INTENT(IN), DIMENSION(ntimes) :: t, xhost, yhost, zhost, vxhost, vyhost, vzhost
 
-        CALL hostcluster_init_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
+        IF (.NOT. HOST_REGISTERED) CALL hostcluster_add()
+        CALL hostcluster_configure_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
         CALL clear_force_registry()
         state%host_enabled = HOST_REGISTERED
         state%finalized = .FALSE.
-    END SUBROUTINE init_hostcluster_kinematics
+    END SUBROUTINE configure_hostcluster_kinematics
 
-    SUBROUTINE set_hostcluster_backend(model_name)
+    SUBROUTINE configure_hostcluster_model(model_name, params, nparams)
         CHARACTER(LEN=*), INTENT(IN) :: model_name
-
-        CALL hostcluster_set_backend(model_name)
-        CALL clear_force_registry()
-        state%host_enabled = HOST_REGISTERED
-        state%finalized = .FALSE.
-    END SUBROUTINE set_hostcluster_backend
-
-    SUBROUTINE set_hostcluster_structure_constant(params, nparams)
         INTEGER, INTENT(IN) :: nparams
         REAL*8, INTENT(IN), DIMENSION(nparams) :: params
 
-        CALL hostcluster_set_constant(params, nparams)
+        IF (.NOT. HOST_REGISTERED) CALL hostcluster_add()
+        CALL hostcluster_configure_model(model_name, params, nparams)
         CALL clear_force_registry()
         state%host_enabled = HOST_REGISTERED
         state%finalized = .FALSE.
-    END SUBROUTINE set_hostcluster_structure_constant
+    END SUBROUTINE configure_hostcluster_model
 
-    SUBROUTINE set_hostcluster_structure_law(law_name, law_params, nparams)
+    SUBROUTINE configure_hostcluster_model_param_law(param_index, law_name, law_params, nparams)
+        INTEGER, INTENT(IN) :: param_index
         CHARACTER(LEN=*), INTENT(IN) :: law_name
         INTEGER, INTENT(IN) :: nparams
         REAL*8, INTENT(IN), DIMENSION(nparams) :: law_params
 
-        CALL hostcluster_set_law(law_name, law_params, nparams)
+        CALL hostcluster_configure_param_law(param_index, law_name, law_params, nparams)
         CALL clear_force_registry()
         state%host_enabled = HOST_REGISTERED
         state%finalized = .FALSE.
-    END SUBROUTINE set_hostcluster_structure_law
+    END SUBROUTINE configure_hostcluster_model_param_law
 
-    SUBROUTINE set_hostcluster_structure_table(times, param_table, ntimes, nparams)
-        INTEGER, INTENT(IN) :: ntimes, nparams
+    SUBROUTINE configure_hostcluster_model_param_table(param_index, times, values, ntimes)
+        INTEGER, INTENT(IN) :: param_index
+        INTEGER, INTENT(IN) :: ntimes
         REAL*8, INTENT(IN), DIMENSION(ntimes) :: times
-        REAL*8, INTENT(IN), DIMENSION(ntimes, nparams) :: param_table
+        REAL*8, INTENT(IN), DIMENSION(ntimes) :: values
 
-        CALL hostcluster_set_table(times, param_table, ntimes, nparams)
+        CALL hostcluster_configure_param_table(param_index, times, values, ntimes)
         CALL clear_force_registry()
         state%host_enabled = HOST_REGISTERED
         state%finalized = .FALSE.
-    END SUBROUTINE set_hostcluster_structure_table
+    END SUBROUTINE configure_hostcluster_model_param_table
 
     SUBROUTINE finalize_hostcluster()
         CALL hostcluster_finalize()
@@ -722,6 +717,42 @@ MODULE simulator
         state%host_enabled = HOST_REGISTERED
         state%finalized = .FALSE.
     END SUBROUTINE finalize_hostcluster    
+
+    ! Backward-compatible wrappers
+    SUBROUTINE init_hostcluster_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
+        INTEGER, INTENT(IN) :: ntimes
+        REAL*8, INTENT(IN), DIMENSION(ntimes) :: t, xhost, yhost, zhost, vxhost, vyhost, vzhost
+        CALL configure_hostcluster_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
+    END SUBROUTINE init_hostcluster_kinematics
+
+    SUBROUTINE set_hostcluster_backend(model_name)
+        CHARACTER(LEN=*), INTENT(IN) :: model_name
+        PRINT*, "WARNING: set_hostcluster_backend is deprecated; use configure_hostcluster_model"
+    END SUBROUTINE set_hostcluster_backend
+
+    SUBROUTINE set_hostcluster_structure_constant(params, nparams)
+        INTEGER, INTENT(IN) :: nparams
+        REAL*8, INTENT(IN), DIMENSION(nparams) :: params
+        CALL configure_hostcluster_model("plummer", params, nparams)
+    END SUBROUTINE set_hostcluster_structure_constant
+
+    SUBROUTINE set_hostcluster_structure_law(law_name, law_params, nparams)
+        CHARACTER(LEN=*), INTENT(IN) :: law_name
+        INTEGER, INTENT(IN) :: nparams
+        REAL*8, INTENT(IN), DIMENSION(nparams) :: law_params
+        CALL configure_hostcluster_model_param_law(1, law_name, law_params, nparams)
+    END SUBROUTINE set_hostcluster_structure_law
+
+    SUBROUTINE set_hostcluster_structure_table(times, param_table, ntimes, nparams)
+        INTEGER, INTENT(IN) :: ntimes, nparams
+        REAL*8, INTENT(IN), DIMENSION(ntimes) :: times
+        REAL*8, INTENT(IN), DIMENSION(ntimes, nparams) :: param_table
+        INTEGER :: i
+
+        DO i = 1, nparams
+            CALL configure_hostcluster_model_param_table(i, times, param_table(:, i), ntimes)
+        END DO
+    END SUBROUTINE set_hostcluster_structure_table
 
     !!!! OUTPUTS
     SUBROUTINE initwritesnapshots(nskip, directory, basename)

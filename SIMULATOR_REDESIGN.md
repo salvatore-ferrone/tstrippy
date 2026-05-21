@@ -275,3 +275,156 @@ x, y, z, vx, vy, vz = tstrippy.simulator.run_simulation()
 - Exact memory accounting for trajectory retention: finalize once array shapes are fixed.
 - Parallel integration: OpenMP on force eval? Out of scope for Phase 5.
 - GPU offload: Out of scope; CPU + OpenMP first.
+
+## Hostcluster Rehaul Contract (New)
+
+This section defines the design contract for replacing legacy host-perturber behavior with a new hostcluster module.
+
+### Goals
+
+1. Keep host state update and force evaluation modular and extensible.
+2. Support multiple structural backends (analytic and table-backed).
+3. Support time-varying structural parameters without backend-specific branching in simulator hot loops.
+4. Integrate cleanly with simulator registry-based force orchestration.
+
+### Layered Hostcluster Design
+
+Hostcluster should be implemented as three internal layers:
+
+1. **Kinematics layer**
+    - Owns host orbit arrays and interpolation.
+    - Returns host position/velocity at current simulator time.
+
+2. **Structure-evolution layer**
+    - Owns structural parameter evolution.
+    - Returns `params_current(t)` independent of chosen potential backend.
+
+3. **Backend layer**
+    - Consumes `params_current` and relative coordinates.
+    - Returns force/potential contribution for all particles.
+    - Backends can be analytic (`plummer`, `isochrone`) or table-backed (`king`, later).
+
+### Time-Varying Structure Policy
+
+Hostcluster should provide one parameter provider with three modes:
+
+1. **constant**: fixed parameter vector.
+2. **law**: named analytic law with law-specific coefficients (for example, double-exponential mass evolution).
+3. **table**: user-provided parameter history interpolated in time.
+
+Recommended precedence when multiple are configured:
+
+- `table > law > constant`
+
+This keeps time evolution backend-agnostic and allows adding new models without changing simulator logic.
+
+### Backend Registration Contract
+
+Use handler registration similar to gravity:
+
+1. backend name
+2. expected parameter count
+3. force evaluator
+4. potential evaluator
+5. optional init/finalize hook for table builders/loaders
+
+Initial backend set:
+
+1. `plummer` (analytic)
+2. `isochrone` (analytic)
+3. `king` (registered scaffold; full table path added in later phase)
+
+### Simulator Interface Contract
+
+Simulator should expose wrapper calls for hostcluster setup:
+
+1. `init_hostcluster_kinematics(...)`
+2. `set_hostcluster_backend(model_name)`
+3. `set_hostcluster_structure_constant(params)`
+4. `set_hostcluster_structure_law(law_name, law_params)`
+5. `set_hostcluster_structure_table(times, param_table)`
+6. `finalize_hostcluster()`
+
+Force orchestration step behavior:
+
+1. `hostcluster.update_state(currenttime)`
+2. `hostcluster.force_on_particles(...)`
+3. accumulate into total acceleration/potential
+
+No per-step branch explosion in the simulator hot path.
+
+### Bound/Unbound Tracking Contract
+
+For each particle, define specific relative energy:
+
+$$
+E_{\mathrm{rel}} = \frac{1}{2}\|\mathbf{v} - \mathbf{v}_{\mathrm{host}}\|^2 + \Phi_{\mathrm{host}}(r, t)
+$$
+
+Bound criterion:
+
+$$
+E_{\mathrm{rel}} < -\epsilon
+$$
+
+Escape-time policy:
+
+1. require `N_confirm` consecutive unbound checks before confirming escape,
+2. store first confirmed escape time,
+3. keep hysteresis to avoid noise-driven flip-flops near zero energy.
+
+### Error-Handling Policy
+
+For Python-exposed call paths, avoid `STOP`.
+
+Preferred behavior:
+
+1. warning + no-op for invalid state transitions,
+2. warning + return for invalid inputs,
+3. explicit lifecycle checks (`clear -> init/set -> finalize -> run`).
+
+## Hostcluster Migration Checklist (Phase-by-Phase)
+
+### Phase 0: Contract Lock
+
+1. Freeze hostcluster public API names and signatures.
+2. Freeze parameter-evolution precedence (`table > law > constant`).
+3. Freeze backend registration format.
+
+### Phase 1: Scaffolding + Build
+
+1. Add hostcluster module skeleton.
+2. Wire simulator wrappers and force accumulation path.
+3. Keep only one parity backend (`plummer`) at first.
+4. Build + smoke test.
+
+### Phase 2: Analytic Backend Expansion
+
+1. Add `isochrone` backend.
+2. Validate `nparams` and backend lookup behavior.
+3. Add tests for force/potential sanity and regression.
+
+### Phase 3: Time-Varying Structure
+
+1. Implement `constant` mode.
+2. Implement `law` mode (double exponential first).
+3. Implement `table` mode interpolation.
+4. Add equivalence tests where law/table reduce to constant behavior.
+
+### Phase 4: Bound/Unbound Tracking
+
+1. Implement `E_rel` evaluation.
+2. Implement hysteresis and first-escape-time recording.
+3. Add tests for edge cases near `E_rel ~= 0`.
+
+### Phase 5: King Backend Scaffold
+
+1. Register `king` backend and lifecycle hooks.
+2. Add warning no-op evaluator until table path is ready.
+3. Implement table build/load path and validate numerics.
+
+### Phase 6: Hardening
+
+1. Remove remaining `STOP` in Python-facing control paths.
+2. Add lifecycle misuse tests.
+3. Add mixed-physics simulator integration tests (gravity + hostcluster + optional modules).

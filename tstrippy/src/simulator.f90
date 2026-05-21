@@ -949,7 +949,6 @@ MODULE simulator
 
     END SUBROUTINE forest_ruth
 
-
     SUBROUTINE compute_yoshida_coefficients()
         yoshida_w = sqrt(2.0D0**(1.0D0/3.0D0) + 2.0D0**(-1.0D0/3.0D0) -1.0D0 )/6.0D0 ! D0 is for double precision
         yoshida_c1 =  yoshida_w + 0.5D0

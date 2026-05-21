@@ -22,9 +22,10 @@ def run_test(n_particles, n_steps, label):
     sim.setinitialconditions(x, y, z, vx, vy, vz)
     sim.initwritesnapshots(2, "./snapshots", "snapshots")
     sim.setscheme('leapfrog', [0, dt, n_steps])
+    sim.add_component("plummer", [1e6, 5e-3])
     sim.finalize()
     sim.run()
-    
+    assert sim.run_success, "the run should be successful"
     compute_time = sim.timer_scheme_seconds
     io_time = sim.timer_write_snapshots_seconds + sim.timer_write_orbits_seconds
     total_time = sim.timer_run_seconds

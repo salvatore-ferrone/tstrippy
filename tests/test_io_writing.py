@@ -7,7 +7,7 @@ import numpy as np
 import tstrippy
 
 sim = tstrippy.simulator
-
+basecomponent = ['plummer', [1e6, 5e-3]]
 
 def test_snapshot_writing():
     """Test that snapshot files are created during run()."""
@@ -29,7 +29,9 @@ def test_snapshot_writing():
     # Setup snapshot writing with temporary directory
     with tempfile.TemporaryDirectory() as tmpdir:
         sim.initwritesnapshots(nskip=2, directory=tmpdir, basename="snap")
-        
+        sim.add_component(*basecomponent)
+        # finalize 
+        sim.finalize()
         # Run simulation
         sim.run()
         
@@ -64,7 +66,7 @@ def test_orbit_writing():
     
     sim.setinitialconditions(x, y, z, vx, vy, vz)
     sim.setscheme("leapfrog", [0.0, 0.01, 5])
-    
+    sim.add_component(*basecomponent)
     # Track all 3 particles
     sim.trim_orbits(2)  # Skip every 2 timesteps
     
@@ -76,7 +78,7 @@ def test_orbit_writing():
         
         # Run simulation
         sim.run()
-        
+        assert sim.run_success, "the run should be successful"
         # Check that orbit files were created (one per tracked particle)
         files = sorted([f for f in os.listdir(tmpdir) if f.startswith("orbits_particle_")])
         print(f"Orbit files created: {files}")
@@ -117,10 +119,10 @@ def test_snapshot_and_orbit_together():
         
         sim.initwritesnapshots(nskip=1, directory=snap_dir, basename="snapshot")
         sim.initwriteorbits(nskip=1, directory=orbit_dir, basename="orbit")
-        
+        sim.add_component(*basecomponent)
         # Run simulation
         sim.run()
-        
+        assert sim.run_success, "the run should be successful"
         # Check snapshots
         snap_files = sorted([f for f in os.listdir(snap_dir) if f.startswith("snapshot_")])
         print(f"Snapshots: {snap_files}")

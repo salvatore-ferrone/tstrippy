@@ -136,10 +136,10 @@ def test_run_orbit_snapshot_count_matches_nskip():
     n_particles = 5
     nsteps = 100
     nskip = 10
-
+    sim = tstrippy.simulator
     _set_basic_problem(n_particles=n_particles, nsteps=nsteps)
     sim.trim_orbits(nskip)
     sim.run()
-
+    assert sim.run_success, "needs to be true"
     expected_snapshots = nsteps // nskip + 1
     assert sim.orbits.shape[0] == expected_snapshots

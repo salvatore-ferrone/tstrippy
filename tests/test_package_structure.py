@@ -77,9 +77,9 @@ def test_io_namespace_structure():
     }
 
     assert isinstance(tstrippy.io.mwgcs, types.ModuleType)
-    assert isinstance(tstrippy.io.milkyway_models, types.ModuleType)
+    assert isinstance(tstrippy.io.milkyway_models, types.FunctionType)
     assert isinstance(tstrippy.io.reference_frames, types.ModuleType)
-    assert isinstance(tstrippy.io.write_simulation_hdf5, types.ModuleType)
+    assert isinstance(tstrippy.io.write_simulation_hdf5, types.FunctionType)
 
 
 def test_direct_import_paths():

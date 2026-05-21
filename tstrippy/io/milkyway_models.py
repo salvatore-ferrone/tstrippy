@@ -52,7 +52,7 @@ def get_model(modelname):
 
     # Get the first match
     model_file = matches[0]
-    extension = model_file.suffix
+    extension = model_file.suffix.lower()
 
     # Check if the format is supported
     if extension not in FILE_HANDLERS:
@@ -69,6 +69,49 @@ def milkyway_models(modelname):
     return get_model(modelname)
 
 
-__all__ = ["milkyway_models", "get_model", "register_handler", "FILE_HANDLERS"]
+def save_model_yaml(model_data, modelname=None, overwrite=False):
+    """Save a Milky Way model dictionary to the MWmodels data directory.
+
+    Parameters
+    ----------
+    model_data : dict
+        Model payload with keys like "name" and "components".
+    modelname : str, optional
+        Output filename stem or filename. If omitted, uses model_data["name"].
+    overwrite : bool, optional
+        If False, raises when the file already exists.
+    """
+    if not isinstance(model_data, dict):
+        raise TypeError("model_data must be a dictionary")
+
+    if modelname is None:
+        modelname = model_data.get("name")
+
+    if not modelname:
+        raise ValueError("modelname must be provided, or model_data must include a non-empty 'name'")
+
+    filename = str(modelname)
+    if not filename.endswith((".yaml", ".yml")):
+        filename = f"{filename}.yaml"
+
+    destination = absolute_path_to_MWmodels / filename
+    if destination.exists() and not overwrite:
+        raise FileExistsError(
+            f"Model file already exists: {destination}. Set overwrite=True to replace it."
+        )
+
+    with open(destination, "w") as fp:
+        yaml.safe_dump(model_data, fp, sort_keys=False)
+
+    return destination
+
+
+__all__ = [
+    "milkyway_models",
+    "get_model",
+    "save_model_yaml",
+    "register_handler",
+    "FILE_HANDLERS",
+]
 
 

@@ -7,7 +7,11 @@ except Exception as exc:
     mwgcs = None
     warnings.warn(f"Failed to import tstrippy.io.mwgcs: {exc}")
 try:
-    from .milkyway_models import milkyway_models
+    from . import milkyway_models as _milkyway_models_module
+    milkyway_models = _milkyway_models_module.milkyway_models
+    # Attach helper methods to keep a compact callable UX.
+    milkyway_models.get_model = _milkyway_models_module.get_model
+    milkyway_models.save_model_yaml = _milkyway_models_module.save_model_yaml
 except Exception as exc:
     milkyway_models = None
     warnings.warn(f"Failed to import tstrippy.io.milkyway_models: {exc}")

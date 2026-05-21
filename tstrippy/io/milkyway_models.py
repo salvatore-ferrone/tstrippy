@@ -64,39 +64,3 @@ def get_model(modelname):
     return handler(model_file)
 
 
-
-
-def pouliasis2017pii():
-    path_to_potential = path_to_data / "pouliasis2017pii.yaml"
-    absolute_path_to_potential = path_to_potential.resolve()
-    with open(absolute_path_to_potential, 'r') as potential:
-        try:
-            potential_parameters = yaml.safe_load(potential)
-        except yaml.YAMLError as exc:
-            print(exc)
-
-    components = []
-    for component in potential_parameters['components']:
-        parameters = component.get('parameters', [])
-        if isinstance(parameters, dict):
-            # Convert ordered mapping to the runtime-friendly list format.
-            parameter_names = component.get('parameter_names')
-            if parameter_names is None:
-                parameter_names = list(parameters.keys())
-            parameters = [parameters[name] for name in parameter_names]
-        components.append({
-            'name': component['name'],
-            'parameters': parameters,
-            'parameter_names': component.get('parameter_names', []),
-            'parameter_units': component.get('parameter_units', []),
-        })
-
-    return components
-
-
-def pouliasis2017pii_flat():
-    """Return the historical flat parameter list used by older call sites."""
-    components = pouliasis2017pii()
-    return [value for component in components for value in component['parameters']]
-
-    

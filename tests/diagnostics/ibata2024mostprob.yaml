@@ -1,0 +1,80 @@
+components:
+- name: ibata2024halo
+  parameter_names:
+  - rho0
+  - r0
+  - rt
+  - q
+  - gamma
+  - beta
+  parameter_units:
+  - solMass / kpc3
+  - kpc
+  - kpc
+  - ''
+  - ''
+  - ''
+  parameters:
+  - 11200000
+  - 19.5
+  - 1000
+  - 0.727
+  - 1.14
+  - 2.54
+- name: exponentialdisk
+  parameter_names:
+  - Sigma0
+  - hR
+  - hz
+  parameter_units:
+  - solMass / kpc2
+  - kpc
+  - kpc
+  parameters:
+  - 1146468181.6431813
+  - 2.251
+  - 0.349
+- name: exponentialdisk
+  parameter_names:
+  - Sigma0
+  - hR
+  - hz
+  parameter_units:
+  - solMass / kpc2
+  - kpc
+  - kpc
+  parameters:
+  - 194742540.44349927
+  - 2.07
+  - 0.86
+- name: mcmilan2017disk
+  parameter_names:
+  - Sigma0
+  - hR
+  - hz
+  - Rm
+  parameter_units:
+  - solMass / kpc2
+  - kpc
+  - kpc
+  parameters:
+  - 52100000.0
+  - 7
+  - 0.085
+  - 4
+- name: mcmilan2017disk
+  parameter_names:
+  - Sigma0
+  - hR
+  - hz
+  - Rm
+  parameter_units:
+  - solMass / kpc2
+  - kpc
+  - kpc
+  parameters:
+  - 2180000000.0
+  - 1.5
+  - 0.045
+  - 12
+name: ../../tstrippy/data/ibata2024mostprob.yaml

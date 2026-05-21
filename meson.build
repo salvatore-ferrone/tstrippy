@@ -148,12 +148,43 @@ py.install_sources(
     subdir: python_install_subdir / 'code'
 )
 
+# for listing files 
+fs = import('fs')
+
+# colelct all files in the MW referenceframes 
+
+
 # And data files
+# install_data(
+#     files('tstrippy/data/mwgcs-kinematics',
+#           'tstrippy/data/mwgcs-structural',
+#           'tstrippy/data/MWreferenceframes/MWrefframeFerrone2023.yaml',
+#           'tstrippy/data/MWmodels/pouliasis2017pii.yaml',
+#           'tstrippy/data/MWmodels/ibata2024mostprob.yaml',
+#           'tstrippy/data/unit_basis.yaml'),
+#     install_dir: python_install_subdir / 'data'
+# )
+
+# And data files
+# Keep top-level data files explicit, and install model/reference-frame
+# directories as subtrees so new files are picked up automatically.
 install_data(
-    files('tstrippy/data/mwgcs-kinematics',
-          'tstrippy/data/mwgcs-structural',
-          'tstrippy/data/MWrefframeFerrone2023.yaml',
-          'tstrippy/data/pouliasis2017pii.yaml',
-          'tstrippy/data/unit_basis.yaml'),
+    files(
+        'tstrippy/data/2023-03-28-merged.fits',
+        'tstrippy/data/README_baumgardt_catalog.md',
+        'tstrippy/data/mwgcs-kinematics',
+        'tstrippy/data/mwgcs-structural',
+        'tstrippy/data/unit_basis.yaml',
+    ),
+    install_dir: python_install_subdir / 'data'
+)
+
+install_subdir(
+    'tstrippy/data/MWmodels',
+    install_dir: python_install_subdir / 'data'
+)
+
+install_subdir(
+    'tstrippy/data/MWreferenceframes',
     install_dir: python_install_subdir / 'data'
 )

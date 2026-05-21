@@ -100,6 +100,7 @@ simulator_sources = [
     'tstrippy/src/sphericalharmonicsbfe.f90',
     'tstrippy/src/besselbfe.f90',
     'tstrippy/src/gravity.f90',
+    'tstrippy/src/hostcluster.f90',
     'tstrippy/src/simulator.f90'
 ]
 simulator_out = 'simulator' + ext_suffix

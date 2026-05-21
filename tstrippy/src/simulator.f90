@@ -7,6 +7,18 @@ MODULE simulator
                        gravity_potential => potential, &
                        GRAVITY_FINALIZED, &
                        GRAVITY_NCOMP
+    USE hostcluster, ONLY: hostcluster_clear => clear, &
+                           hostcluster_add => add_hostcluster, &
+                           hostcluster_init_kinematics => init_hostcluster_kinematics, &
+                           hostcluster_set_backend => set_hostcluster_backend, &
+                           hostcluster_set_constant => set_hostcluster_structure_constant, &
+                           hostcluster_set_law => set_hostcluster_structure_law, &
+                           hostcluster_set_table => set_hostcluster_structure_table, &
+                           hostcluster_finalize => finalize_hostcluster, &
+                           hostcluster_update_state => update_hostcluster_state, &
+                           hostcluster_force_on_particles => force_hostcluster_on_particles, &
+                           HOST_REGISTERED, &
+                           HOST_FINALIZED
     ! UX: 
     ! (1) set necessary values and physics module (order independent): 
     !   1a. simulator.set_initial_conditions(x,y,z,vx,vy,vz)
@@ -154,14 +166,8 @@ MODULE simulator
     ! PUBLIC :: simulator_force, simulator_potential
 
     CONTAINS 
+    
     !!!!! CALLS WHERE THE USER INTERFACES WITH THE MODULE
-    SUBROUTINE cleargravitycomponents()
-        CALL gravity_clear()
-        CALL clear_force_registry()
-        state%gravity_finalized = .FALSE.
-        state%finalized = .FALSE.
-    END SUBROUTINE cleargravitycomponents
-
     SUBROUTINE set_gravitational_constant(g)
         REAL*8, INTENT(IN) :: g
 
@@ -170,18 +176,6 @@ MODULE simulator
         state%gravity_finalized = GRAVITY_FINALIZED
         state%finalized = .FALSE.
     END SUBROUTINE set_gravitational_constant
-
-    SUBROUTINE add_component(model_name, params, nparams)
-        CHARACTER(LEN=*), INTENT(IN) :: model_name
-        INTEGER, INTENT(IN) :: nparams
-        REAL*8, DIMENSION(nparams), INTENT(IN) :: params
-
-        CALL gravity_add_component(model_name, params, nparams)
-        CALL clear_force_registry()
-        state%gravity_finalized = GRAVITY_FINALIZED
-        state%finalized = .FALSE.
-    END SUBROUTINE add_component
-
 
     SUBROUTINE setinitialconditions(N,xin,yin,zin,vxin,vyin,vzin)
         INTEGER, INTENT(in) :: N 
@@ -389,13 +383,15 @@ MODULE simulator
         state = state_t()
         CALL clear_force_registry()
         ! clear the modules
+        call hostcluster_clear()
         call gravity_clear()
 
     END SUBROUTINE clear
 
     SUBROUTINE finalize()
-        LOGICAL :: should_return = .FALSE.
+        LOGICAL :: should_return
         INTEGER(KIND=8) :: c_fin_start, c_fin_end
+        should_return = .FALSE.
         state%finalized = .FALSE.
 
         CALL system_clock(c_fin_start, rate_clock, cmax_clock)
@@ -422,6 +418,17 @@ MODULE simulator
         END IF
 
         state%gravity_finalized = GRAVITY_FINALIZED
+
+        IF (state%host_enabled .OR. HOST_REGISTERED) THEN
+            IF (.NOT. HOST_FINALIZED) THEN
+                CALL hostcluster_finalize()
+            END IF
+            IF (.NOT. HOST_FINALIZED) THEN
+                PRINT*, "ERROR: hostcluster finalize failed"
+                should_return = .TRUE.
+            END IF
+            state%host_enabled = HOST_REGISTERED
+        END IF
 
         ! Resolve timestamps: build if user did not provide them
         IF (.NOT. state%timestamps_from_user) THEN
@@ -628,6 +635,93 @@ MODULE simulator
         TIMER_WRITE_ORBITS_SECONDS = DBLE(c_write_orb_accum) / DBLE(rate_clock)
 
     END SUBROUTINE run
+
+    !!! INTERACTING WITH SPECIFIC MODULES
+
+    !!! THE GRAVITY MODULE 
+    SUBROUTINE cleargravitycomponents()
+        CALL gravity_clear()
+        CALL clear_force_registry()
+        state%gravity_finalized = .FALSE.
+        state%finalized = .FALSE.
+    END SUBROUTINE cleargravitycomponents    
+
+    SUBROUTINE add_component(model_name, params, nparams)
+        CHARACTER(LEN=*), INTENT(IN) :: model_name
+        INTEGER, INTENT(IN) :: nparams
+        REAL*8, DIMENSION(nparams), INTENT(IN) :: params
+
+        CALL gravity_add_component(model_name, params, nparams)
+        CALL clear_force_registry()
+        state%gravity_finalized = GRAVITY_FINALIZED
+        state%finalized = .FALSE.
+    END SUBROUTINE add_component
+
+    !!!!! THE HOST CLUSTER MODULE
+    SUBROUTINE add_hostcluster()
+        CALL hostcluster_add()
+        CALL clear_force_registry()
+        state%host_enabled = HOST_REGISTERED
+        state%finalized = .FALSE.
+    END SUBROUTINE add_hostcluster
+
+    SUBROUTINE init_hostcluster_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
+        INTEGER, INTENT(IN) :: ntimes
+        REAL*8, INTENT(IN), DIMENSION(ntimes) :: t, xhost, yhost, zhost, vxhost, vyhost, vzhost
+
+        CALL hostcluster_init_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
+        CALL clear_force_registry()
+        state%host_enabled = HOST_REGISTERED
+        state%finalized = .FALSE.
+    END SUBROUTINE init_hostcluster_kinematics
+
+    SUBROUTINE set_hostcluster_backend(model_name)
+        CHARACTER(LEN=*), INTENT(IN) :: model_name
+
+        CALL hostcluster_set_backend(model_name)
+        CALL clear_force_registry()
+        state%host_enabled = HOST_REGISTERED
+        state%finalized = .FALSE.
+    END SUBROUTINE set_hostcluster_backend
+
+    SUBROUTINE set_hostcluster_structure_constant(params, nparams)
+        INTEGER, INTENT(IN) :: nparams
+        REAL*8, INTENT(IN), DIMENSION(nparams) :: params
+
+        CALL hostcluster_set_constant(params, nparams)
+        CALL clear_force_registry()
+        state%host_enabled = HOST_REGISTERED
+        state%finalized = .FALSE.
+    END SUBROUTINE set_hostcluster_structure_constant
+
+    SUBROUTINE set_hostcluster_structure_law(law_name, law_params, nparams)
+        CHARACTER(LEN=*), INTENT(IN) :: law_name
+        INTEGER, INTENT(IN) :: nparams
+        REAL*8, INTENT(IN), DIMENSION(nparams) :: law_params
+
+        CALL hostcluster_set_law(law_name, law_params, nparams)
+        CALL clear_force_registry()
+        state%host_enabled = HOST_REGISTERED
+        state%finalized = .FALSE.
+    END SUBROUTINE set_hostcluster_structure_law
+
+    SUBROUTINE set_hostcluster_structure_table(times, param_table, ntimes, nparams)
+        INTEGER, INTENT(IN) :: ntimes, nparams
+        REAL*8, INTENT(IN), DIMENSION(ntimes) :: times
+        REAL*8, INTENT(IN), DIMENSION(ntimes, nparams) :: param_table
+
+        CALL hostcluster_set_table(times, param_table, ntimes, nparams)
+        CALL clear_force_registry()
+        state%host_enabled = HOST_REGISTERED
+        state%finalized = .FALSE.
+    END SUBROUTINE set_hostcluster_structure_table
+
+    SUBROUTINE finalize_hostcluster()
+        CALL hostcluster_finalize()
+        CALL clear_force_registry()
+        state%host_enabled = HOST_REGISTERED
+        state%finalized = .FALSE.
+    END SUBROUTINE finalize_hostcluster    
 
     !!!! OUTPUTS
     SUBROUTINE initwritesnapshots(nskip, directory, basename)
@@ -990,8 +1084,9 @@ MODULE simulator
         yoshida_d2 = -4.0D0*yoshida_w-1.0D0
         yoshida_d3 =  2.0D0*yoshida_w+1.0D0
         yoshida_d4 =  0.0D0        
-    END SUBROUTINE 
+    END SUBROUTINE compute_yoshida_coefficients
 
+    ! FORCE ORCHESTRATION aross multiple modules
     SUBROUTINE clear_force_registry()
         INTEGER :: i
 
@@ -1022,6 +1117,10 @@ MODULE simulator
         IF (GRAVITY_FINALIZED .AND. GRAVITY_NCOMP > 0) THEN
             CALL register_force_provider("gravity", gravity_force_provider)
         END IF
+
+        IF (HOST_REGISTERED .AND. HOST_FINALIZED) THEN
+            CALL register_force_provider("hostcluster", hostcluster_force_provider)
+        END IF
     END SUBROUTINE rebuild_force_registry
 
     SUBROUTINE gravity_force_provider(t, n, xin, yin, zin, ax, ay, az)
@@ -1039,6 +1138,17 @@ MODULE simulator
 
         CALL gravity_force(n, xin, yin, zin, ax, ay, az)
     END SUBROUTINE gravity_force_provider
+
+    SUBROUTINE hostcluster_force_provider(t, n, xin, yin, zin, ax, ay, az)
+        REAL*8, INTENT(IN) :: t
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: xin, yin, zin
+        REAL*8, INTENT(OUT), DIMENSION(n) :: ax, ay, az
+        REAL*8, DIMENSION(n) :: phi_host
+
+        CALL hostcluster_update_state(t)
+        CALL hostcluster_force_on_particles(n, xin, yin, zin, ax, ay, az, phi_host)
+    END SUBROUTINE hostcluster_force_provider
 
     SUBROUTINE evaluate_total_force(t, n, xin, yin, zin, ax, ay, az)
         REAL*8, INTENT(IN) :: t

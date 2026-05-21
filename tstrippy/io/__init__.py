@@ -7,7 +7,7 @@ except Exception as exc:
     mwgcs = None
     warnings.warn(f"Failed to import tstrippy.io.mwgcs: {exc}")
 try:
-    from . import milkyway_models
+    from .milkyway_models import milkyway_models
 except Exception as exc:
     milkyway_models = None
     warnings.warn(f"Failed to import tstrippy.io.milkyway_models: {exc}")

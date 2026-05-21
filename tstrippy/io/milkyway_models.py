@@ -64,3 +64,11 @@ def get_model(modelname):
     return handler(model_file)
 
 
+def milkyway_models(modelname):
+    """Return a Milky Way model payload by name."""
+    return get_model(modelname)
+
+
+__all__ = ["milkyway_models", "get_model", "register_handler", "FILE_HANDLERS"]
+
+

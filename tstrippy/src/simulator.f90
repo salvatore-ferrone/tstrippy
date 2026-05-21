@@ -64,7 +64,19 @@ MODULE simulator
     ABSTRACT INTERFACE
         SUBROUTINE scheme_step_interface()
         END SUBROUTINE scheme_step_interface
+
+        SUBROUTINE force_provider_interface(t, n, x, y, z, ax, ay, az)
+            REAL*8, INTENT(IN) :: t
+            INTEGER, INTENT(IN) :: n
+            REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+            REAL*8, INTENT(OUT), DIMENSION(n) :: ax, ay, az
+        END SUBROUTINE force_provider_interface
     END INTERFACE    
+
+    TYPE, PRIVATE :: force_provider_t
+        CHARACTER(LEN=64) :: name = ""
+        PROCEDURE(force_provider_interface), POINTER, NOPASS :: eval => NULL()
+    END TYPE force_provider_t
 
     TYPE(state_t), PRIVATE :: state
 
@@ -83,6 +95,10 @@ MODULE simulator
 
     REAL*8, PRIVATE :: yoshida_w, yoshida_c1, yoshida_c2, yoshida_c3, yoshida_c4
     REAL*8, PRIVATE :: yoshida_d1, yoshida_d2, yoshida_d3, yoshida_d4    
+
+    INTEGER, PARAMETER, PRIVATE :: MAX_ACTIVE_FORCE_PROVIDERS = 8
+    TYPE(force_provider_t), DIMENSION(MAX_ACTIVE_FORCE_PROVIDERS), PRIVATE :: active_force_providers
+    INTEGER, PRIVATE :: nactive_force_providers = 0
 
 
     ! for saving some trajectories
@@ -141,6 +157,7 @@ MODULE simulator
     !!!!! CALLS WHERE THE USER INTERFACES WITH THE MODULE
     SUBROUTINE cleargravitycomponents()
         CALL gravity_clear()
+        CALL clear_force_registry()
         state%gravity_finalized = .FALSE.
         state%finalized = .FALSE.
     END SUBROUTINE cleargravitycomponents
@@ -149,6 +166,7 @@ MODULE simulator
         REAL*8, INTENT(IN) :: g
 
         CALL gravity_set_gravitational_constant(g)
+        CALL clear_force_registry()
         state%gravity_finalized = GRAVITY_FINALIZED
         state%finalized = .FALSE.
     END SUBROUTINE set_gravitational_constant
@@ -159,6 +177,7 @@ MODULE simulator
         REAL*8, DIMENSION(nparams), INTENT(IN) :: params
 
         CALL gravity_add_component(model_name, params, nparams)
+        CALL clear_force_registry()
         state%gravity_finalized = GRAVITY_FINALIZED
         state%finalized = .FALSE.
     END SUBROUTINE add_component
@@ -323,6 +342,7 @@ MODULE simulator
         Nparticles   = 0
         nsteps       = 0
         current_step = 1
+        currenttime  = 0.0D0
         n_particles_orbit = 1
         nskip_orbit_timestamps = 1
         orbit_ram_limit_MB = DEFAULT_ORBIT_RAM_LIMIT_MB
@@ -367,6 +387,7 @@ MODULE simulator
         c_write_orb_accum = 0
         ! Reset all state flags to defaults
         state = state_t()
+        CALL clear_force_registry()
         ! clear the modules
         call gravity_clear()
 
@@ -432,8 +453,15 @@ MODULE simulator
 
         nsteps = SIZE(timestamps) - 1
         current_step = 1
+        currenttime = timestamps(current_step)
 
         if (should_return) return
+
+        CALL rebuild_force_registry()
+        IF (nactive_force_providers < 1) THEN
+            PRINT*, "ERROR: no active force providers are registered"
+            RETURN
+        END IF
 
         if (.not.state%orbits_allocated) THEN
             CALL allocate_orbits(nskip_orbit_timestamps)
@@ -874,13 +902,14 @@ MODULE simulator
 
         IF (current_step > nsteps) RETURN
 
+        currenttime = timestamps(current_step)
         dt_step = timestamps(current_step + 1) - timestamps(current_step)
 
         xtemp = x + 0.5D0 * dt_step * vx
         ytemp = y + 0.5D0 * dt_step * vy
         ztemp = z + 0.5D0 * dt_step * vz
 
-        CALL gravity_force(Nparticles, xtemp, ytemp, ztemp, fx, fy, fz)
+        CALL evaluate_total_force(currenttime + 0.5D0*dt_step, Nparticles, xtemp, ytemp, ztemp, fx, fy, fz)
 
         vx = vx + dt_step * fx
         vy = vy + dt_step * fy
@@ -891,6 +920,7 @@ MODULE simulator
         z = ztemp + 0.5D0 * dt_step * vz
 
         current_step = current_step + 1
+        currenttime = timestamps(current_step)
     END SUBROUTINE leapfrog
 
     SUBROUTINE forest_ruth()
@@ -909,7 +939,7 @@ MODULE simulator
         z = z + yoshida_c1 * dt_step * vz
         ! KICK 
         currenttime = currenttime + yoshida_c1*dt_step 
-        call gravity_force(Nparticles, x, y, z, fx, fy, fz)
+        CALL evaluate_total_force(currenttime, Nparticles, x, y, z, fx, fy, fz)
         vx = vx + yoshida_d1*fx*dt_step
         vy = vy + yoshida_d1*fy*dt_step
         vz = vz + yoshida_d1*fz*dt_step
@@ -919,7 +949,7 @@ MODULE simulator
         z = z + yoshida_c2 * dt_step * vz
         ! KICK 
         currenttime = currenttime + yoshida_c2*dt_step 
-        call gravity_force(Nparticles, x, y, z, fx, fy, fz)
+        CALL evaluate_total_force(currenttime, Nparticles, x, y, z, fx, fy, fz)
         vx = vx + yoshida_d2*fx*dt_step
         vy = vy + yoshida_d2*fy*dt_step
         vz = vz + yoshida_d2*fz*dt_step
@@ -929,7 +959,7 @@ MODULE simulator
         z = z + yoshida_c3 * dt_step * vz
         ! KICK 
         currenttime = currenttime + yoshida_c3*dt_step 
-        call gravity_force(Nparticles, x, y, z, fx, fy, fz)
+        CALL evaluate_total_force(currenttime, Nparticles, x, y, z, fx, fy, fz)
         vx = vx + yoshida_d3*fx*dt_step
         vy = vy + yoshida_d3*fy*dt_step
         vz = vz + yoshida_d3*fz*dt_step
@@ -939,12 +969,13 @@ MODULE simulator
         z = z + yoshida_c4 * dt_step * vz
         ! KICK 
         currenttime = currenttime + yoshida_c4*dt_step 
-        call gravity_force(Nparticles, x, y, z, fx, fy, fz)
+        CALL evaluate_total_force(currenttime, Nparticles, x, y, z, fx, fy, fz)
         vx = vx + yoshida_d4*fx*dt_step
         vy = vy + yoshida_d4*fy*dt_step
         vz = vz + yoshida_d4*fz*dt_step
 
         current_step = current_step + 1 
+        currenttime = timestamps(current_step)
 
 
     END SUBROUTINE forest_ruth
@@ -960,6 +991,75 @@ MODULE simulator
         yoshida_d3 =  2.0D0*yoshida_w+1.0D0
         yoshida_d4 =  0.0D0        
     END SUBROUTINE 
+
+    SUBROUTINE clear_force_registry()
+        INTEGER :: i
+
+        nactive_force_providers = 0
+        DO i = 1, MAX_ACTIVE_FORCE_PROVIDERS
+            active_force_providers(i)%name = ""
+            NULLIFY(active_force_providers(i)%eval)
+        END DO
+    END SUBROUTINE clear_force_registry
+
+    SUBROUTINE register_force_provider(name, eval_proc)
+        CHARACTER(LEN=*), INTENT(IN) :: name
+        PROCEDURE(force_provider_interface) :: eval_proc
+
+        IF (nactive_force_providers >= MAX_ACTIVE_FORCE_PROVIDERS) THEN
+            PRINT*, "WARNING: register_force_provider: maximum providers reached"
+            RETURN
+        END IF
+
+        nactive_force_providers = nactive_force_providers + 1
+        active_force_providers(nactive_force_providers)%name = TRIM(name)
+        active_force_providers(nactive_force_providers)%eval => eval_proc
+    END SUBROUTINE register_force_provider
+
+    SUBROUTINE rebuild_force_registry()
+        CALL clear_force_registry()
+
+        IF (GRAVITY_FINALIZED .AND. GRAVITY_NCOMP > 0) THEN
+            CALL register_force_provider("gravity", gravity_force_provider)
+        END IF
+    END SUBROUTINE rebuild_force_registry
+
+    SUBROUTINE gravity_force_provider(t, n, xin, yin, zin, ax, ay, az)
+        REAL*8, INTENT(IN) :: t
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: xin, yin, zin
+        REAL*8, INTENT(OUT), DIMENSION(n) :: ax, ay, az
+
+        IF (t /= t) THEN
+            ax = 0.0D0
+            ay = 0.0D0
+            az = 0.0D0
+            RETURN
+        END IF
+
+        CALL gravity_force(n, xin, yin, zin, ax, ay, az)
+    END SUBROUTINE gravity_force_provider
+
+    SUBROUTINE evaluate_total_force(t, n, xin, yin, zin, ax, ay, az)
+        REAL*8, INTENT(IN) :: t
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: xin, yin, zin
+        REAL*8, INTENT(OUT), DIMENSION(n) :: ax, ay, az
+        REAL*8, DIMENSION(n) :: ax_tmp, ay_tmp, az_tmp
+        INTEGER :: i
+
+        ax = 0.0D0
+        ay = 0.0D0
+        az = 0.0D0
+
+        DO i = 1, nactive_force_providers
+            IF (.NOT. ASSOCIATED(active_force_providers(i)%eval)) CYCLE
+            CALL active_force_providers(i)%eval(t, n, xin, yin, zin, ax_tmp, ay_tmp, az_tmp)
+            ax = ax + ax_tmp
+            ay = ay + ay_tmp
+            az = az + az_tmp
+        END DO
+    END SUBROUTINE evaluate_total_force
 
     ! HELPER FUNCTIONS 
     LOGICAL FUNCTION is_strictly_increasing(t)

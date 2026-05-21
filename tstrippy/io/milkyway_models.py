@@ -1,7 +1,11 @@
 import yaml
+import numpy as np
 import astropy.constants as const
+from astropy.units import Quantity, UnitBase
 import logging
+import os
 from pathlib import Path
+import tempfile
 
 # Get the directory of the current script
 current_script_directory = Path(__file__).parent
@@ -69,6 +73,26 @@ def milkyway_models(modelname):
     return get_model(modelname)
 
 
+def _to_yaml_compatible(value):
+    """Recursively convert common scientific Python objects to YAML-safe types."""
+    if isinstance(value, dict):
+        return {key: _to_yaml_compatible(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_yaml_compatible(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return _to_yaml_compatible(value.tolist())
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, UnitBase):
+        return value.to_string()
+    if isinstance(value, Quantity):
+        return {
+            "value": _to_yaml_compatible(value.value),
+            "unit": value.unit.to_string(),
+        }
+    return value
+
+
 def save_model_yaml(model_data, modelname=None, overwrite=False):
     """Save a Milky Way model dictionary to the MWmodels data directory.
 
@@ -100,8 +124,23 @@ def save_model_yaml(model_data, modelname=None, overwrite=False):
             f"Model file already exists: {destination}. Set overwrite=True to replace it."
         )
 
-    with open(destination, "w") as fp:
-        yaml.safe_dump(model_data, fp, sort_keys=False)
+    serializable_model_data = _to_yaml_compatible(model_data)
+
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            dir=absolute_path_to_MWmodels,
+            suffix=Path(filename).suffix,
+            delete=False,
+        ) as fp:
+            temporary_path = Path(fp.name)
+            yaml.safe_dump(serializable_model_data, fp, sort_keys=False)
+        os.replace(temporary_path, destination)
+    except Exception:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
+        raise
 
     return destination
 

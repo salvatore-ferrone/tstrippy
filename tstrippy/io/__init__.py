@@ -12,6 +12,7 @@ try:
     # Attach helper methods to keep a compact callable UX.
     milkyway_models.get_model = _milkyway_models_module.get_model
     milkyway_models.save_model_yaml = _milkyway_models_module.save_model_yaml
+    milkyway_models._to_yaml_compatible = _milkyway_models_module._to_yaml_compatible
 except Exception as exc:
     milkyway_models = None
     warnings.warn(f"Failed to import tstrippy.io.milkyway_models: {exc}")

@@ -9,29 +9,15 @@ current_script_directory = Path(__file__).parent
 # Construct the path to the data file relative to the current script
 path_to_data = current_script_directory / ".." / "data" 
 path_to_MWmodels = path_to_data / "MWmodels"
-path_to_MWreferenceframes = path_to_data / "MWreferenceframes"
-path_to_unit_basis = path_to_data / "unit_basis.yaml"
-
 # Resolve the path to make it absolute (and normalize it)
-absolute_path_to_unit_basis = path_to_unit_basis.resolve()
 absolute_path_to_MWmodels = path_to_MWmodels.resolve()
-absolute_path_to_MWreferenceframes = path_to_MWreferenceframes.resolve()
 
 # configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-#### MAKE THE G constant a global variable 
-with open(absolute_path_to_unit_basis, 'r') as basis:
-    try:
-        unitbasis = yaml.safe_load(basis)
-    except yaml.YAMLError as exc:
-        print(exc)
-G=const.G.to(unitbasis['G']).value
-
 # Supported file handlers
 FILE_HANDLERS = {}
-
 def register_handler(extension):
     """Decorator to register a handler for a specific file extension."""
     def decorator(func):
@@ -77,7 +63,9 @@ def get_model(modelname):
     handler = FILE_HANDLERS[extension]
     return handler(model_file)
 
-            
+
+
+
 def pouliasis2017pii():
     path_to_potential = path_to_data / "pouliasis2017pii.yaml"
     absolute_path_to_potential = path_to_potential.resolve()

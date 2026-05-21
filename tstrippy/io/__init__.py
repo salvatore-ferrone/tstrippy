@@ -21,7 +21,15 @@ try:
 except Exception as exc:
     reference_frames = None
     warnings.warn(f"Failed to import tstrippy.io.reference_frames: {exc}")
+try:
+    from . import write_simulation_hdf5 as _write_simulation_hdf5
+    write_simulation_hdf5 = _write_simulation_hdf5.write_simulation_hdf5
+    write_simulation_hdf5.read_snapshot_binary = _write_simulation_hdf5.read_snapshot_binary
+    write_simulation_hdf5.read_orbit_binary = _write_simulation_hdf5.read_orbit_binary
+except Exception as exc:
+    write_simulation_hdf5 = None
+    warnings.warn(f"Failed to import tstrippy.io.write_simulation_hdf5: {exc}")
+
 from .write_simulation_hdf5 import write_simulation_hdf5, read_snapshot_binary, read_orbit_binary
 
-__all__ = ["mwgcs", "milkyway_models", "reference_frames",
-           "write_simulation_hdf5", "read_snapshot_binary", "read_orbit_binary"]
+__all__ = ["mwgcs", "milkyway_models", "reference_frames", "write_simulation_hdf5",]

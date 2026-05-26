@@ -19,6 +19,7 @@ MODULE simulator
                            hostcluster_set_gravitational_constant => set_gravitational_constant,&
                            HOST_REGISTERED, &
                            HOST_FINALIZED
+    USE mathutils, ONLY: is_strictly_increasing, is_strictly_decreasing
     ! UX: 
     ! (1) set necessary values and physics module (order independent): 
     !   1a. simulator.set_initial_conditions(x,y,z,vx,vy,vz)
@@ -1204,30 +1205,7 @@ MODULE simulator
         END DO
     END SUBROUTINE evaluate_total_force
 
-    ! HELPER FUNCTIONS 
-    LOGICAL FUNCTION is_strictly_increasing(t)
-        REAL*8, DIMENSION(:), INTENT(IN) :: t
-        INTEGER :: i
-        is_strictly_increasing = .TRUE.
-        DO i = 1, SIZE(t)-1
-            IF (t(i+1) <= t(i)) THEN
-                is_strictly_increasing = .FALSE.
-                RETURN
-            END IF
-        END DO
-    END FUNCTION is_strictly_increasing
-    
-    LOGICAL FUNCTION is_strictly_decreasing(t)
-        REAL*8, DIMENSION(:), INTENT(IN) :: t
-        INTEGER :: i
-        is_strictly_decreasing = .TRUE.
-        DO i = 1, SIZE(t)-1
-            IF (t(i+1) >= t(i)) THEN
-                is_strictly_decreasing = .FALSE.
-                RETURN
-            END IF
-        END DO
-    END FUNCTION is_strictly_decreasing    
+  
 
 
 END MODULE simulator

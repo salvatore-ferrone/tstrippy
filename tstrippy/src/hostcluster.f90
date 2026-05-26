@@ -53,20 +53,6 @@ MODULE hostcluster
 
 
 
-
-    LOGICAL, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_param_has_table
-    LOGICAL, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_param_has_law
-    INTEGER, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_param_table_ntimes
-    INTEGER, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_param_law_nparams
-    CHARACTER(LEN=64), DIMENSION(:), PUBLIC, ALLOCATABLE :: host_param_law_name
-
-    REAL*8, DIMENSION(:,:), PUBLIC, ALLOCATABLE :: host_param_table_times
-    REAL*8, DIMENSION(:,:), PUBLIC, ALLOCATABLE :: host_param_table_values
-    REAL*8, DIMENSION(:,:), PUBLIC, ALLOCATABLE :: host_param_law_values
-
-    INTEGER, PRIVATE :: host_param_table_capacity = 0
-    INTEGER, PRIVATE :: host_param_law_capacity = 0
-
     INTEGER, PUBLIC :: host_current_kinematics_time_index = 1 
     REAL*8, PUBLIC :: host_x_current = 0.0D0
     REAL*8, PUBLIC :: host_y_current = 0.0D0
@@ -80,8 +66,6 @@ MODULE hostcluster
     PUBLIC :: add_hostcluster
     PUBLIC :: configure_hostcluster_kinematics
     PUBLIC :: configure_hostcluster_model
-    PUBLIC :: configure_hostcluster_model_param_law
-    PUBLIC :: configure_hostcluster_model_param_table
     PUBLIC :: finalize_hostcluster
     PUBLIC :: update_hostcluster_state
     PUBLIC :: force_hostcluster_on_particles
@@ -109,14 +93,7 @@ CONTAINS
 
         IF (ALLOCATED(host_params_current)) DEALLOCATE(host_params_current)
         IF (ALLOCATED(host_params_constant)) DEALLOCATE(host_params_constant)
-        IF (ALLOCATED(host_param_has_table)) DEALLOCATE(host_param_has_table)
-        IF (ALLOCATED(host_param_has_law)) DEALLOCATE(host_param_has_law)
-        IF (ALLOCATED(host_param_table_ntimes)) DEALLOCATE(host_param_table_ntimes)
-        IF (ALLOCATED(host_param_law_nparams)) DEALLOCATE(host_param_law_nparams)
-        IF (ALLOCATED(host_param_law_name)) DEALLOCATE(host_param_law_name)
-        IF (ALLOCATED(host_param_table_times)) DEALLOCATE(host_param_table_times)
-        IF (ALLOCATED(host_param_table_values)) DEALLOCATE(host_param_table_values)
-        IF (ALLOCATED(host_param_law_values)) DEALLOCATE(host_param_law_values)
+
 
         HOST_REGISTERED = .FALSE.
         HOST_FINALIZED = .FALSE.
@@ -132,8 +109,6 @@ CONTAINS
         host_vx_current = 0.0D0
         host_vy_current = 0.0D0
         host_vz_current = 0.0D0
-        host_param_table_capacity = 0
-        host_param_law_capacity = 0
     END SUBROUTINE clear
 
     SUBROUTINE set_gravitational_constant(g)
@@ -181,7 +156,6 @@ CONTAINS
             RETURN
         END IF
 
-        CALL query_current_structural_params(host_times(1))
         HOST_FINALIZED = .TRUE.
     END SUBROUTINE finalize_hostcluster
 
@@ -369,98 +343,16 @@ CONTAINS
             PRINT*, "WARNING: hostcluster model updated; clearing previous parameter overrides"
         END IF
 
-        CALL allocate_param_state(nparams)
 
         HOST_BACKEND_NAME = TRIM(model_name)
         host_params_constant = params
         host_params_current = params
-        host_param_has_table = .FALSE.
-        host_param_has_law = .FALSE.
-        host_param_table_ntimes = 0
-        host_param_law_nparams = 0
-        host_param_law_name = ""
+
 
         HOST_MODEL_SET = .TRUE.
         HOST_NPARAMS = nparams
         HOST_FINALIZED = .FALSE.
     END SUBROUTINE configure_hostcluster_model
-
-    SUBROUTINE configure_hostcluster_model_param_law(param_index, law_name, law_params, nparams)
-        INTEGER, INTENT(IN) :: param_index
-        CHARACTER(LEN=*), INTENT(IN) :: law_name
-        INTEGER, INTENT(IN) :: nparams
-        REAL*8, INTENT(IN), DIMENSION(nparams) :: law_params
-
-        IF (.NOT. HOST_MODEL_SET) THEN
-            PRINT*, "WARNING: configure_hostcluster_model must be called before parameter overrides"
-            RETURN
-        END IF
-
-        IF (param_index < 1 .OR. param_index > HOST_NPARAMS) THEN
-            PRINT*, "WARNING: configure_hostcluster_model_param_law invalid param_index"
-            RETURN
-        END IF
-
-        IF (nparams < 1) THEN
-            PRINT*, "WARNING: configure_hostcluster_model_param_law requires nparams >= 1"
-            RETURN
-        END IF
-
-        IF (host_param_has_law(param_index)) THEN
-            PRINT*, "WARNING: parameter in time being updated"
-        END IF
-
-        CALL ensure_law_capacity(nparams)
-        host_param_law_values(:, param_index) = 0.0D0
-        host_param_law_values(1:nparams, param_index) = law_params
-        host_param_law_nparams(param_index) = nparams
-        host_param_law_name(param_index) = TRIM(law_name)
-        host_param_has_law(param_index) = .TRUE.
-
-        ! Law execution is intentionally deferred; current value remains constant unless table override exists.
-        HOST_FINALIZED = .FALSE.
-    END SUBROUTINE configure_hostcluster_model_param_law
-
-    SUBROUTINE configure_hostcluster_model_param_table(param_index, times, values, ntimes)
-        INTEGER, INTENT(IN) :: param_index
-        INTEGER, INTENT(IN) :: ntimes
-        REAL*8, INTENT(IN), DIMENSION(ntimes) :: times, values
-
-        IF (.NOT. HOST_MODEL_SET) THEN
-            PRINT*, "WARNING: configure_hostcluster_model must be called before parameter overrides"
-            RETURN
-        END IF
-
-        IF (param_index < 1 .OR. param_index > HOST_NPARAMS) THEN
-            PRINT*, "WARNING: configure_hostcluster_model_param_table invalid param_index"
-            RETURN
-        END IF
-
-        IF (ntimes < 2) THEN
-            PRINT*, "WARNING: configure_hostcluster_model_param_table requires ntimes >= 2"
-            RETURN
-        END IF
-
-        IF (.NOT. is_strictly_monotonic(times)) THEN
-            PRINT*, "WARNING: configure_hostcluster_model_param_table requires strictly monotonic times"
-            RETURN
-        END IF
-
-        IF (host_param_has_table(param_index)) THEN
-            PRINT*, "WARNING: parameter in time being updated"
-        END IF
-
-        CALL ensure_table_capacity(ntimes)
-        host_param_table_times(:, param_index) = 0.0D0
-        host_param_table_values(:, param_index) = 0.0D0
-        host_param_table_times(1:ntimes, param_index) = times
-        host_param_table_values(1:ntimes, param_index) = values
-        host_param_table_ntimes(param_index) = ntimes
-        host_param_has_table(param_index) = .TRUE.
-
-        HOST_FINALIZED = .FALSE.
-    END SUBROUTINE configure_hostcluster_model_param_table
-
 
 
     SUBROUTINE update_hostcluster_state(t)
@@ -470,7 +362,6 @@ CONTAINS
         IF (.NOT. ALLOCATED(host_times)) RETURN
 
         CALL query_current_kinematics(t)
-        CALL query_current_structural_params(t)
 
     END SUBROUTINE update_hostcluster_state
 
@@ -487,127 +378,6 @@ CONTAINS
     END SUBROUTINE force_hostcluster_on_particles
 
 
-    SUBROUTINE query_current_structural_params(t)
-        REAL*8, INTENT(IN) :: t
-        INTEGER :: i
-        ! this could be optomised with a derived type and pointer registery, but not f
-
-        IF (.NOT. ALLOCATED(host_params_current)) RETURN
-        host_params_current = host_params_constant
-
-        DO i = 1, HOST_NPARAMS
-            IF (host_param_has_table(i)) THEN
-                host_params_current(i) = interp_table_value(i, t)
-            ELSE IF (host_param_has_law(i)) THEN
-                ! Law support is intentionally deferred; keep baseline for now.
-            END IF
-        END DO
-    END SUBROUTINE query_current_structural_params
-
-    REAL*8 FUNCTION interp_table_value(param_index, t)
-        INTEGER, INTENT(IN) :: param_index
-        REAL*8, INTENT(IN) :: t
-        INTEGER :: ntime, j
-        REAL*8 :: t0, t1, alpha
-
-        
-        interp_table_value = host_params_constant(param_index)
-        ntime = host_param_table_ntimes(param_index)
-        IF (ntime < 2) RETURN
-
-        IF (t <= host_param_table_times(1, param_index)) THEN
-            interp_table_value = host_param_table_values(1, param_index)
-            RETURN
-        END IF
-        IF (t >= host_param_table_times(ntime, param_index)) THEN
-            interp_table_value = host_param_table_values(ntime, param_index)
-            RETURN
-        END IF
-
-        DO j = 1, ntime - 1
-            t0 = host_param_table_times(j, param_index)
-            t1 = host_param_table_times(j + 1, param_index)
-            IF ((t0 <= t .AND. t <= t1) .OR. (t1 <= t .AND. t <= t0)) THEN
-                alpha = (t - t0) / (t1 - t0)
-                interp_table_value = (1.0D0 - alpha) * host_param_table_values(j, param_index) + &
-                                     alpha * host_param_table_values(j + 1, param_index)
-                RETURN
-            END IF
-        END DO
-    END FUNCTION interp_table_value
-
-
-    SUBROUTINE allocate_param_state(nparams)
-        INTEGER, INTENT(IN) :: nparams
-
-        IF (ALLOCATED(host_params_constant)) DEALLOCATE(host_params_constant)
-        IF (ALLOCATED(host_params_current)) DEALLOCATE(host_params_current)
-        IF (ALLOCATED(host_param_has_table)) DEALLOCATE(host_param_has_table)
-        IF (ALLOCATED(host_param_has_law)) DEALLOCATE(host_param_has_law)
-        IF (ALLOCATED(host_param_table_ntimes)) DEALLOCATE(host_param_table_ntimes)
-        IF (ALLOCATED(host_param_law_nparams)) DEALLOCATE(host_param_law_nparams)
-        IF (ALLOCATED(host_param_law_name)) DEALLOCATE(host_param_law_name)
-
-        ALLOCATE(host_params_constant(nparams), host_params_current(nparams))
-        ALLOCATE(host_param_has_table(nparams), host_param_has_law(nparams))
-        ALLOCATE(host_param_table_ntimes(nparams), host_param_law_nparams(nparams))
-        ALLOCATE(host_param_law_name(nparams))
-
-        host_param_has_table = .FALSE.
-        host_param_has_law = .FALSE.
-        host_param_table_ntimes = 0
-        host_param_law_nparams = 0
-        host_param_law_name = ""
-
-        IF (ALLOCATED(host_param_table_times)) DEALLOCATE(host_param_table_times)
-        IF (ALLOCATED(host_param_table_values)) DEALLOCATE(host_param_table_values)
-        IF (ALLOCATED(host_param_law_values)) DEALLOCATE(host_param_law_values)
-        host_param_table_capacity = 0
-        host_param_law_capacity = 0
-    END SUBROUTINE allocate_param_state
-
-    SUBROUTINE ensure_table_capacity(ntimes)
-        INTEGER, INTENT(IN) :: ntimes
-        REAL*8, DIMENSION(:,:), ALLOCATABLE :: tmp_times, tmp_values
-
-        IF (ntimes <= host_param_table_capacity .AND. ALLOCATED(host_param_table_times)) RETURN
-
-        ALLOCATE(tmp_times(ntimes, HOST_NPARAMS), tmp_values(ntimes, HOST_NPARAMS))
-        tmp_times = 0.0D0
-        tmp_values = 0.0D0
-
-        IF (ALLOCATED(host_param_table_times)) THEN
-            tmp_times(1:host_param_table_capacity, :) = host_param_table_times
-            tmp_values(1:host_param_table_capacity, :) = host_param_table_values
-            DEALLOCATE(host_param_table_times)
-            DEALLOCATE(host_param_table_values)
-        END IF
-
-        ALLOCATE(host_param_table_times(ntimes, HOST_NPARAMS), host_param_table_values(ntimes, HOST_NPARAMS))
-        host_param_table_times = tmp_times
-        host_param_table_values = tmp_values
-        DEALLOCATE(tmp_times, tmp_values)
-        host_param_table_capacity = ntimes
-    END SUBROUTINE ensure_table_capacity
-
-    SUBROUTINE ensure_law_capacity(nparams)
-        INTEGER, INTENT(IN) :: nparams
-        REAL*8, DIMENSION(:,:), ALLOCATABLE :: tmp_law
-
-        IF (nparams <= host_param_law_capacity .AND. ALLOCATED(host_param_law_values)) RETURN
-
-        ALLOCATE(tmp_law(nparams, HOST_NPARAMS))
-        tmp_law = 0.0D0
-        IF (ALLOCATED(host_param_law_values)) THEN
-            tmp_law(1:host_param_law_capacity, :) = host_param_law_values
-            DEALLOCATE(host_param_law_values)
-        END IF
-
-        ALLOCATE(host_param_law_values(nparams, HOST_NPARAMS))
-        host_param_law_values = tmp_law
-        DEALLOCATE(tmp_law)
-        host_param_law_capacity = nparams
-    END SUBROUTINE ensure_law_capacity
 
     ! FORCES
     SUBROUTINE plummer_force(params, n, x, y, z, force)

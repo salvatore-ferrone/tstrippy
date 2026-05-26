@@ -11,8 +11,6 @@ MODULE simulator
                            hostcluster_add => add_hostcluster, &
                            hostcluster_configure_kinematics => configure_hostcluster_kinematics, &
                            hostcluster_configure_model => configure_hostcluster_model, &
-                           hostcluster_configure_param_law => configure_hostcluster_model_param_law, &
-                           hostcluster_configure_param_table => configure_hostcluster_model_param_table, &
                            hostcluster_finalize => finalize_hostcluster, &
                            hostcluster_update_state => update_hostcluster_state, &
                            hostcluster_force_on_particles => force_hostcluster_on_particles, &
@@ -688,30 +686,6 @@ MODULE simulator
         state%host_enabled = HOST_REGISTERED
         state%finalized = .FALSE.
     END SUBROUTINE configure_hostcluster_model
-
-    SUBROUTINE configure_hostcluster_model_param_law(param_index, law_name, law_params, nparams)
-        INTEGER, INTENT(IN) :: param_index
-        CHARACTER(LEN=*), INTENT(IN) :: law_name
-        INTEGER, INTENT(IN) :: nparams
-        REAL*8, INTENT(IN), DIMENSION(nparams) :: law_params
-
-        CALL hostcluster_configure_param_law(param_index, law_name, law_params, nparams)
-        CALL clear_force_registry()
-        state%host_enabled = HOST_REGISTERED
-        state%finalized = .FALSE.
-    END SUBROUTINE configure_hostcluster_model_param_law
-
-    SUBROUTINE configure_hostcluster_model_param_table(param_index, times, values, ntimes)
-        INTEGER, INTENT(IN) :: param_index
-        INTEGER, INTENT(IN) :: ntimes
-        REAL*8, INTENT(IN), DIMENSION(ntimes) :: times
-        REAL*8, INTENT(IN), DIMENSION(ntimes) :: values
-
-        CALL hostcluster_configure_param_table(param_index, times, values, ntimes)
-        CALL clear_force_registry()
-        state%host_enabled = HOST_REGISTERED
-        state%finalized = .FALSE.
-    END SUBROUTINE configure_hostcluster_model_param_table
 
     SUBROUTINE finalize_hostcluster()
         CALL hostcluster_finalize()

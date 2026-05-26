@@ -67,8 +67,8 @@ MODULE hostcluster
 
 
     ! set the procedure for setting the force and potential evaluator
-    PROCEDURE(force_eval_iface), pointer, private :: force => NULL()
-    PROCEDURE(potential_eval_iface), pointer, private :: potential => NULL()
+    PROCEDURE(force_eval_iface), pointer, private :: model_force => NULL()
+    PROCEDURE(potential_eval_iface), pointer, private :: model_potential => NULL()
 
     INTEGER, PUBLIC :: host_current_kinematics_time_index = 1 
     REAL*8, PUBLIC :: host_x_current = 0.0D0
@@ -85,7 +85,7 @@ MODULE hostcluster
     PUBLIC :: configure_hostcluster_model
     PUBLIC :: finalize_hostcluster
     PUBLIC :: update_hostcluster_state
-    PUBLIC :: force_hostcluster_on_particles
+    PUBLIC :: eval_force
 
     REAL*8, PARAMETER, PRIVATE :: G_DEFAULT = 4.30091727D-6
     REAL*8, PUBLIC :: G_hostcluster = G_DEFAULT
@@ -347,12 +347,12 @@ CONTAINS
 
         SELECT CASE (TRIM(MODEL_NAME))
         CASE ("plummer")
-            force => plummer_force
-            potential => plummer_potential
+            model_force => plummer_force
+            model_potential => plummer_potential
         CASE DEFAULT
             PRINT*, "ERROR: unknown hostcluster model: ", TRIM(model_name)
-            NULLIFY(force)
-            NULLIFY(potential)
+            NULLIFY(model_force)
+            NULLIFY(model_potential)
         END SELECT
 
         HOST_MODEL_SET = .TRUE.
@@ -375,7 +375,6 @@ CONTAINS
 
     end function value_at   
 
-
     SUBROUTINE update_hostcluster_state(t)
         REAL*8, INTENT(IN) :: t
 
@@ -386,21 +385,30 @@ CONTAINS
 
     END SUBROUTINE update_hostcluster_state
 
-    SUBROUTINE force_hostcluster_on_particles(nparticles, x, y, z, ax, ay, az, phi)
+    SUBROUTINE eval_force(nparticles, x, y, z, ax, ay, az)
         INTEGER, INTENT(IN) :: nparticles
         REAL*8, INTENT(IN), DIMENSION(nparticles) :: x, y, z
-        REAL*8, INTENT(OUT), DIMENSION(nparticles) :: ax, ay, az, phi
+        REAL*8, INTENT(OUT), DIMENSION(nparticles) :: ax, ay, az
+        REAL*8, DIMENSION(nparticles,3) :: force_temp
 
-        ! Base contract scaffold: backend physics is added in later phases.
-        ax = 0.0D0
-        ay = 0.0D0
-        az = 0.0D0
-        phi = 0.0D0
-    END SUBROUTINE force_hostcluster_on_particles
+        REAL*8, DIMENSION(nparticles) :: dx,dy,dz
+
+        dx = x - host_x_current
+        dy = y - host_y_current
+        dz = z - host_z_current
+
+        call model_force(nparticles,dx,dy,dz,force_temp)
+        ax = force_temp(:,1)
+        ay = force_temp(:,2)
+        az = force_temp(:,3)
+
+    END SUBROUTINE eval_force
 
 
 
-    ! FORCES
+    !!! MODELS 
+
+    ! ANALYTICAL MODELS
     SUBROUTINE plummer_force(n, x, y, z, force)
         
         INTEGER, INTENT(IN) :: n

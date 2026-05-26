@@ -13,7 +13,7 @@ MODULE simulator
                            hostcluster_configure_model => configure_hostcluster_model, &
                            hostcluster_finalize => finalize_hostcluster, &
                            hostcluster_update_state => update_hostcluster_state, &
-                           hostcluster_force_on_particles => force_hostcluster_on_particles, &
+                           hostcluster_eval_force => eval_force, &
                            hostcluster_set_gravitational_constant => set_gravitational_constant,&
                            HOST_REGISTERED, &
                            HOST_FINALIZED
@@ -111,7 +111,6 @@ MODULE simulator
     TYPE(force_provider_t), DIMENSION(MAX_ACTIVE_FORCE_PROVIDERS), PRIVATE :: active_force_providers
     INTEGER, PRIVATE :: nactive_force_providers = 0
 
-
     ! for saving some trajectories
     REAL*8, PARAMETER :: DEFAULT_ORBIT_RAM_LIMIT_MB = 1024.0D0
     REAL*8, PARAMETER :: DEFAULT_MAX_RAM_MB = 1024.0D0
@@ -122,7 +121,6 @@ MODULE simulator
     INTEGER, PRIVATE :: nvars_orbits = 6 ! phase space 
     REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: orbits
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: orbits_timestamps
-    
     
     ! persistent file handles for direct orbit writing (no per-step open/close)
     INTEGER, DIMENSION(:), ALLOCATABLE, PRIVATE :: orbit_file_units
@@ -551,6 +549,9 @@ MODULE simulator
             CALL scheme()  ! advances positions/velocities and increments current_step
             CALL system_clock(c_scheme_end)
             c_scheme_accum = c_scheme_accum + (c_scheme_end - c_scheme_start)
+
+            ! ADD NOTE
+            ! if there is a host cluster, check who is bound
 
             ! Save orbit snapshot every nskip_orbit_timestamps steps
             IF (n_particles_orbit > 0) THEN
@@ -1115,10 +1116,9 @@ MODULE simulator
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: xin, yin, zin
         REAL*8, INTENT(OUT), DIMENSION(n) :: ax, ay, az
-        REAL*8, DIMENSION(n) :: phi_host
 
         CALL hostcluster_update_state(t)
-        CALL hostcluster_force_on_particles(n, xin, yin, zin, ax, ay, az, phi_host)
+        CALL hostcluster_eval_force(n, xin, yin, zin, ax, ay, az)
     END SUBROUTINE hostcluster_force_provider
 
     SUBROUTINE evaluate_total_force(t, n, xin, yin, zin, ax, ay, az)

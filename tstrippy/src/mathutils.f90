@@ -10,6 +10,9 @@ MODULE mathutils
     PUBLIC :: gauss_legendre_nodes_weights
     PUBLIC :: bessel_j0_scalar
     PUBLIC :: bessel_j1_scalar
+    PUBLIC :: is_strictly_decreasing
+    PUBLIC :: is_strictly_increasing
+    PUBLIC :: is_strictly_monotonic
 
     CONTAINS
 
@@ -17,11 +20,48 @@ MODULE mathutils
         REAL*8, INTENT(IN) :: y0, y1, alpha
         REAL*8 :: y
         REAL*8 :: a
-
         ! Clamp alpha to avoid accidental extrapolation from caller roundoff.
         a = MAX(0.0D0, MIN(1.0D0, alpha))
         y = (1.0D0 - a) * y0 + a * y1
     END FUNCTION linear_interp_scalar
+
+    LOGICAL FUNCTION is_strictly_increasing(t)
+        REAL*8, DIMENSION(:), INTENT(IN) :: t
+        INTEGER :: i
+        is_strictly_increasing = .TRUE.
+        DO i = 1, SIZE(t)-1
+            IF (t(i+1) <= t(i)) THEN
+                is_strictly_increasing = .FALSE.
+                RETURN
+            END IF
+        END DO
+    END FUNCTION is_strictly_increasing
+    
+    LOGICAL FUNCTION is_strictly_decreasing(t)
+        REAL*8, DIMENSION(:), INTENT(IN) :: t
+        INTEGER :: i
+        is_strictly_decreasing = .TRUE.
+        DO i = 1, SIZE(t)-1
+            IF (t(i+1) >= t(i)) THEN
+                is_strictly_decreasing = .FALSE.
+                RETURN
+            END IF
+        END DO
+    END FUNCTION is_strictly_decreasing      
+
+    LOGICAL FUNCTION is_strictly_monotonic(arr)
+        REAL*8, INTENT(IN), DIMENSION(:) :: arr
+        INTEGER :: i
+        LOGICAL :: inc, dec
+
+        inc = .TRUE.
+        dec = .TRUE.
+        DO i = 1, SIZE(arr) - 1
+            IF (arr(i+1) <= arr(i)) inc = .FALSE.
+            IF (arr(i+1) >= arr(i)) dec = .FALSE.
+        END DO
+        is_strictly_monotonic = inc .OR. dec
+    END FUNCTION is_strictly_monotonic    
 
     FUNCTION bilinear_interp_2d(f00, f10, f01, f11, alphaR, alphaZ) RESULT(val)
         ! Bilinear interpolation given four corner values and two fractional
@@ -225,6 +265,6 @@ MODULE mathutils
         REAL*8, INTENT(IN) :: x
         REAL*8 :: y
         y = BESSEL_J1(x)
-    END FUNCTION bessel_j1_scalar
+    END FUNCTION bessel_j1_scalar    
 
 END MODULE mathutils

@@ -26,6 +26,34 @@ MODULE hostcluster
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_params_current
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_params_constant
 
+    ABSTRACT INTERFACE 
+    ! for the different laws that can be used for the time evolution of the structural parameters
+        SUBROUTINE parameter_law_iface(lawparams,time,param)
+            REAL*8, INTENT(IN), DIMENSION(:) :: lawparams 
+            REAL*8, INTENT(IN) :: time 
+            REAL*8, INTENT(OUT) :: param
+        END subroutine parameter_law_iface
+    END INTERFACE
+
+    ! make a derived type to handle the host parameters
+    TYPE, PRIVATE :: structural_parameter_t
+        CHARACTER(LEN=32) :: name 
+         ! 0: constant, 1: table, 2: law
+        INTEGER :: evolution_type = 0 ! default at constant 
+        REAL*8 :: initial_value ! the value extracted when `configure_hostcluster_model` is called    
+        ! table data
+        REAL*8, ALLOCATABLE :: timestamps(:)
+        INTEGER :: closest_timestamp = 0 
+        REAL*8, ALLOCATABLE :: values(:)
+        ! for a law
+        ! PROCEDURE(parameter_law_iface), POINTER, NOPASS :: law_eval => NULL() ! default to null
+        contains 
+            PROCEDURE :: value_at
+    END TYPE structural_parameter_t
+
+
+
+
     LOGICAL, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_param_has_table
     LOGICAL, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_param_has_law
     INTEGER, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_param_table_ntimes
@@ -67,6 +95,9 @@ MODULE hostcluster
 
 CONTAINS
 
+
+
+    !!! GENERAL MODULE ROUTINES 
     SUBROUTINE clear()
         IF (ALLOCATED(host_times)) DEALLOCATE(host_times)
         IF (ALLOCATED(host_x)) DEALLOCATE(host_x)
@@ -127,6 +158,35 @@ CONTAINS
         HOST_FINALIZED = .FALSE.
     END SUBROUTINE add_hostcluster
 
+    SUBROUTINE finalize_hostcluster()
+        HOST_FINALIZED = .FALSE.
+
+        IF (.NOT. HOST_REGISTERED) THEN
+            PRINT*, "WARNING: finalize_hostcluster called before add_hostcluster"
+            RETURN
+        END IF
+
+        IF (.NOT. HOST_KINEMATICS_SET) THEN
+            PRINT*, "WARNING: finalize_hostcluster requires host kinematics"
+            RETURN
+        END IF
+
+        IF (LEN_TRIM(HOST_BACKEND_NAME) < 1) THEN
+            PRINT*, "WARNING: finalize_hostcluster requires backend selection"
+            RETURN
+        END IF
+
+        IF (.NOT. HOST_MODEL_SET) THEN
+            PRINT*, "WARNING: finalize_hostcluster requires model and constant parameters"
+            RETURN
+        END IF
+
+        CALL query_current_structural_params(host_times(1))
+        HOST_FINALIZED = .TRUE.
+    END SUBROUTINE finalize_hostcluster
+
+
+    !!!! HANDELING THE KINEMATICS
     SUBROUTINE configure_hostcluster_kinematics(ntimes, t, x, y, z, vx, vy, vz)
         INTEGER, INTENT(IN) :: ntimes
         REAL*8, INTENT(IN), DIMENSION(ntimes) :: t, x, y, z, vx, vy, vz
@@ -177,6 +237,118 @@ CONTAINS
         HOST_KINEMATICS_SET = .TRUE.
         HOST_FINALIZED = .FALSE.
     END SUBROUTINE configure_hostcluster_kinematics
+
+    SUBROUTINE query_current_kinematics(query_time)
+        REAL*8, INTENT(IN) :: query_time
+        REAL*8 :: T0, TF
+        INTEGER :: n
+        REAL*8 :: alpha, dt
+        LOGICAL :: bracketted
+
+        n = SIZE(host_times)
+
+        if (kinematics_forward_orbit) then 
+            IF (query_time <= host_times(1)) THEN
+                host_x_current = host_x(1)
+                host_y_current = host_y(1)
+                host_z_current = host_z(1)
+                host_vx_current = host_vx(1)
+                host_vy_current = host_vy(1)
+                host_vz_current = host_vz(1)
+                RETURN
+            END IF
+            IF (query_time >= host_times(n)) THEN
+                host_x_current = host_x(n)
+                host_y_current = host_y(n)
+                host_z_current = host_z(n)
+                host_vx_current = host_vx(n)
+                host_vy_current = host_vy(n)
+                host_vz_current = host_vz(n)
+                RETURN
+            END IF
+        ELSE 
+            IF (query_time >= host_times(1)) THEN
+                host_x_current = host_x(1)
+                host_y_current = host_y(1)
+                host_z_current = host_z(1)
+                host_vx_current = host_vx(1)
+                host_vy_current = host_vy(1)
+                host_vz_current = host_vz(1)
+                RETURN
+            END IF
+            IF (query_time <= host_times(n)) THEN
+                host_x_current = host_x(n)
+                host_y_current = host_y(n)
+                host_z_current = host_z(n)
+                host_vx_current = host_vx(n)
+                host_vy_current = host_vy(n)
+                host_vz_current = host_vz(n)
+                RETURN
+            END IF            
+        END IF 
+
+        ! we expect that the user will query this function at timestamps that progress monotonically
+        ! therefore, we will save the most recent timestamp, and only advance it need be.
+        ! so the search time for this algorithm is O(1) to O(ntimestamps). Not bad. 
+        ! For the interpolation method, it doesn't matter if dt is positive or negative
+
+        ! check the timestamp time
+        T0 = host_times(host_current_kinematics_time_index)
+        TF = host_times(host_current_kinematics_time_index + 1)
+        dt = TF - T0
+        if (dt==0d0) THEN 
+            print*, "WARNING in query_current_kinematics. dt=0"
+        end if 
+
+        bracketted = (query_time.lt.T0).NEQV.(query_time.lt.TF)
+        ! NEQV is the same as XOR and simplifies this expression: 
+        ! since we don't know if a<b or b<a
+        ! ( (a<x) AND (x<b) ) OR ( (x<b) AND (x<a) )
+
+
+        do while (.NOT.bracketted)
+
+            if (kinematics_forward_orbit) then 
+                if (query_time.gt.TF) host_current_kinematics_time_index = host_current_kinematics_time_index + 1
+                if (query_time.lt.T0) host_current_kinematics_time_index = host_current_kinematics_time_index - 1 
+            else
+                if (query_time.lt.TF) host_current_kinematics_time_index = host_current_kinematics_time_index + 1
+                if (query_time.gt.t0) host_current_kinematics_time_index = host_current_kinematics_time_index - 1
+            END IF 
+
+            T0 = host_times(host_current_kinematics_time_index)
+            TF = host_times(host_current_kinematics_time_index + 1)
+            dt = TF - T0
+            if (dt==0d0) THEN 
+                print*, "WARNING in query_current_kinematics. dt=0"
+            end if             
+            bracketted = (query_time.lt.T0).NEQV.(query_time.lt.TF)
+        END DO 
+        alpha = (query_time - T0) / dt
+        host_x_current = linear_interp_scalar(host_x(host_current_kinematics_time_index),host_x(host_current_kinematics_time_index+1), alpha )
+        host_y_current = linear_interp_scalar(host_y(host_current_kinematics_time_index),host_y(host_current_kinematics_time_index+1), alpha )
+        host_z_current = linear_interp_scalar(host_z(host_current_kinematics_time_index),host_z(host_current_kinematics_time_index+1), alpha )
+        host_vx_current = linear_interp_scalar(host_vx(host_current_kinematics_time_index),host_vx(host_current_kinematics_time_index+1), alpha )
+        host_vy_current = linear_interp_scalar(host_vy(host_current_kinematics_time_index),host_vy(host_current_kinematics_time_index+1), alpha )
+        host_vz_current = linear_interp_scalar(host_vz(host_current_kinematics_time_index),host_vz(host_current_kinematics_time_index+1), alpha )
+    END SUBROUTINE query_current_kinematics
+
+
+    !!!! ROUTINES FOR HANDLING CHANGING STRUCTURAL PARAMETERS 
+    REAL*8 FUNCTION value_at(self, t)
+        CLASS(structural_parameter_t), INTENT(IN) :: self 
+        REAL*8, INTENT(IN) :: t 
+
+        SELECT CASE (self%evolution_type)
+        CASE (0)
+            value_at = self%initial_value
+        case(1)
+            ! interpolate
+        CASE DEFAULT
+            value_at = self%initial_value
+        END SELECT
+
+    end function value_at   
 
     SUBROUTINE configure_hostcluster_model(model_name, params, nparams)
         CHARACTER(LEN=*), INTENT(IN) :: model_name
@@ -289,32 +461,7 @@ CONTAINS
         HOST_FINALIZED = .FALSE.
     END SUBROUTINE configure_hostcluster_model_param_table
 
-    SUBROUTINE finalize_hostcluster()
-        HOST_FINALIZED = .FALSE.
 
-        IF (.NOT. HOST_REGISTERED) THEN
-            PRINT*, "WARNING: finalize_hostcluster called before add_hostcluster"
-            RETURN
-        END IF
-
-        IF (.NOT. HOST_KINEMATICS_SET) THEN
-            PRINT*, "WARNING: finalize_hostcluster requires host kinematics"
-            RETURN
-        END IF
-
-        IF (LEN_TRIM(HOST_BACKEND_NAME) < 1) THEN
-            PRINT*, "WARNING: finalize_hostcluster requires backend selection"
-            RETURN
-        END IF
-
-        IF (.NOT. HOST_MODEL_SET) THEN
-            PRINT*, "WARNING: finalize_hostcluster requires model and constant parameters"
-            RETURN
-        END IF
-
-        CALL resolve_current_params(host_times(1))
-        HOST_FINALIZED = .TRUE.
-    END SUBROUTINE finalize_hostcluster
 
     SUBROUTINE update_hostcluster_state(t)
         REAL*8, INTENT(IN) :: t
@@ -322,10 +469,9 @@ CONTAINS
         IF (.NOT. HOST_FINALIZED) RETURN
         IF (.NOT. ALLOCATED(host_times)) RETURN
 
-        CALL sample_kinematics_at_time(t)
-        CALL resolve_current_params(t)
+        CALL query_current_kinematics(t)
+        CALL query_current_structural_params(t)
 
-        print*, t, ",", host_x_current
     END SUBROUTINE update_hostcluster_state
 
     SUBROUTINE force_hostcluster_on_particles(nparticles, x, y, z, ax, ay, az, phi)
@@ -340,106 +486,11 @@ CONTAINS
         phi = 0.0D0
     END SUBROUTINE force_hostcluster_on_particles
 
-    SUBROUTINE sample_kinematics_at_time(query_time)
-        REAL*8, INTENT(IN) :: query_time
-        REAL*8 :: T0, TF
-        INTEGER :: n
-        REAL*8 :: alpha, dt
-        LOGICAL :: bracketted
 
-        n = SIZE(host_times)
-
-        if (kinematics_forward_orbit) then 
-            IF (query_time <= host_times(1)) THEN
-                host_x_current = host_x(1)
-                host_y_current = host_y(1)
-                host_z_current = host_z(1)
-                host_vx_current = host_vx(1)
-                host_vy_current = host_vy(1)
-                host_vz_current = host_vz(1)
-                RETURN
-            END IF
-            IF (query_time >= host_times(n)) THEN
-                host_x_current = host_x(n)
-                host_y_current = host_y(n)
-                host_z_current = host_z(n)
-                host_vx_current = host_vx(n)
-                host_vy_current = host_vy(n)
-                host_vz_current = host_vz(n)
-                RETURN
-            END IF
-        ELSE 
-            IF (query_time >= host_times(1)) THEN
-                host_x_current = host_x(1)
-                host_y_current = host_y(1)
-                host_z_current = host_z(1)
-                host_vx_current = host_vx(1)
-                host_vy_current = host_vy(1)
-                host_vz_current = host_vz(1)
-                RETURN
-            END IF
-            IF (query_time <= host_times(n)) THEN
-                host_x_current = host_x(n)
-                host_y_current = host_y(n)
-                host_z_current = host_z(n)
-                host_vx_current = host_vx(n)
-                host_vy_current = host_vy(n)
-                host_vz_current = host_vz(n)
-                RETURN
-            END IF            
-        END IF 
-
-
-
-        ! we expect that the user will query this function at timestamps that progress monotonically
-        ! therefore, we will save the most recent timestamp, and only advance it need be.
-        ! so the search time for this algorithm is O(1) to O(ntimestamps). Not bad. 
-        ! For the interpolation method, it doesn't matter if dt is positive or negative
-
-        ! check the timestamp time
-        T0 = host_times(host_current_kinematics_time_index)
-        TF = host_times(host_current_kinematics_time_index + 1)
-        dt = TF - T0
-        if (dt==0d0) THEN 
-            print*, "WARNING in sample_kinematics_at_time. dt=0"
-        end if 
-
-        bracketted = (query_time.lt.T0).NEQV.(query_time.lt.TF)
-        ! NEQV is the same as XOR and simplifies this expression: 
-        ! since we don't know if a<b or b<a
-        ! ( (a<x) AND (x<b) ) OR ( (x<b) AND (x<a) )
-
-
-        do while (.NOT.bracketted)
-
-            if (kinematics_forward_orbit) then 
-                if (query_time.gt.TF) host_current_kinematics_time_index = host_current_kinematics_time_index + 1
-                if (query_time.lt.T0) host_current_kinematics_time_index = host_current_kinematics_time_index - 1 
-            else
-                if (query_time.lt.TF) host_current_kinematics_time_index = host_current_kinematics_time_index + 1
-                if (query_time.gt.t0) host_current_kinematics_time_index = host_current_kinematics_time_index - 1
-            END IF 
-
-            T0 = host_times(host_current_kinematics_time_index)
-            TF = host_times(host_current_kinematics_time_index + 1)
-            dt = TF - T0
-            if (dt==0d0) THEN 
-                print*, "WARNING in sample_kinematics_at_time. dt=0"
-            end if             
-            bracketted = (query_time.lt.T0).NEQV.(query_time.lt.TF)
-        END DO 
-        alpha = (query_time - T0) / dt
-        host_x_current = linear_interp_scalar(host_x(host_current_kinematics_time_index),host_x(host_current_kinematics_time_index+1), alpha )
-        host_y_current = linear_interp_scalar(host_y(host_current_kinematics_time_index),host_y(host_current_kinematics_time_index+1), alpha )
-        host_z_current = linear_interp_scalar(host_z(host_current_kinematics_time_index),host_z(host_current_kinematics_time_index+1), alpha )
-        host_vx_current = linear_interp_scalar(host_vx(host_current_kinematics_time_index),host_vx(host_current_kinematics_time_index+1), alpha )
-        host_vy_current = linear_interp_scalar(host_vy(host_current_kinematics_time_index),host_vy(host_current_kinematics_time_index+1), alpha )
-        host_vz_current = linear_interp_scalar(host_vz(host_current_kinematics_time_index),host_vz(host_current_kinematics_time_index+1), alpha )
-    END SUBROUTINE sample_kinematics_at_time
-
-    SUBROUTINE resolve_current_params(t)
+    SUBROUTINE query_current_structural_params(t)
         REAL*8, INTENT(IN) :: t
         INTEGER :: i
+        ! this could be optomised with a derived type and pointer registery, but not f
 
         IF (.NOT. ALLOCATED(host_params_current)) RETURN
         host_params_current = host_params_constant
@@ -451,7 +502,7 @@ CONTAINS
                 ! Law support is intentionally deferred; keep baseline for now.
             END IF
         END DO
-    END SUBROUTINE resolve_current_params
+    END SUBROUTINE query_current_structural_params
 
     REAL*8 FUNCTION interp_table_value(param_index, t)
         INTEGER, INTENT(IN) :: param_index
@@ -459,6 +510,7 @@ CONTAINS
         INTEGER :: ntime, j
         REAL*8 :: t0, t1, alpha
 
+        
         interp_table_value = host_params_constant(param_index)
         ntime = host_param_table_ntimes(param_index)
         IF (ntime < 2) RETURN

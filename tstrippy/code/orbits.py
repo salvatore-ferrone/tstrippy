@@ -4,7 +4,7 @@ A broad helper module for aiding with construcing orbits and the like
 
 import numpy as np 
 
-def apoapsis_shot(potential, params, radius, eccen, theta, phi, polar_mix, getVecs=False):
+def apoapsis_shot(force_model, params, radius, eccen, theta, phi, polar_mix, getVecs=False):
     """
     Generate initial position and velocity for an orbit launched from apogee.
     
@@ -14,9 +14,9 @@ def apoapsis_shot(potential, params, radius, eccen, theta, phi, polar_mix, getVe
     Parameters
     ----------
     potential : function 
-        tstrippy.potentials.pouliasis2017pii()
+        tstrippy.gravity.force_model()
     params : array-like
-        Potential parameters (from tstrippy.Parsers.pouliasis2017pii())
+        Potential parameters (from tstrippy.io.pouliasis2017pii())
     radius : float
         Distance from galactic center (kpc)
     eccen : float
@@ -51,7 +51,8 @@ def apoapsis_shot(potential, params, radius, eccen, theta, phi, polar_mix, getVe
     rvec = np.array([x, y, z])
     
     # Compute circular speed from the local force
-    fx, fy, fz, _ = potential(params, x, y, z)
+    force  = force_model(params, x, y, z)
+    fx, fy, fz = force[:,0],force[:,1],force[:,2]
     fmag = np.sqrt(fx**2 + fy**2 + fz**2)
     vcirc = np.sqrt(radius * fmag)
     

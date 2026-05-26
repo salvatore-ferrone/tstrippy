@@ -33,6 +33,20 @@ MODULE hostcluster
             REAL*8, INTENT(IN) :: time 
             REAL*8, INTENT(OUT) :: param
         END subroutine parameter_law_iface
+
+        SUBROUTINE force_eval_iface(n,x,y,z,force)
+            INTEGER, INTENT(IN) :: n
+            REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+            REAL*8, INTENT(OUT), DIMENSION(n,3) :: force            
+        END SUBROUTINE force_eval_iface
+
+        SUBROUTINE potential_eval_iface(n, x, y, z, phi)
+            INTEGER, INTENT(IN) :: n
+            REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+            REAL*8, INTENT(OUT), DIMENSION(n) :: phi
+        END SUBROUTINE potential_eval_iface
+
+
     END INTERFACE
 
     ! make a derived type to handle the host parameters
@@ -52,6 +66,9 @@ MODULE hostcluster
     END TYPE structural_parameter_t
 
 
+    ! set the procedure for setting the force and potential evaluator
+    PROCEDURE(force_eval_iface), pointer, private :: force => NULL()
+    PROCEDURE(potential_eval_iface), pointer, private :: potential => NULL()
 
     INTEGER, PUBLIC :: host_current_kinematics_time_index = 1 
     REAL*8, PUBLIC :: host_x_current = 0.0D0
@@ -74,12 +91,7 @@ MODULE hostcluster
     REAL*8, PUBLIC :: G_hostcluster = G_DEFAULT
     LOGICAL, PUBLIC :: G_IS_DEFAULT = .TRUE.
 
-
-
-
 CONTAINS
-
-
 
     !!! GENERAL MODULE ROUTINES 
     SUBROUTINE clear()
@@ -309,21 +321,6 @@ CONTAINS
 
 
     !!!! ROUTINES FOR HANDLING CHANGING STRUCTURAL PARAMETERS 
-    REAL*8 FUNCTION value_at(self, t)
-        CLASS(structural_parameter_t), INTENT(IN) :: self 
-        REAL*8, INTENT(IN) :: t 
-
-        SELECT CASE (self%evolution_type)
-        CASE (0)
-            value_at = self%initial_value
-        case(1)
-            ! interpolate
-        CASE DEFAULT
-            value_at = self%initial_value
-        END SELECT
-
-    end function value_at   
-
     SUBROUTINE configure_hostcluster_model(model_name, params, nparams)
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER, INTENT(IN) :: nparams
@@ -348,11 +345,35 @@ CONTAINS
         host_params_constant = params
         host_params_current = params
 
+        SELECT CASE (TRIM(MODEL_NAME))
+        CASE ("plummer")
+            force => plummer_force
+            potential => plummer_potential
+        CASE DEFAULT
+            PRINT*, "ERROR: unknown hostcluster model: ", TRIM(model_name)
+            NULLIFY(force)
+            NULLIFY(potential)
+        END SELECT
 
         HOST_MODEL_SET = .TRUE.
         HOST_NPARAMS = nparams
         HOST_FINALIZED = .FALSE.
     END SUBROUTINE configure_hostcluster_model
+
+    REAL*8 FUNCTION value_at(self, t)
+        CLASS(structural_parameter_t), INTENT(IN) :: self 
+        REAL*8, INTENT(IN) :: t 
+
+        SELECT CASE (self%evolution_type)
+        CASE (0)
+            value_at = self%initial_value
+        case(1)
+            ! interpolate
+        CASE DEFAULT
+            value_at = self%initial_value
+        END SELECT
+
+    end function value_at   
 
 
     SUBROUTINE update_hostcluster_state(t)
@@ -380,17 +401,16 @@ CONTAINS
 
 
     ! FORCES
-    SUBROUTINE plummer_force(params, n, x, y, z, force)
+    SUBROUTINE plummer_force(n, x, y, z, force)
         
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
         REAL*8, DIMENSION(n) :: r, amod
         REAL*8 :: m, b
 
-        m = params(1)
-        b = params(2)
+        m = host_params_current(1)
+        b = host_params_current(2)
         r = SQRT(x*x + y*y + z*z)
         amod = -G_hostcluster*m / (r*r + b*b)**1.5
 
@@ -399,17 +419,16 @@ CONTAINS
         force(:,3) = amod*z
     END SUBROUTINE plummer_force
 
-    SUBROUTINE plummer_potential(params, n, x, y, z, phi)
+    SUBROUTINE plummer_potential(n, x, y, z, phi)
         
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
-        REAL*8, INTENT(IN), DIMENSION(:) :: params
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
         REAL*8, DIMENSION(n) :: r
         REAL*8 :: m, b
 
-        m = params(1)
-        b = params(2)
+        m = host_params_current(1)
+        b = host_params_current(2)
         r = SQRT(x*x + y*y + z*z)
         phi = -G_hostcluster*m / SQRT(r*r + b*b)
     END SUBROUTINE plummer_potential

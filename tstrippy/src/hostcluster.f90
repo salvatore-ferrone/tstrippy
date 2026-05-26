@@ -324,6 +324,8 @@ CONTAINS
 
         CALL sample_kinematics_at_time(t)
         CALL resolve_current_params(t)
+
+        print*, t, ",", host_x_current
     END SUBROUTINE update_hostcluster_state
 
     SUBROUTINE force_hostcluster_on_particles(nparticles, x, y, z, ax, ay, az, phi)
@@ -426,7 +428,6 @@ CONTAINS
             end if             
             bracketted = (query_time.lt.T0).NEQV.(query_time.lt.TF)
         END DO 
-        ! Success is if the queery time is between [host_times(host_current_kinematics_time_index) host_times(host_current_kinematics_time_index + 1)]
         alpha = (query_time - T0) / dt
         host_x_current = linear_interp_scalar(host_x(host_current_kinematics_time_index),host_x(host_current_kinematics_time_index+1), alpha )
         host_y_current = linear_interp_scalar(host_y(host_current_kinematics_time_index),host_y(host_current_kinematics_time_index+1), alpha )

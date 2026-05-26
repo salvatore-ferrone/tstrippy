@@ -125,7 +125,6 @@ MODULE simulator
     REAL*8, DIMENSION(:,:,:), ALLOCATABLE, PUBLIC :: orbits
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: orbits_timestamps
     
-    !!!!! i/o
     
     ! persistent file handles for direct orbit writing (no per-step open/close)
     INTEGER, DIMENSION(:), ALLOCATABLE, PRIVATE :: orbit_file_units
@@ -720,42 +719,6 @@ MODULE simulator
         state%host_enabled = HOST_REGISTERED
         state%finalized = .FALSE.
     END SUBROUTINE finalize_hostcluster    
-
-    ! Backward-compatible wrappers
-    SUBROUTINE init_hostcluster_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
-        INTEGER, INTENT(IN) :: ntimes
-        REAL*8, INTENT(IN), DIMENSION(ntimes) :: t, xhost, yhost, zhost, vxhost, vyhost, vzhost
-        CALL configure_hostcluster_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
-    END SUBROUTINE init_hostcluster_kinematics
-
-    SUBROUTINE set_hostcluster_backend(model_name)
-        CHARACTER(LEN=*), INTENT(IN) :: model_name
-        PRINT*, "WARNING: set_hostcluster_backend is deprecated; use configure_hostcluster_model"
-    END SUBROUTINE set_hostcluster_backend
-
-    SUBROUTINE set_hostcluster_structure_constant(params, nparams)
-        INTEGER, INTENT(IN) :: nparams
-        REAL*8, INTENT(IN), DIMENSION(nparams) :: params
-        CALL configure_hostcluster_model("plummer", params, nparams)
-    END SUBROUTINE set_hostcluster_structure_constant
-
-    SUBROUTINE set_hostcluster_structure_law(law_name, law_params, nparams)
-        CHARACTER(LEN=*), INTENT(IN) :: law_name
-        INTEGER, INTENT(IN) :: nparams
-        REAL*8, INTENT(IN), DIMENSION(nparams) :: law_params
-        CALL configure_hostcluster_model_param_law(1, law_name, law_params, nparams)
-    END SUBROUTINE set_hostcluster_structure_law
-
-    SUBROUTINE set_hostcluster_structure_table(times, param_table, ntimes, nparams)
-        INTEGER, INTENT(IN) :: ntimes, nparams
-        REAL*8, INTENT(IN), DIMENSION(ntimes) :: times
-        REAL*8, INTENT(IN), DIMENSION(ntimes, nparams) :: param_table
-        INTEGER :: i
-
-        DO i = 1, nparams
-            CALL configure_hostcluster_model_param_table(i, times, param_table(:, i), ntimes)
-        END DO
-    END SUBROUTINE set_hostcluster_structure_table
 
     !!!! OUTPUTS
     SUBROUTINE initwritesnapshots(nskip, directory, basename)

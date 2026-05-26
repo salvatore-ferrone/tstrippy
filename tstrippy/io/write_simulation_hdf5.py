@@ -74,6 +74,46 @@ def write_simulation_hdf5(simulator, filename,
 # Group writers
 # ---------------------------------------------------------------------------
 
+def _write_hostcluster_group(f,simulator):
+    import platform
+    # extract the information about thoe host. Should include everything... 
+    print("IMPLEMENT SAVING THE HOST CLUSTER DATA")
+
+    # add the kinematics of the host's orbit 
+
+    # add the structural parameters and their evoultion 
+
+    # if there is a host cluster.
+    if not simulator.host_registered: 
+        return 
+
+    thost,xhost,yhost,zhost,vxhost,vyhost,vzhost=simulator.get_hostcluster_kinematics(simulator.n_host_orbit_time_stamps)
+    state=np.zeros((6,xhost.shape[0]))
+    state[0]=xhost
+    state[1]=yhost
+    state[2]=zhost
+    state[0+3]=vxhost
+    state[1+3]=vyhost
+    state[2+3]=vzhost
+
+    hostcluster_group = f.create_group("hostcluster")
+    kinematics_group = hostcluster_group.create_group("kinematics")
+    kinematics_group.create_dataset("state",data=state.astype(np.float32),
+                               compression="gzip", compression_opts=4)
+    kinematics_group.create_dataset("time",data=thost.astype(np.float32))
+
+    structure_group = hostcluster_group.create_group("structure")
+    model_name = simulator.get_hostcluster_modelname()
+    model_initial_params = simulator.get_hostcluster_initial_params()
+    structure_group.create_dataset("modelname", )
+    structure_group.create_dataset("initial_params", model_initial_params)
+    # what is below is for adding either laws or tables dependin on if a time evolution backend was added...
+    
+    # structure_group.create_dataset("param1", data=paramarray)
+    # structure_group.create_dataset("param2", data=paramarra)
+    # we want to transpose it to be [phase, time]
+
+
 def _write_meta_group(f, simulator):
     import platform
     grp = f.create_group("meta")

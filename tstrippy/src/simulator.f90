@@ -10,11 +10,12 @@ MODULE simulator
     USE hostcluster, ONLY: hostcluster_clear => clear, &
                            hostcluster_add => add_hostcluster, &
                            hostcluster_configure_kinematics => configure_hostcluster_kinematics, &
-                           hostcluster_configure_model => configure_hostcluster_model, &
+                           hostcluster_configure_model => configure_hostcluster_structure, &
                            hostcluster_finalize => finalize_hostcluster, &
                            hostcluster_update_state => update_hostcluster_state, &
                            hostcluster_eval_force => eval_force, &
                            hostcluster_set_gravitational_constant => set_gravitational_constant,&
+                           hostcluster_get_kinematics => get_kinematics,&
                            HOST_REGISTERED, &
                            HOST_FINALIZED
     USE mathutils, ONLY: is_strictly_increasing, is_strictly_decreasing
@@ -103,7 +104,7 @@ MODULE simulator
     REAL*8, DIMENSION(:), ALLOCATABLE, PUBLIC :: timestamps
     INTEGER, PRIVATE :: NSTEPS, current_step
     REAL*8, PUBLIC :: currenttime
-
+    
     REAL*8, PRIVATE :: yoshida_w, yoshida_c1, yoshida_c2, yoshida_c3, yoshida_c4
     REAL*8, PRIVATE :: yoshida_d1, yoshida_d2, yoshida_d3, yoshida_d4    
 
@@ -160,6 +161,9 @@ MODULE simulator
     ! PUBLIC :: simulator_cleargravitycomponents, simulator_set_gravitational_constant
     ! PUBLIC :: simulator_add_component, simulator_finalizegravity
     ! PUBLIC :: simulator_force, simulator_potential
+
+    INTEGER, PUBLIC :: N_HOST_ORBIT_TIME_STAMPS = 0
+
 
     CONTAINS 
     
@@ -382,6 +386,7 @@ MODULE simulator
         ! clear the modules
         call hostcluster_clear()
         call gravity_clear()
+        N_HOST_ORBIT_TIME_STAMPS = 0 
 
     END SUBROUTINE clear
 
@@ -674,9 +679,10 @@ MODULE simulator
         CALL clear_force_registry()
         state%host_enabled = HOST_REGISTERED
         state%finalized = .FALSE.
+        N_HOST_ORBIT_TIME_STAMPS = ntimes
     END SUBROUTINE configure_hostcluster_kinematics
 
-    SUBROUTINE configure_hostcluster_model(model_name, params, nparams)
+    SUBROUTINE configure_hostcluster_structure(model_name, params, nparams)
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER, INTENT(IN) :: nparams
         REAL*8, INTENT(IN), DIMENSION(nparams) :: params
@@ -686,7 +692,7 @@ MODULE simulator
         CALL clear_force_registry()
         state%host_enabled = HOST_REGISTERED
         state%finalized = .FALSE.
-    END SUBROUTINE configure_hostcluster_model
+    END SUBROUTINE configure_hostcluster_structure
 
     SUBROUTINE finalize_hostcluster()
         CALL hostcluster_finalize()
@@ -694,6 +700,18 @@ MODULE simulator
         state%host_enabled = HOST_REGISTERED
         state%finalized = .FALSE.
     END SUBROUTINE finalize_hostcluster    
+
+    SUBROUTINE get_hostcluster_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
+        INTEGER, INTENT(IN) :: ntimes
+        REAL*8, INTENT(OUT), DIMENSION(ntimes) :: t, xhost, yhost, zhost, vxhost, vyhost, vzhost
+        LOGICAL :: ok
+
+        CALL hostcluster_get_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost, ok)
+        IF (.NOT. ok) THEN
+            PRINT*, "ERROR: get_hostcluster_kinematics failed"
+        END IF
+    END SUBROUTINE get_hostcluster_kinematics
+
 
     !!!! OUTPUTS
     SUBROUTINE initwritesnapshots(nskip, directory, basename)

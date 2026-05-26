@@ -1,10 +1,10 @@
 MODULE hostcluster
     ! Contract (table-first, extensible for laws):
     ! 1) configure_hostcluster_kinematics(...) is required
-    ! 2) configure_hostcluster_model(model_name, params) sets constant baseline params
+    ! 2) configure_hostcluster_structure(model_name, params) sets constant baseline params
     ! 3) Per-parameter overrides are optional and replace previous values with a warning:
-    !      configure_hostcluster_model_param_table(param_index, times, values)
-    !      configure_hostcluster_model_param_law(param_index, law_name, law_parameters)
+    !      configure_hostcluster_structure_param_table(param_index, times, values)
+    !      configure_hostcluster_structure_param_law(param_index, law_name, law_parameters)
     ! 4) Per-parameter precedence at runtime: table > law(stub) > constant
     ! 5) finalize_hostcluster() validates lifecycle/state only (minimal physics policing)
     
@@ -54,7 +54,7 @@ MODULE hostcluster
         CHARACTER(LEN=32) :: name 
          ! 0: constant, 1: table, 2: law
         INTEGER :: evolution_type = 0 ! default at constant 
-        REAL*8 :: initial_value ! the value extracted when `configure_hostcluster_model` is called    
+        REAL*8 :: initial_value ! the value extracted when `configure_hostcluster_structure` is called    
         ! table data
         REAL*8, ALLOCATABLE :: timestamps(:)
         INTEGER :: closest_timestamp = 0 
@@ -82,10 +82,12 @@ MODULE hostcluster
     PUBLIC :: clear
     PUBLIC :: add_hostcluster
     PUBLIC :: configure_hostcluster_kinematics
-    PUBLIC :: configure_hostcluster_model
+    PUBLIC :: configure_hostcluster_structure
     PUBLIC :: finalize_hostcluster
     PUBLIC :: update_hostcluster_state
     PUBLIC :: eval_force
+    PUBLIC :: get_kinematics
+
 
     REAL*8, PARAMETER, PRIVATE :: G_DEFAULT = 4.30091727D-6
     REAL*8, PUBLIC :: G_hostcluster = G_DEFAULT
@@ -321,7 +323,7 @@ CONTAINS
 
 
     !!!! ROUTINES FOR HANDLING CHANGING STRUCTURAL PARAMETERS 
-    SUBROUTINE configure_hostcluster_model(model_name, params, nparams)
+    SUBROUTINE configure_hostcluster_structure(model_name, params, nparams)
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER, INTENT(IN) :: nparams
         REAL*8, INTENT(IN), DIMENSION(nparams) :: params
@@ -332,7 +334,7 @@ CONTAINS
         END IF
 
         IF (nparams < 1) THEN
-            PRINT*, "WARNING: configure_hostcluster_model requires nparams >= 1"
+            PRINT*, "WARNING: configure_hostcluster_structure requires nparams >= 1"
             RETURN
         END IF
 
@@ -358,7 +360,7 @@ CONTAINS
         HOST_MODEL_SET = .TRUE.
         HOST_NPARAMS = nparams
         HOST_FINALIZED = .FALSE.
-    END SUBROUTINE configure_hostcluster_model
+    END SUBROUTINE configure_hostcluster_structure
 
     REAL*8 FUNCTION value_at(self, t)
         CLASS(structural_parameter_t), INTENT(IN) :: self 
@@ -405,6 +407,39 @@ CONTAINS
     END SUBROUTINE eval_force
 
 
+    !! TO INTERFACE WITH SIMULATOR
+    ! in hostcluster.f90 (inside CONTAINS)
+    SUBROUTINE get_kinematics(ntimes, t, x, y, z, vx, vy, vz, ok)
+        INTEGER, INTENT(IN) :: ntimes
+        REAL*8, INTENT(OUT), DIMENSION(ntimes) :: t, x, y, z, vx, vy, vz
+        LOGICAL, INTENT(OUT) :: ok
+
+        ok = .FALSE.
+
+        IF (.NOT. HOST_REGISTERED) THEN
+            PRINT*, "WARNING: get_kinematics: host is not registered"
+            RETURN
+        END IF
+
+        IF (.NOT. ALLOCATED(host_times)) THEN
+            PRINT*, "WARNING: get_kinematics: host kinematics are not set"
+            RETURN
+        END IF
+
+        IF (SIZE(host_times) /= ntimes) THEN
+            PRINT*, "WARNING: get_kinematics: ntimes mismatch"
+            RETURN
+        END IF
+
+        t  = host_times
+        x  = host_x
+        y  = host_y
+        z  = host_z
+        vx = host_vx
+        vy = host_vy
+        vz = host_vz
+        ok = .TRUE.
+    END SUBROUTINE GET_KINEMATICS    
 
     !!! MODELS 
 

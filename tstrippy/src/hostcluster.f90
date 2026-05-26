@@ -485,47 +485,5 @@ CONTAINS
         host_param_law_capacity = nparams
     END SUBROUTINE ensure_law_capacity
 
-    ! Backward-compatible wrappers
-    SUBROUTINE init_hostcluster_kinematics(ntimes, t, x, y, z, vx, vy, vz)
-        INTEGER, INTENT(IN) :: ntimes
-        REAL*8, INTENT(IN), DIMENSION(ntimes) :: t, x, y, z, vx, vy, vz
-        CALL configure_hostcluster_kinematics(ntimes, t, x, y, z, vx, vy, vz)
-    END SUBROUTINE init_hostcluster_kinematics
-
-    SUBROUTINE set_hostcluster_backend(model_name)
-        CHARACTER(LEN=*), INTENT(IN) :: model_name
-        IF (.NOT. HOST_MODEL_SET) THEN
-            PRINT*, "WARNING: set_hostcluster_backend called before configure_hostcluster_model"
-            HOST_BACKEND_NAME = TRIM(model_name)
-            RETURN
-        END IF
-        PRINT*, "WARNING: set_hostcluster_backend is deprecated; use configure_hostcluster_model"
-        HOST_BACKEND_NAME = TRIM(model_name)
-        HOST_FINALIZED = .FALSE.
-    END SUBROUTINE set_hostcluster_backend
-
-    SUBROUTINE set_hostcluster_structure_constant(params, nparams)
-        INTEGER, INTENT(IN) :: nparams
-        REAL*8, INTENT(IN), DIMENSION(nparams) :: params
-        CALL configure_hostcluster_model(HOST_BACKEND_NAME, params, nparams)
-    END SUBROUTINE set_hostcluster_structure_constant
-
-    SUBROUTINE set_hostcluster_structure_law(law_name, law_params, nparams)
-        CHARACTER(LEN=*), INTENT(IN) :: law_name
-        INTEGER, INTENT(IN) :: nparams
-        REAL*8, INTENT(IN), DIMENSION(nparams) :: law_params
-        CALL configure_hostcluster_model_param_law(1, law_name, law_params, nparams)
-    END SUBROUTINE set_hostcluster_structure_law
-
-    SUBROUTINE set_hostcluster_structure_table(times, ptable, ntimes, nparams)
-        INTEGER, INTENT(IN) :: ntimes, nparams
-        REAL*8, INTENT(IN), DIMENSION(ntimes) :: times
-        REAL*8, INTENT(IN), DIMENSION(ntimes, nparams) :: ptable
-        INTEGER :: ip
-
-        DO ip = 1, MIN(nparams, HOST_NPARAMS)
-            CALL configure_hostcluster_model_param_table(ip, times, ptable(:, ip), ntimes)
-        END DO
-    END SUBROUTINE set_hostcluster_structure_table
 
 END MODULE hostcluster

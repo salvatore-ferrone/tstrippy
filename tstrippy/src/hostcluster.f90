@@ -54,12 +54,12 @@ MODULE hostcluster
     PUBLIC :: update_hostcluster_state
     PUBLIC :: force_hostcluster_on_particles
 
-    ! Backward-compatible names while simulator/test code migrates.
-    PUBLIC :: init_hostcluster_kinematics
-    PUBLIC :: set_hostcluster_backend
-    PUBLIC :: set_hostcluster_structure_constant
-    PUBLIC :: set_hostcluster_structure_law
-    PUBLIC :: set_hostcluster_structure_table
+    REAL*8, PARAMETER, PRIVATE :: G_DEFAULT = 4.30091727D-6
+    REAL*8, PUBLIC :: G_hostcluster = G_DEFAULT
+    LOGICAL, PUBLIC :: G_IS_DEFAULT = .TRUE.
+
+
+
 
 CONTAINS
 
@@ -87,6 +87,8 @@ CONTAINS
         HOST_FINALIZED = .FALSE.
         HOST_KINEMATICS_SET = .FALSE.
         HOST_MODEL_SET = .FALSE.
+        G_hostcluster = G_DEFAULT
+        G_IS_DEFAULT = .TRUE.
         HOST_NPARAMS = 0
         HOST_BACKEND_NAME = ""
         host_x_current = 0.0D0
@@ -98,6 +100,23 @@ CONTAINS
         host_param_table_capacity = 0
         host_param_law_capacity = 0
     END SUBROUTINE clear
+
+    SUBROUTINE set_gravitational_constant(g)
+
+        REAL*8, INTENT(IN) :: g
+        
+        IF (HOST_FINALIZED) THEN
+            WRITE(*,'(A)') "WARNING: set_gravitational_constant: cannot change G after finalize"
+            RETURN
+        END IF
+        IF (g <= 0.0D0) THEN
+            WRITE(*,'(A)') "WARNING: set_gravitational_constant: G must be positive"
+            RETURN
+        END IF
+        
+        G_hostcluster = g
+        G_IS_DEFAULT = .FALSE.
+    END SUBROUTINE set_gravitational_constant
 
     SUBROUTINE add_hostcluster()
         HOST_REGISTERED = .TRUE.
@@ -485,5 +504,39 @@ CONTAINS
         host_param_law_capacity = nparams
     END SUBROUTINE ensure_law_capacity
 
+    ! FORCES
+    SUBROUTINE plummer_force(params, n, x, y, z, force)
+        
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
+        REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
+        REAL*8, DIMENSION(n) :: r, amod
+        REAL*8 :: m, b
+
+        m = params(1)
+        b = params(2)
+        r = SQRT(x*x + y*y + z*z)
+        amod = -G_hostcluster*m / (r*r + b*b)**1.5
+
+        force(:,1) = amod*x
+        force(:,2) = amod*y
+        force(:,3) = amod*z
+    END SUBROUTINE plummer_force
+
+    SUBROUTINE plummer_potential(params, n, x, y, z, phi)
+        
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(IN), DIMENSION(:) :: params
+        REAL*8, INTENT(OUT), DIMENSION(n) :: phi
+        REAL*8, DIMENSION(n) :: r
+        REAL*8 :: m, b
+
+        m = params(1)
+        b = params(2)
+        r = SQRT(x*x + y*y + z*z)
+        phi = -G_hostcluster*m / SQRT(r*r + b*b)
+    END SUBROUTINE plummer_potential
 
 END MODULE hostcluster

@@ -16,6 +16,7 @@ MODULE simulator
                            hostcluster_finalize => finalize_hostcluster, &
                            hostcluster_update_state => update_hostcluster_state, &
                            hostcluster_force_on_particles => force_hostcluster_on_particles, &
+                           hostcluster_set_gravitational_constant => set_gravitational_constant,&
                            HOST_REGISTERED, &
                            HOST_FINALIZED
     ! UX: 
@@ -170,6 +171,7 @@ MODULE simulator
     SUBROUTINE set_gravitational_constant(g)
         REAL*8, INTENT(IN) :: g
 
+        CALL hostcluster_set_gravitational_constant(g)
         CALL gravity_set_gravitational_constant(g)
         CALL clear_force_registry()
         state%gravity_finalized = GRAVITY_FINALIZED

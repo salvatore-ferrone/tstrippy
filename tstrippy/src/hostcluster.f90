@@ -11,23 +11,22 @@ MODULE hostcluster
     USE mathutils, only : linear_interp_scalar, is_strictly_monotonic, is_strictly_decreasing
     IMPLICIT NONE
 
+    ! MODULE STATE VARIABLES 
     LOGICAL, PUBLIC :: HOST_REGISTERED = .FALSE.
     LOGICAL, PUBLIC :: HOST_FINALIZED = .FALSE.
     LOGICAL, PUBLIC :: HOST_KINEMATICS_SET = .FALSE.
     LOGICAL, PUBLIC :: HOST_MODEL_SET = .FALSE.
+    LOGICAL, PUBLIC :: KINEMATICS_FORWARD_ORBIT = .TRUE.
+    ! FOR THE STRUCTURAL PARAMETER DEFAULTS
     INTEGER, PUBLIC :: HOST_NPARAMS = 0
+    CHARACTER(LEN=64), PUBLIC :: HOST_MODEL_NAME = ""
 
-    CHARACTER(LEN=64), PUBLIC :: HOST_BACKEND_NAME = ""
+    REAL*8, PARAMETER, PRIVATE :: G_DEFAULT = 4.30091727D-6
+    REAL*8, PUBLIC  :: G_HOSTCLUSTER = G_DEFAULT
+    LOGICAL, PUBLIC :: G_IS_DEFAULT = .TRUE.
 
-    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_times
-    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_x, host_y, host_z
-    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_vx, host_vy, host_vz
-
-    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_params_current
-    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: host_params_constant
-
-    ABSTRACT INTERFACE 
     ! for the different laws that can be used for the time evolution of the structural parameters
+    ABSTRACT INTERFACE 
         SUBROUTINE parameter_law_iface(lawparams,time,param)
             REAL*8, INTENT(IN), DIMENSION(:) :: lawparams 
             REAL*8, INTENT(IN) :: time 
@@ -46,12 +45,11 @@ MODULE hostcluster
             REAL*8, INTENT(OUT), DIMENSION(n) :: phi
         END SUBROUTINE potential_eval_iface
 
-
     END INTERFACE
 
     ! make a derived type to handle the host parameters
     TYPE, PRIVATE :: structural_parameter_t
-        CHARACTER(LEN=32) :: name 
+        CHARACTER(LEN=64) :: name 
          ! 0: constant, 1: table, 2: law
         INTEGER :: evolution_type = 0 ! default at constant 
         REAL*8 :: initial_value ! the value extracted when `configure_hostcluster_structure` is called    
@@ -65,19 +63,26 @@ MODULE hostcluster
             PROCEDURE :: value_at
     END TYPE structural_parameter_t
 
-
     ! set the procedure for setting the force and potential evaluator
     PROCEDURE(force_eval_iface), pointer, private :: model_force => NULL()
     PROCEDURE(potential_eval_iface), pointer, private :: model_potential => NULL()
 
-    INTEGER, PUBLIC :: host_current_kinematics_time_index = 1 
-    REAL*8, PUBLIC :: host_x_current = 0.0D0
-    REAL*8, PUBLIC :: host_y_current = 0.0D0
-    REAL*8, PUBLIC :: host_z_current = 0.0D0
-    REAL*8, PUBLIC :: host_vx_current = 0.0D0
-    REAL*8, PUBLIC :: host_vy_current = 0.0D0
-    REAL*8, PUBLIC :: host_vz_current = 0.0D0
-    LOGICAL, PUBLIC :: kinematics_forward_orbit = .TRUE.
+
+    ! THE VARIABLES FOR THE KINEMATICS
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_TIMES
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_X, HOST_Y, HOST_Z
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_VX, HOST_VY, HOST_VZ
+
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_PARAMS_CURRENT
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_PARAMS_CONSTANT    
+
+    INTEGER, PUBLIC :: HOST_CURRENT_KINEMATICS_TIME_INDEX = 1 
+    REAL*8, PUBLIC  :: HOST_X_CURRENT = 0.0D0
+    REAL*8, PUBLIC  :: HOST_Y_CURRENT = 0.0D0
+    REAL*8, PUBLIC  :: HOST_Z_CURRENT = 0.0D0
+    REAL*8, PUBLIC  :: HOST_VX_CURRENT = 0.0D0
+    REAL*8, PUBLIC  :: HOST_VY_CURRENT = 0.0D0
+    REAL*8, PUBLIC  :: HOST_VZ_CURRENT = 0.0D0
 
     PUBLIC :: clear
     PUBLIC :: add_hostcluster
@@ -89,40 +94,36 @@ MODULE hostcluster
     PUBLIC :: get_kinematics
 
 
-    REAL*8, PARAMETER, PRIVATE :: G_DEFAULT = 4.30091727D-6
-    REAL*8, PUBLIC :: G_hostcluster = G_DEFAULT
-    LOGICAL, PUBLIC :: G_IS_DEFAULT = .TRUE.
-
 CONTAINS
 
     !!! GENERAL MODULE ROUTINES 
     SUBROUTINE clear()
-        IF (ALLOCATED(host_times)) DEALLOCATE(host_times)
-        IF (ALLOCATED(host_x)) DEALLOCATE(host_x)
-        IF (ALLOCATED(host_y)) DEALLOCATE(host_y)
-        IF (ALLOCATED(host_z)) DEALLOCATE(host_z)
-        IF (ALLOCATED(host_vx)) DEALLOCATE(host_vx)
-        IF (ALLOCATED(host_vy)) DEALLOCATE(host_vy)
-        IF (ALLOCATED(host_vz)) DEALLOCATE(host_vz)
+        IF (ALLOCATED(HOST_TIMES)) DEALLOCATE(HOST_TIMES)
+        IF (ALLOCATED(HOST_X)) DEALLOCATE(HOST_X)
+        IF (ALLOCATED(HOST_Y)) DEALLOCATE(HOST_Y)
+        IF (ALLOCATED(HOST_Z)) DEALLOCATE(HOST_Z)
+        IF (ALLOCATED(HOST_VX)) DEALLOCATE(HOST_VX)
+        IF (ALLOCATED(HOST_VY)) DEALLOCATE(HOST_VY)
+        IF (ALLOCATED(HOST_VZ)) DEALLOCATE(HOST_VZ)
 
-        IF (ALLOCATED(host_params_current)) DEALLOCATE(host_params_current)
-        IF (ALLOCATED(host_params_constant)) DEALLOCATE(host_params_constant)
+        IF (ALLOCATED(HOST_PARAMS_CURRENT)) DEALLOCATE(HOST_PARAMS_CURRENT)
+        IF (ALLOCATED(HOST_PARAMS_CONSTANT)) DEALLOCATE(HOST_PARAMS_CONSTANT)
 
 
         HOST_REGISTERED = .FALSE.
         HOST_FINALIZED = .FALSE.
         HOST_KINEMATICS_SET = .FALSE.
         HOST_MODEL_SET = .FALSE.
-        G_hostcluster = G_DEFAULT
+        G_HOSTCLUSTER = G_DEFAULT
         G_IS_DEFAULT = .TRUE.
         HOST_NPARAMS = 0
-        HOST_BACKEND_NAME = ""
-        host_x_current = 0.0D0
-        host_y_current = 0.0D0
-        host_z_current = 0.0D0
-        host_vx_current = 0.0D0
-        host_vy_current = 0.0D0
-        host_vz_current = 0.0D0
+        HOST_MODEL_NAME = ""
+        HOST_X_CURRENT = 0.0D0
+        HOST_Y_CURRENT = 0.0D0
+        HOST_Z_CURRENT = 0.0D0
+        HOST_VX_CURRENT = 0.0D0
+        HOST_VY_CURRENT = 0.0D0
+        HOST_VZ_CURRENT = 0.0D0
     END SUBROUTINE clear
 
     SUBROUTINE set_gravitational_constant(g)
@@ -138,7 +139,7 @@ CONTAINS
             RETURN
         END IF
         
-        G_hostcluster = g
+        G_HOSTCLUSTER = g
         G_IS_DEFAULT = .FALSE.
     END SUBROUTINE set_gravitational_constant
 
@@ -160,7 +161,7 @@ CONTAINS
             RETURN
         END IF
 
-        IF (LEN_TRIM(HOST_BACKEND_NAME) < 1) THEN
+        IF (LEN_TRIM(HOST_MODEL_NAME) < 1) THEN
             PRINT*, "WARNING: finalize_hostcluster requires backend selection"
             RETURN
         END IF
@@ -194,33 +195,33 @@ CONTAINS
             RETURN
         END IF
 
-        IF (ALLOCATED(host_times)) DEALLOCATE(host_times)
-        IF (ALLOCATED(host_x)) DEALLOCATE(host_x)
-        IF (ALLOCATED(host_y)) DEALLOCATE(host_y)
-        IF (ALLOCATED(host_z)) DEALLOCATE(host_z)
-        IF (ALLOCATED(host_vx)) DEALLOCATE(host_vx)
-        IF (ALLOCATED(host_vy)) DEALLOCATE(host_vy)
-        IF (ALLOCATED(host_vz)) DEALLOCATE(host_vz)
+        IF (ALLOCATED(HOST_TIMES)) DEALLOCATE(HOST_TIMES)
+        IF (ALLOCATED(HOST_X)) DEALLOCATE(HOST_X)
+        IF (ALLOCATED(HOST_Y)) DEALLOCATE(HOST_Y)
+        IF (ALLOCATED(HOST_Z)) DEALLOCATE(HOST_Z)
+        IF (ALLOCATED(HOST_VX)) DEALLOCATE(HOST_VX)
+        IF (ALLOCATED(HOST_VY)) DEALLOCATE(HOST_VY)
+        IF (ALLOCATED(HOST_VZ)) DEALLOCATE(HOST_VZ)
         
-        ALLOCATE(host_times(ntimes), host_x(ntimes), host_y(ntimes), host_z(ntimes))
-        ALLOCATE(host_vx(ntimes), host_vy(ntimes), host_vz(ntimes))
+        ALLOCATE(HOST_TIMES(ntimes), HOST_X(ntimes), HOST_Y(ntimes), HOST_Z(ntimes))
+        ALLOCATE(HOST_VX(ntimes), HOST_VY(ntimes), HOST_VZ(ntimes))
         
-        host_times = t
-        host_x = x
-        host_y = y
-        host_z = z
-        host_vx = vx
-        host_vy = vy
-        host_vz = vz
+        HOST_TIMES = t
+        HOST_X = x
+        HOST_Y = y
+        HOST_Z = z
+        HOST_VX = vx
+        HOST_VY = vy
+        HOST_VZ = vz
         
-        host_x_current = x(1)
-        host_y_current = y(1)
-        host_z_current = z(1)
-        host_vx_current = vx(1)
-        host_vy_current = vy(1)
-        host_vz_current = vz(1)
+        HOST_X_CURRENT = x(1)
+        HOST_Y_CURRENT = y(1)
+        HOST_Z_CURRENT = z(1)
+        HOST_VX_CURRENT = vx(1)
+        HOST_VY_CURRENT = vy(1)
+        HOST_VZ_CURRENT = vz(1)
         
-        if (is_strictly_decreasing(host_times)) kinematics_forward_orbit=.FALSE.
+        if (is_strictly_decreasing(HOST_TIMES)) KINEMATICS_FORWARD_ORBIT=.FALSE.
         
         HOST_KINEMATICS_SET = .TRUE.
         HOST_FINALIZED = .FALSE.
@@ -233,44 +234,44 @@ CONTAINS
         REAL*8 :: alpha, dt
         LOGICAL :: bracketted
 
-        n = SIZE(host_times)
+        n = SIZE(HOST_TIMES)
 
-        if (kinematics_forward_orbit) then 
-            IF (query_time <= host_times(1)) THEN
-                host_x_current = host_x(1)
-                host_y_current = host_y(1)
-                host_z_current = host_z(1)
-                host_vx_current = host_vx(1)
-                host_vy_current = host_vy(1)
-                host_vz_current = host_vz(1)
+        if (KINEMATICS_FORWARD_ORBIT) then 
+            IF (query_time <= HOST_TIMES(1)) THEN
+                HOST_X_CURRENT = HOST_X(1)
+                HOST_Y_CURRENT = HOST_Y(1)
+                HOST_Z_CURRENT = HOST_Z(1)
+                HOST_VX_CURRENT = HOST_VX(1)
+                HOST_VY_CURRENT = HOST_VY(1)
+                HOST_VZ_CURRENT = HOST_VZ(1)
                 RETURN
             END IF
-            IF (query_time >= host_times(n)) THEN
-                host_x_current = host_x(n)
-                host_y_current = host_y(n)
-                host_z_current = host_z(n)
-                host_vx_current = host_vx(n)
-                host_vy_current = host_vy(n)
-                host_vz_current = host_vz(n)
+            IF (query_time >= HOST_TIMES(n)) THEN
+                HOST_X_CURRENT = HOST_X(n)
+                HOST_Y_CURRENT = HOST_Y(n)
+                HOST_Z_CURRENT = HOST_Z(n)
+                HOST_VX_CURRENT = HOST_VX(n)
+                HOST_VY_CURRENT = HOST_VY(n)
+                HOST_VZ_CURRENT = HOST_VZ(n)
                 RETURN
             END IF
         ELSE 
-            IF (query_time >= host_times(1)) THEN
-                host_x_current = host_x(1)
-                host_y_current = host_y(1)
-                host_z_current = host_z(1)
-                host_vx_current = host_vx(1)
-                host_vy_current = host_vy(1)
-                host_vz_current = host_vz(1)
+            IF (query_time >= HOST_TIMES(1)) THEN
+                HOST_X_CURRENT = HOST_X(1)
+                HOST_Y_CURRENT = HOST_Y(1)
+                HOST_Z_CURRENT = HOST_Z(1)
+                HOST_VX_CURRENT = HOST_VX(1)
+                HOST_VY_CURRENT = HOST_VY(1)
+                HOST_VZ_CURRENT = HOST_VZ(1)
                 RETURN
             END IF
-            IF (query_time <= host_times(n)) THEN
-                host_x_current = host_x(n)
-                host_y_current = host_y(n)
-                host_z_current = host_z(n)
-                host_vx_current = host_vx(n)
-                host_vy_current = host_vy(n)
-                host_vz_current = host_vz(n)
+            IF (query_time <= HOST_TIMES(n)) THEN
+                HOST_X_CURRENT = HOST_X(n)
+                HOST_Y_CURRENT = HOST_Y(n)
+                HOST_Z_CURRENT = HOST_Z(n)
+                HOST_VX_CURRENT = HOST_VX(n)
+                HOST_VY_CURRENT = HOST_VY(n)
+                HOST_VZ_CURRENT = HOST_VZ(n)
                 RETURN
             END IF            
         END IF 
@@ -281,8 +282,8 @@ CONTAINS
         ! For the interpolation method, it doesn't matter if dt is positive or negative
 
         ! check the timestamp time
-        T0 = host_times(host_current_kinematics_time_index)
-        TF = host_times(host_current_kinematics_time_index + 1)
+        T0 = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX)
+        TF = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX + 1)
         dt = TF - T0
         if (dt==0d0) THEN 
             print*, "WARNING in query_current_kinematics. dt=0"
@@ -296,16 +297,16 @@ CONTAINS
 
         do while (.NOT.bracketted)
 
-            if (kinematics_forward_orbit) then 
-                if (query_time.gt.TF) host_current_kinematics_time_index = host_current_kinematics_time_index + 1
-                if (query_time.lt.T0) host_current_kinematics_time_index = host_current_kinematics_time_index - 1 
+            if (KINEMATICS_FORWARD_ORBIT) then 
+                if (query_time.gt.TF) HOST_CURRENT_KINEMATICS_TIME_INDEX = HOST_CURRENT_KINEMATICS_TIME_INDEX + 1
+                if (query_time.lt.T0) HOST_CURRENT_KINEMATICS_TIME_INDEX = HOST_CURRENT_KINEMATICS_TIME_INDEX - 1 
             else
-                if (query_time.lt.TF) host_current_kinematics_time_index = host_current_kinematics_time_index + 1
-                if (query_time.gt.t0) host_current_kinematics_time_index = host_current_kinematics_time_index - 1
+                if (query_time.lt.TF) HOST_CURRENT_KINEMATICS_TIME_INDEX = HOST_CURRENT_KINEMATICS_TIME_INDEX + 1
+                if (query_time.gt.t0) HOST_CURRENT_KINEMATICS_TIME_INDEX = HOST_CURRENT_KINEMATICS_TIME_INDEX - 1
             END IF 
 
-            T0 = host_times(host_current_kinematics_time_index)
-            TF = host_times(host_current_kinematics_time_index + 1)
+            T0 = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX)
+            TF = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX + 1)
             dt = TF - T0
             if (dt==0d0) THEN 
                 print*, "WARNING in query_current_kinematics. dt=0"
@@ -313,12 +314,12 @@ CONTAINS
             bracketted = (query_time.lt.T0).NEQV.(query_time.lt.TF)
         END DO 
         alpha = (query_time - T0) / dt
-        host_x_current = linear_interp_scalar(host_x(host_current_kinematics_time_index),host_x(host_current_kinematics_time_index+1), alpha )
-        host_y_current = linear_interp_scalar(host_y(host_current_kinematics_time_index),host_y(host_current_kinematics_time_index+1), alpha )
-        host_z_current = linear_interp_scalar(host_z(host_current_kinematics_time_index),host_z(host_current_kinematics_time_index+1), alpha )
-        host_vx_current = linear_interp_scalar(host_vx(host_current_kinematics_time_index),host_vx(host_current_kinematics_time_index+1), alpha )
-        host_vy_current = linear_interp_scalar(host_vy(host_current_kinematics_time_index),host_vy(host_current_kinematics_time_index+1), alpha )
-        host_vz_current = linear_interp_scalar(host_vz(host_current_kinematics_time_index),host_vz(host_current_kinematics_time_index+1), alpha )
+        HOST_X_CURRENT = linear_interp_scalar(HOST_X(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_X(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
+        HOST_Y_CURRENT = linear_interp_scalar(HOST_Y(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_Y(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
+        HOST_Z_CURRENT = linear_interp_scalar(HOST_Z(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_Z(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
+        HOST_VX_CURRENT = linear_interp_scalar(HOST_VX(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_VX(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
+        HOST_VY_CURRENT = linear_interp_scalar(HOST_VY(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_VY(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
+        HOST_VZ_CURRENT = linear_interp_scalar(HOST_VZ(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_VZ(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
     END SUBROUTINE query_current_kinematics
 
 
@@ -343,9 +344,12 @@ CONTAINS
         END IF
 
 
-        HOST_BACKEND_NAME = TRIM(model_name)
-        host_params_constant = params
-        host_params_current = params
+        HOST_MODEL_NAME = TRIM(model_name)
+        ! allocate my friends
+        ALLOCATE(HOST_PARAMS_CONSTANT(nparams))
+        ALLOCATE(HOST_PARAMS_CURRENT(nparams))
+        HOST_PARAMS_CONSTANT = params
+        HOST_PARAMS_CURRENT = params
 
         SELECT CASE (TRIM(MODEL_NAME))
         CASE ("plummer")
@@ -381,7 +385,7 @@ CONTAINS
         REAL*8, INTENT(IN) :: t
 
         IF (.NOT. HOST_FINALIZED) RETURN
-        IF (.NOT. ALLOCATED(host_times)) RETURN
+        IF (.NOT. ALLOCATED(HOST_TIMES)) RETURN
 
         CALL query_current_kinematics(t)
 
@@ -395,9 +399,9 @@ CONTAINS
 
         REAL*8, DIMENSION(nparticles) :: dx,dy,dz
 
-        dx = x - host_x_current
-        dy = y - host_y_current
-        dz = z - host_z_current
+        dx = x - HOST_X_CURRENT
+        dy = y - HOST_Y_CURRENT
+        dz = z - HOST_Z_CURRENT
 
         call model_force(nparticles,dx,dy,dz,force_temp)
         ax = force_temp(:,1)
@@ -421,25 +425,39 @@ CONTAINS
             RETURN
         END IF
 
-        IF (.NOT. ALLOCATED(host_times)) THEN
+        IF (.NOT. ALLOCATED(HOST_TIMES)) THEN
             PRINT*, "WARNING: get_kinematics: host kinematics are not set"
             RETURN
         END IF
 
-        IF (SIZE(host_times) /= ntimes) THEN
+        IF (SIZE(HOST_TIMES) /= ntimes) THEN
             PRINT*, "WARNING: get_kinematics: ntimes mismatch"
             RETURN
         END IF
 
-        t  = host_times
-        x  = host_x
-        y  = host_y
-        z  = host_z
-        vx = host_vx
-        vy = host_vy
-        vz = host_vz
+        t  = HOST_TIMES
+        x  = HOST_X
+        y  = HOST_Y
+        z  = HOST_Z
+        vx = HOST_VX
+        vy = HOST_VY
+        vz = HOST_VZ
         ok = .TRUE.
     END SUBROUTINE GET_KINEMATICS    
+
+    ! extract the structural params
+    subroutine get_structure(n_params,model_name,constant_params)
+        INTEGER, INTENT(IN)                         :: n_params
+        CHARACTER(LEN=64), INTENT(OUT)              :: model_name 
+        REAL*8, INTENT(OUT), DIMENSION(n_params)    :: constant_params
+
+        constant_params = HOST_PARAMS_CONSTANT
+        model_name = HOST_MODEL_NAME
+
+        
+
+
+    END SUBROUTINE get_structure
 
     !!! MODELS 
 
@@ -452,10 +470,10 @@ CONTAINS
         REAL*8, DIMENSION(n) :: r, amod
         REAL*8 :: m, b
 
-        m = host_params_current(1)
-        b = host_params_current(2)
+        m = HOST_PARAMS_CURRENT(1)
+        b = HOST_PARAMS_CURRENT(2)
         r = SQRT(x*x + y*y + z*z)
-        amod = -G_hostcluster*m / (r*r + b*b)**1.5
+        amod = -G_HOSTCLUSTER*m / (r*r + b*b)**1.5
 
         force(:,1) = amod*x
         force(:,2) = amod*y
@@ -470,10 +488,10 @@ CONTAINS
         REAL*8, DIMENSION(n) :: r
         REAL*8 :: m, b
 
-        m = host_params_current(1)
-        b = host_params_current(2)
+        m = HOST_PARAMS_CURRENT(1)
+        b = HOST_PARAMS_CURRENT(2)
         r = SQRT(x*x + y*y + z*z)
-        phi = -G_hostcluster*m / SQRT(r*r + b*b)
+        phi = -G_HOSTCLUSTER*m / SQRT(r*r + b*b)
     END SUBROUTINE plummer_potential
 
 END MODULE hostcluster

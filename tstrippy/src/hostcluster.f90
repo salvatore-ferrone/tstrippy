@@ -68,7 +68,10 @@ MODULE hostcluster
     INTEGER, PUBLIC :: HOST_NPARAMS = 0
     CHARACTER(LEN=64), PUBLIC :: HOST_MODEL_NAME = ""
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_PARAMS_CURRENT
-    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_PARAMS_CONSTANT        
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_PARAMS_CONSTANT
+    INTEGER, PARAMETER, PRIVATE :: MAX_STRUCTURE_PARAMETERS_HANDLERS = 16
+    ! cannot have a deffered dimension
+    TYPE(structural_parameter_t), DIMENSION(MAX_STRUCTURE_PARAMETERS_HANDLERS) :: STRUCTURE_PARAMETERS 
 
 
     ! THE VARIABLES FOR THE KINEMATICS
@@ -174,6 +177,31 @@ CONTAINS
         HOST_FINALIZED = .TRUE.
     END SUBROUTINE finalize_hostcluster
 
+    SUBROUTINE update_hostcluster_state(t)
+        REAL*8, INTENT(IN) :: t
+        IF (.NOT. HOST_FINALIZED) RETURN
+        IF (.NOT. ALLOCATED(HOST_TIMES)) RETURN
+        CALL query_current_kinematics(t)
+    END SUBROUTINE update_hostcluster_state
+
+    SUBROUTINE eval_force(nparticles, x, y, z, ax, ay, az)
+        INTEGER, INTENT(IN) :: nparticles
+        REAL*8, INTENT(IN), DIMENSION(nparticles) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(nparticles) :: ax, ay, az
+        REAL*8, DIMENSION(nparticles,3) :: force_temp
+
+        REAL*8, DIMENSION(nparticles) :: dx,dy,dz
+
+        dx = x - HOST_X_CURRENT
+        dy = y - HOST_Y_CURRENT
+        dz = z - HOST_Z_CURRENT
+
+        call model_force(nparticles,dx,dy,dz,force_temp)
+        ax = force_temp(:,1)
+        ay = force_temp(:,2)
+        az = force_temp(:,3)
+
+    END SUBROUTINE eval_force    
 
     !!!! HANDELING THE KINEMATICS
     SUBROUTINE configure_hostcluster_kinematics(ntimes, t, x, y, z, vx, vy, vz)
@@ -255,6 +283,7 @@ CONTAINS
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER, INTENT(IN) :: nparams
         REAL*8, INTENT(IN), DIMENSION(nparams) :: params
+        INTEGER :: i 
 
         IF (.NOT. HOST_REGISTERED) THEN
             PRINT*, "WARNING: hostcluster not registered. Call add_hostcluster first"
@@ -290,8 +319,39 @@ CONTAINS
         HOST_STRUCTURE_SET = .TRUE.
         HOST_NPARAMS = nparams
         HOST_FINALIZED = .FALSE.
+
+        do i = 1,HOST_NPARAMS
+            STRUCTURE_PARAMETERS(i)%initial_value=params(i)
+        END DO 
+
     END SUBROUTINE configure_hostcluster_structure
 
+    SUBROUTINE configure_hostcluster_structure_parameter_table(index,ntimes,timestamps,values)
+        INTEGER, INTENT(IN) :: index, ntimes
+        REAL*8, INTENT(IN), DIMENSION(ntimes) :: timestamps,values
+
+        IF (.NOT.HOST_STRUCTURE_SET) THEN
+            PRINT*, "ERROR IN configure_hostcluster_structure_parameter_table"
+            PRINT*, "   call configure_hostcluster_structure first"
+        END IF 
+
+        IF (index.gt.HOST_NPARAMS) THEN 
+            print*, "ERROR IN configure_hostcluster_structure_parameter_table"
+            print*, "   index.gt.HOST_NPARAMS"
+            RETURN 
+        END IF
+
+        IF (INDEX.LT.1) THEN 
+            PRINT*, "ERROR IN configure_hostcluster_structure_parameter_table"
+            print*, "INDEX must be >0 "
+        END IF 
+
+        STRUCTURE_PARAMETERS(index)%values = values 
+        STRUCTURE_PARAMETERS(index)%timestamps = timestamps 
+        STRUCTURE_PARAMETERS(INDEX)%evolution_type = 1 
+
+    END SUBROUTINE configure_hostcluster_structure_parameter_table
+    ! wire a specific parameter 
     REAL*8 FUNCTION value_at(self, t)
         CLASS(structural_parameter_t), INTENT(IN) :: self 
         REAL*8, INTENT(IN) :: t 
@@ -306,35 +366,6 @@ CONTAINS
         END SELECT
 
     end function value_at   
-
-    SUBROUTINE update_hostcluster_state(t)
-        REAL*8, INTENT(IN) :: t
-
-        IF (.NOT. HOST_FINALIZED) RETURN
-        IF (.NOT. ALLOCATED(HOST_TIMES)) RETURN
-
-        CALL query_current_kinematics(t)
-
-    END SUBROUTINE update_hostcluster_state
-
-    SUBROUTINE eval_force(nparticles, x, y, z, ax, ay, az)
-        INTEGER, INTENT(IN) :: nparticles
-        REAL*8, INTENT(IN), DIMENSION(nparticles) :: x, y, z
-        REAL*8, INTENT(OUT), DIMENSION(nparticles) :: ax, ay, az
-        REAL*8, DIMENSION(nparticles,3) :: force_temp
-
-        REAL*8, DIMENSION(nparticles) :: dx,dy,dz
-
-        dx = x - HOST_X_CURRENT
-        dy = y - HOST_Y_CURRENT
-        dz = z - HOST_Z_CURRENT
-
-        call model_force(nparticles,dx,dy,dz,force_temp)
-        ax = force_temp(:,1)
-        ay = force_temp(:,2)
-        az = force_temp(:,3)
-
-    END SUBROUTINE eval_force
 
 
     !! TO INTERFACE WITH SIMULATOR

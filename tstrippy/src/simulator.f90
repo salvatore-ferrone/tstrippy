@@ -7,16 +7,17 @@ MODULE simulator
                        gravity_potential => potential, &
                        GRAVITY_FINALIZED, &
                        GRAVITY_NCOMP
-    USE hostcluster, ONLY: hostcluster_clear => clear, &
-                           hostcluster_add => add_hostcluster, &
+    USE hostcluster, ONLY: hostcluster_clear                => clear, &
+                           hostcluster_add                  => add_hostcluster, &
                            hostcluster_configure_kinematics => configure_hostcluster_kinematics, &
-                           hostcluster_configure_model => configure_hostcluster_structure, &
-                           hostcluster_finalize => finalize_hostcluster, &
-                           hostcluster_update_state => update_hostcluster_state, &
-                           hostcluster_eval_force => eval_force, &
+                           hostcluster_configure_model      => configure_hostcluster_structure, &
+                           hostcluster_finalize             => finalize_hostcluster, &
+                           hostcluster_update_state         => update_hostcluster_state, &
+                           hostcluster_eval_force           => eval_force, &
                            hostcluster_set_gravitational_constant => set_gravitational_constant,&
-                           hostcluster_get_kinematics => get_kinematics,&
-                           hostcluster_get_structure => get_structure,&
+                           hostcluster_get_kinematics       => get_kinematics,&
+                           hostcluster_get_structure        => get_structure,&
+                           hostcluster_configure_structure_parameter_table => configure_hostcluster_structure_parameter_table,&
                            HOST_REGISTERED, &
                            HOST_FINALIZED
     USE mathutils, ONLY: is_strictly_increasing, is_strictly_decreasing
@@ -715,13 +716,14 @@ MODULE simulator
         INTEGER, INTENT(IN)                         :: n_params
         CHARACTER(LEN=64), INTENT(OUT)              :: model_name 
         REAL*8, INTENT(OUT), DIMENSION(n_params)    :: constant_params   
-
-
         CALL hostcluster_get_structure(n_params, model_name, constant_params)
-
     END SUBROUTINE get_hostcluster_structure 
 
-
+    SUBROUTINE configure_hostcluster_structure_parameter_table(index,ntimes,timestamps,values)
+        INTEGER, INTENT(IN) :: index, ntimes
+        REAL*8, INTENT(IN), DIMENSION(ntimes) :: timestamps,values
+        CALL hostcluster_configure_structure_parameter_table(index,ntimes,timestamps,values)
+    END SUBROUTINE configure_hostcluster_structure_parameter_table
 
 
     !!!! OUTPUTS

@@ -229,56 +229,17 @@ CONTAINS
 
     SUBROUTINE query_current_kinematics(query_time)
         REAL*8, INTENT(IN) :: query_time
-        REAL*8 :: T0, TF
+        REAL*8 :: T0, TF,alpha, dt
         INTEGER :: n
-        REAL*8 :: alpha, dt
-        LOGICAL :: bracketted
 
         n = SIZE(HOST_TIMES)
-
-        if (KINEMATICS_FORWARD_ORBIT) then 
-            IF (query_time <= HOST_TIMES(1)) THEN
-                HOST_X_CURRENT = HOST_X(1)
-                HOST_Y_CURRENT = HOST_Y(1)
-                HOST_Z_CURRENT = HOST_Z(1)
-                HOST_VX_CURRENT = HOST_VX(1)
-                HOST_VY_CURRENT = HOST_VY(1)
-                HOST_VZ_CURRENT = HOST_VZ(1)
-                RETURN
-            END IF
-            IF (query_time >= HOST_TIMES(n)) THEN
-                HOST_X_CURRENT = HOST_X(n)
-                HOST_Y_CURRENT = HOST_Y(n)
-                HOST_Z_CURRENT = HOST_Z(n)
-                HOST_VX_CURRENT = HOST_VX(n)
-                HOST_VY_CURRENT = HOST_VY(n)
-                HOST_VZ_CURRENT = HOST_VZ(n)
-                RETURN
-            END IF
-        ELSE 
-            IF (query_time >= HOST_TIMES(1)) THEN
-                HOST_X_CURRENT = HOST_X(1)
-                HOST_Y_CURRENT = HOST_Y(1)
-                HOST_Z_CURRENT = HOST_Z(1)
-                HOST_VX_CURRENT = HOST_VX(1)
-                HOST_VY_CURRENT = HOST_VY(1)
-                HOST_VZ_CURRENT = HOST_VZ(1)
-                RETURN
-            END IF
-            IF (query_time <= HOST_TIMES(n)) THEN
-                HOST_X_CURRENT = HOST_X(n)
-                HOST_Y_CURRENT = HOST_Y(n)
-                HOST_Z_CURRENT = HOST_Z(n)
-                HOST_VX_CURRENT = HOST_VX(n)
-                HOST_VY_CURRENT = HOST_VY(n)
-                HOST_VZ_CURRENT = HOST_VZ(n)
-                RETURN
-            END IF            
-        END IF 
 
         ! do quick search, which which will be between O(1) to O(N_TIME_STAMPS), works if forward or backward
         HOST_CURRENT_KINEMATICS_TIME_INDEX = bracketed_index_search(query_time, HOST_CURRENT_KINEMATICS_TIME_INDEX, HOST_TIMES)
 
+        T0 = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX)
+        TF = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX+1)
+        dt = TF-T0
         alpha = (query_time - T0) / dt
         HOST_X_CURRENT = linear_interp_scalar(HOST_X(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_X(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
         HOST_Y_CURRENT = linear_interp_scalar(HOST_Y(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_Y(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )

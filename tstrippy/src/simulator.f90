@@ -16,6 +16,7 @@ MODULE simulator
                            hostcluster_eval_force => eval_force, &
                            hostcluster_set_gravitational_constant => set_gravitational_constant,&
                            hostcluster_get_kinematics => get_kinematics,&
+                           hostcluster_get_structure => get_structure,&
                            HOST_REGISTERED, &
                            HOST_FINALIZED
     USE mathutils, ONLY: is_strictly_increasing, is_strictly_decreasing
@@ -612,18 +613,18 @@ MODULE simulator
         print*, "|  $$$$$$/|  $$$$$$/|  $$$$$$/| $$$$$$$$|  $$$$$$/|  $$$$$$/"
         print*, " \______/  \______/  \______/ |________/ \______/  \______/ "
         print*, ""
-        print*, "_________________________________________.____________________________.___."
-        print*, "\__    ___/   _____/\__    ___/\______   \   \______   \______   \__  |   |"
-        print*, "  |    |  \_____  \   |    |    |       _/   ||     ___/|     ___//   |   |"
-        print*, "  |    |  /        \  |    |    |    |   \   ||    |    |    |    \____   |"
-        print*, "  |____| /_______  /  |____|    |____|_  /___||____|    |____|    / ______|"
-        print*, "                 \/                    \/                         \/       "
-        print*, "___________________ _________________________   _________________________  "
-        print*, "\_   _____/\_____  \\______   \_   _____/\   \ /   /\_   _____/\______   \ "
-        print*, " |    __)   /   |   \|       _/|    __)_  \   Y   /  |    __)_  |       _/ "
-        print*, " |     \   /    |    \    |   \|        \  \     /   |        \ |    |   \ "
-        print*, " \___  /   \_______  /____|_  /_______  /   \___/   /_______  / |____|_  / "
-        print*, "     \/            \/       \/        \/                    \/         \/  "
+        ! print*, "_________________________________________.____________________________.___."
+        ! print*, "\__    ___/   _____/\__    ___/\______   \   \______   \______   \__  |   |"
+        ! print*, "  |    |  \_____  \   |    |    |       _/   ||     ___/|     ___//   |   |"
+        ! print*, "  |    |  /        \  |    |    |    |   \   ||    |    |    |    \____   |"
+        ! print*, "  |____| /_______  /  |____|    |____|_  /___||____|    |____|    / ______|"
+        ! print*, "                 \/                    \/                         \/       "
+        ! print*, "___________________ _________________________   _________________________  "
+        ! print*, "\_   _____/\_____  \\______   \_   _____/\   \ /   /\_   _____/\______   \ "
+        ! print*, " |    __)   /   |   \|       _/|    __)_  \   Y   /  |    __)_  |       _/ "
+        ! print*, " |     \   /    |    \    |   \|        \  \     /   |        \ |    |   \ "
+        ! print*, " \___  /   \_______  /____|_  /_______  /   \___/   /_______  / |____|_  / "
+        ! print*, "     \/            \/       \/        \/                    \/         \/  "
 
         ! Finalize timing measurements
         CALL system_clock(c_run_end)
@@ -704,13 +705,21 @@ MODULE simulator
     SUBROUTINE get_hostcluster_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
         INTEGER, INTENT(IN) :: ntimes
         REAL*8, INTENT(OUT), DIMENSION(ntimes) :: t, xhost, yhost, zhost, vxhost, vyhost, vzhost
-        LOGICAL :: ok
 
-        CALL hostcluster_get_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost, ok)
-        IF (.NOT. ok) THEN
-            PRINT*, "ERROR: get_hostcluster_kinematics failed"
-        END IF
+        CALL hostcluster_get_kinematics(ntimes, t, xhost, yhost, zhost, vxhost, vyhost, vzhost)
     END SUBROUTINE get_hostcluster_kinematics
+
+    SUBROUTINE get_hostcluster_structure(n_params,model_name,constant_params)
+        INTEGER, INTENT(IN)                         :: n_params
+        CHARACTER(LEN=64), INTENT(OUT)              :: model_name 
+        REAL*8, INTENT(OUT), DIMENSION(n_params)    :: constant_params   
+
+
+        CALL hostcluster_get_structure(n_params, model_name, constant_params)
+
+    END SUBROUTINE get_hostcluster_structure 
+
+
 
 
     !!!! OUTPUTS

@@ -281,7 +281,6 @@ CONTAINS
         HOST_VZ_CURRENT = linear_interp_scalar(HOST_VZ(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_VZ(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
     END SUBROUTINE query_current_kinematics
 
-
     !!!! ROUTINES FOR HANDLING CHANGING STRUCTURAL PARAMETERS 
     SUBROUTINE configure_hostcluster_structure(model_name, params, nparams)
         CHARACTER(LEN=*), INTENT(IN) :: model_name
@@ -383,7 +382,6 @@ CONTAINS
 
     end function value_at   
 
-
     !! TO INTERFACE WITH SIMULATOR
     ! in hostcluster.f90 (inside CONTAINS)
     SUBROUTINE get_kinematics(ntimes, t, x, y, z, vx, vy, vz)
@@ -441,7 +439,6 @@ CONTAINS
 
     ! ANALYTICAL MODELS
     SUBROUTINE plummer_force(n, x, y, z, force)
-        
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n,3) :: force

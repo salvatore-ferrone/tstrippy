@@ -179,9 +179,13 @@ CONTAINS
 
     SUBROUTINE update_hostcluster_state(t)
         REAL*8, INTENT(IN) :: t
+        INTEGER :: i 
         IF (.NOT. HOST_FINALIZED) RETURN
         IF (.NOT. ALLOCATED(HOST_TIMES)) RETURN
         CALL query_current_kinematics(t)
+        DO i=1,HOST_NPARAMS
+            HOST_PARAMS_CURRENT(i) = STRUCTURE_PARAMETERS(i)%value_at(t)
+        END DO 
     END SUBROUTINE update_hostcluster_state
 
     SUBROUTINE eval_force(nparticles, x, y, z, ax, ay, az)

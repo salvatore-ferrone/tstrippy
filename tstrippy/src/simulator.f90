@@ -49,8 +49,6 @@ MODULE simulator
     !       simulator.clear() the module before using again 
     IMPLICIT NONE 
 
-
-
     ! A derived type for orchestating the module 
     TYPE, PRIVATE :: state_t
         ! REQUIRED
@@ -158,7 +156,6 @@ MODULE simulator
     INTEGER(KIND=8), PRIVATE :: c_write_snap_accum, c_write_snap_start
     INTEGER(KIND=8), PRIVATE :: c_write_orb_accum, c_write_orb_start
     INTEGER(KIND=8), PRIVATE :: rate_clock, cmax_clock
-
 
     ! PUBLIC :: simulator_cleargravitycomponents, simulator_set_gravitational_constant
     ! PUBLIC :: simulator_add_component, simulator_finalizegravity
@@ -725,7 +722,6 @@ MODULE simulator
         CALL hostcluster_configure_structure_parameter_table(index,ntimes,timestamps,values)
     END SUBROUTINE configure_hostcluster_structure_parameter_table
 
-
     !!!! OUTPUTS
     SUBROUTINE initwritesnapshots(nskip, directory, basename)
         INTEGER, INTENT(IN) :: nskip
@@ -1172,9 +1168,6 @@ MODULE simulator
             az = az + az_tmp
         END DO
     END SUBROUTINE evaluate_total_force
-
-  
-
 
 END MODULE simulator
 

@@ -15,11 +15,8 @@ MODULE hostcluster
     LOGICAL, PUBLIC :: HOST_REGISTERED = .FALSE.
     LOGICAL, PUBLIC :: HOST_FINALIZED = .FALSE.
     LOGICAL, PUBLIC :: HOST_KINEMATICS_SET = .FALSE.
-    LOGICAL, PUBLIC :: HOST_MODEL_SET = .FALSE.
+    LOGICAL, PUBLIC :: HOST_STRUCTURE_SET = .FALSE.
     LOGICAL, PUBLIC :: KINEMATICS_FORWARD_ORBIT = .TRUE.
-    ! FOR THE STRUCTURAL PARAMETER DEFAULTS
-    INTEGER, PUBLIC :: HOST_NPARAMS = 0
-    CHARACTER(LEN=64), PUBLIC :: HOST_MODEL_NAME = ""
 
     REAL*8, PARAMETER, PRIVATE :: G_DEFAULT = 4.30091727D-6
     REAL*8, PUBLIC  :: G_HOSTCLUSTER = G_DEFAULT
@@ -67,14 +64,17 @@ MODULE hostcluster
     PROCEDURE(force_eval_iface), pointer, private :: model_force => NULL()
     PROCEDURE(potential_eval_iface), pointer, private :: model_potential => NULL()
 
+    ! FOR THE STRUCTURAL PARAMETER DEFAULTS
+    INTEGER, PUBLIC :: HOST_NPARAMS = 0
+    CHARACTER(LEN=64), PUBLIC :: HOST_MODEL_NAME = ""
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_PARAMS_CURRENT
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_PARAMS_CONSTANT        
+
 
     ! THE VARIABLES FOR THE KINEMATICS
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_TIMES
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_X, HOST_Y, HOST_Z
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_VX, HOST_VY, HOST_VZ
-
-    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_PARAMS_CURRENT
-    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_PARAMS_CONSTANT    
 
     INTEGER, PUBLIC :: HOST_CURRENT_KINEMATICS_TIME_INDEX = 1 
     REAL*8, PUBLIC  :: HOST_X_CURRENT = 0.0D0
@@ -113,7 +113,7 @@ CONTAINS
         HOST_REGISTERED = .FALSE.
         HOST_FINALIZED = .FALSE.
         HOST_KINEMATICS_SET = .FALSE.
-        HOST_MODEL_SET = .FALSE.
+        HOST_STRUCTURE_SET = .FALSE.
         G_HOSTCLUSTER = G_DEFAULT
         G_IS_DEFAULT = .TRUE.
         HOST_NPARAMS = 0
@@ -166,7 +166,7 @@ CONTAINS
             RETURN
         END IF
 
-        IF (.NOT. HOST_MODEL_SET) THEN
+        IF (.NOT. HOST_STRUCTURE_SET) THEN
             PRINT*, "WARNING: finalize_hostcluster requires model and constant parameters"
             RETURN
         END IF
@@ -339,7 +339,7 @@ CONTAINS
             RETURN
         END IF
 
-        IF (HOST_MODEL_SET) THEN
+        IF (HOST_STRUCTURE_SET) THEN
             PRINT*, "WARNING: hostcluster model updated; clearing previous parameter overrides"
         END IF
 
@@ -361,7 +361,7 @@ CONTAINS
             NULLIFY(model_potential)
         END SELECT
 
-        HOST_MODEL_SET = .TRUE.
+        HOST_STRUCTURE_SET = .TRUE.
         HOST_NPARAMS = nparams
         HOST_FINALIZED = .FALSE.
     END SUBROUTINE configure_hostcluster_structure
@@ -413,12 +413,10 @@ CONTAINS
 
     !! TO INTERFACE WITH SIMULATOR
     ! in hostcluster.f90 (inside CONTAINS)
-    SUBROUTINE get_kinematics(ntimes, t, x, y, z, vx, vy, vz, ok)
+    SUBROUTINE get_kinematics(ntimes, t, x, y, z, vx, vy, vz)
         INTEGER, INTENT(IN) :: ntimes
         REAL*8, INTENT(OUT), DIMENSION(ntimes) :: t, x, y, z, vx, vy, vz
-        LOGICAL, INTENT(OUT) :: ok
 
-        ok = .FALSE.
 
         IF (.NOT. HOST_REGISTERED) THEN
             PRINT*, "WARNING: get_kinematics: host is not registered"
@@ -442,7 +440,7 @@ CONTAINS
         vx = HOST_VX
         vy = HOST_VY
         vz = HOST_VZ
-        ok = .TRUE.
+
     END SUBROUTINE GET_KINEMATICS    
 
     ! extract the structural params
@@ -451,10 +449,19 @@ CONTAINS
         CHARACTER(LEN=64), INTENT(OUT)              :: model_name 
         REAL*8, INTENT(OUT), DIMENSION(n_params)    :: constant_params
 
+        IF (.NOT. HOST_STRUCTURE_SET) THEN
+            PRINT*, "WARNING: get_structure: host structure is not HOST_STRUCTURE_SET"
+            RETURN
+        END IF
+
+        IF (HOST_NPARAMS /= n_params) THEN
+            PRINT*, "WARNING: get_structure: n_params /= HOST_NPARAMS"
+            RETURN
+        END IF
+
+
         constant_params = HOST_PARAMS_CONSTANT
         model_name = HOST_MODEL_NAME
-
-        
 
 
     END SUBROUTINE get_structure

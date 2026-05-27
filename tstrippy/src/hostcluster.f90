@@ -8,7 +8,7 @@ MODULE hostcluster
     ! 4) Per-parameter precedence at runtime: table > law(stub) > constant
     ! 5) finalize_hostcluster() validates lifecycle/state only (minimal physics policing)
     
-    USE mathutils, only : linear_interp_scalar, is_strictly_monotonic, is_strictly_decreasing
+    USE mathutils, only : linear_interp_scalar, is_strictly_monotonic, is_strictly_decreasing, bracketed_index_search
     IMPLICIT NONE
 
     ! MODULE STATE VARIABLES 
@@ -276,43 +276,9 @@ CONTAINS
             END IF            
         END IF 
 
-        ! we expect that the user will query this function at timestamps that progress monotonically
-        ! therefore, we will save the most recent timestamp, and only advance it need be.
-        ! so the search time for this algorithm is O(1) to O(ntimestamps). Not bad. 
-        ! For the interpolation method, it doesn't matter if dt is positive or negative
+        ! do quick search, which which will be between O(1) to O(N_TIME_STAMPS), works if forward or backward
+        HOST_CURRENT_KINEMATICS_TIME_INDEX = bracketed_index_search(query_time, HOST_CURRENT_KINEMATICS_TIME_INDEX, HOST_TIMES)
 
-        ! check the timestamp time
-        T0 = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX)
-        TF = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX + 1)
-        dt = TF - T0
-        if (dt==0d0) THEN 
-            print*, "WARNING in query_current_kinematics. dt=0"
-        end if 
-
-        bracketted = (query_time.lt.T0).NEQV.(query_time.lt.TF)
-        ! NEQV is the same as XOR and simplifies this expression: 
-        ! since we don't know if a<b or b<a
-        ! ( (a<x) AND (x<b) ) OR ( (x<b) AND (x<a) )
-
-
-        do while (.NOT.bracketted)
-
-            if (KINEMATICS_FORWARD_ORBIT) then 
-                if (query_time.gt.TF) HOST_CURRENT_KINEMATICS_TIME_INDEX = HOST_CURRENT_KINEMATICS_TIME_INDEX + 1
-                if (query_time.lt.T0) HOST_CURRENT_KINEMATICS_TIME_INDEX = HOST_CURRENT_KINEMATICS_TIME_INDEX - 1 
-            else
-                if (query_time.lt.TF) HOST_CURRENT_KINEMATICS_TIME_INDEX = HOST_CURRENT_KINEMATICS_TIME_INDEX + 1
-                if (query_time.gt.t0) HOST_CURRENT_KINEMATICS_TIME_INDEX = HOST_CURRENT_KINEMATICS_TIME_INDEX - 1
-            END IF 
-
-            T0 = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX)
-            TF = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX + 1)
-            dt = TF - T0
-            if (dt==0d0) THEN 
-                print*, "WARNING in query_current_kinematics. dt=0"
-            end if             
-            bracketted = (query_time.lt.T0).NEQV.(query_time.lt.TF)
-        END DO 
         alpha = (query_time - T0) / dt
         HOST_X_CURRENT = linear_interp_scalar(HOST_X(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_X(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
         HOST_Y_CURRENT = linear_interp_scalar(HOST_Y(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_Y(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )

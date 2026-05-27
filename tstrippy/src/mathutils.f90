@@ -13,8 +13,80 @@ MODULE mathutils
     PUBLIC :: is_strictly_decreasing
     PUBLIC :: is_strictly_increasing
     PUBLIC :: is_strictly_monotonic
+    PUBLIC :: bracketed_index_search
 
     CONTAINS
+
+    PURE INTEGER FUNCTION bracketed_index_search(query_time, start_index, time_array) RESULT(idx)
+        IMPLICIT NONE
+        REAL*8, INTENT(IN) :: query_time
+        INTEGER, INTENT(IN) :: start_index
+        REAL*8, INTENT(IN), DIMENSION(:) :: time_array
+
+        INTEGER :: n
+        REAL*8 :: t0, t1
+        LOGICAL :: increasing, bracketed
+
+        n = SIZE(time_array)
+
+        ! Minimal safety. Assumes caller gives a valid monotonic array.
+        IF (n < 2) THEN
+            idx = 1
+            RETURN
+        END IF
+
+        increasing = (time_array(n) > time_array(1))
+
+        ! Fast endpoint clamp (prevents out-of-range wandering).
+        IF (increasing) THEN
+            IF (query_time <= time_array(1)) THEN
+                idx = 1
+                RETURN
+            END IF
+            IF (query_time >= time_array(n)) THEN
+                idx = n - 1
+                RETURN
+            END IF
+        ELSE
+            IF (query_time >= time_array(1)) THEN
+                idx = 1
+                RETURN
+            END IF
+            IF (query_time <= time_array(n)) THEN
+                idx = n - 1
+                RETURN
+            END IF
+        END IF
+
+        ! Start where caller suggests, clamp once.
+        idx = MAX(1, MIN(start_index, n - 1))
+
+        DO
+            t0 = time_array(idx)
+            t1 = time_array(idx + 1)
+
+            bracketed = (query_time >= MIN(t0, t1)) .AND. (query_time <= MAX(t0, t1))
+            IF (bracketed) EXIT
+
+            IF (increasing) THEN
+                IF (query_time > t1) THEN
+                    idx = idx + 1
+                ELSE
+                    idx = idx - 1
+                END IF
+            ELSE
+                IF (query_time < t1) THEN
+                    idx = idx + 1
+                ELSE
+                    idx = idx - 1
+                END IF
+            END IF
+
+            ! Keep index in valid pair range.
+            idx = MAX(1, MIN(idx, n - 1))
+        END DO
+    END FUNCTION bracketed_index_search    
+
 
     FUNCTION linear_interp_scalar(y0, y1, alpha) RESULT(y)
         REAL*8, INTENT(IN) :: y0, y1, alpha

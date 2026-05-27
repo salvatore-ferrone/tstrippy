@@ -164,6 +164,7 @@ MODULE simulator
     ! PUBLIC :: simulator_force, simulator_potential
 
     INTEGER, PUBLIC :: N_HOST_ORBIT_TIME_STAMPS = 0
+    INTEGER, PUBLIC :: N_HOST_STRUCTURE_PARAMETERS = 0 
 
 
     CONTAINS 
@@ -693,6 +694,7 @@ MODULE simulator
         CALL clear_force_registry()
         state%host_enabled = HOST_REGISTERED
         state%finalized = .FALSE.
+        N_HOST_STRUCTURE_PARAMETERS = nparams
     END SUBROUTINE configure_hostcluster_structure
 
     SUBROUTINE finalize_hostcluster()

@@ -343,14 +343,6 @@ CONTAINS
             PRINT*, "WARNING: hostcluster model updated; clearing previous parameter overrides"
         END IF
 
-
-        HOST_MODEL_NAME = TRIM(model_name)
-        ! allocate my friends
-        ALLOCATE(HOST_PARAMS_CONSTANT(nparams))
-        ALLOCATE(HOST_PARAMS_CURRENT(nparams))
-        HOST_PARAMS_CONSTANT = params
-        HOST_PARAMS_CURRENT = params
-
         SELECT CASE (TRIM(MODEL_NAME))
         CASE ("plummer")
             model_force => plummer_force
@@ -361,6 +353,13 @@ CONTAINS
             NULLIFY(model_potential)
         END SELECT
 
+        if (ALLOCATED(HOST_PARAMS_CONSTANT)) DEALLOCATE(HOST_PARAMS_CONSTANT) 
+        if (ALLOCATED(HOST_PARAMS_CURRENT)) DEALLOCATE(HOST_PARAMS_CURRENT) 
+        ALLOCATE(HOST_PARAMS_CURRENT(nparams))
+        ALLOCATE(HOST_PARAMS_CONSTANT(nparams))
+        HOST_PARAMS_CONSTANT = params
+        HOST_PARAMS_CURRENT = params
+        HOST_MODEL_NAME = TRIM(model_name)        
         HOST_STRUCTURE_SET = .TRUE.
         HOST_NPARAMS = nparams
         HOST_FINALIZED = .FALSE.
@@ -458,11 +457,9 @@ CONTAINS
             PRINT*, "WARNING: get_structure: n_params /= HOST_NPARAMS"
             RETURN
         END IF
-
-
+        
         constant_params = HOST_PARAMS_CONSTANT
         model_name = HOST_MODEL_NAME
-
 
     END SUBROUTINE get_structure
 

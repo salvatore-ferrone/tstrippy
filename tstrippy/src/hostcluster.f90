@@ -49,10 +49,10 @@ MODULE hostcluster
         CHARACTER(LEN=64) :: name 
          ! 0: constant, 1: table, 2: law
         INTEGER :: evolution_type = 0 ! default at constant 
-        REAL*8 :: initial_value ! the value extracted when `configure_hostcluster_structure` is called    
+        REAL*8 :: current_value ! the value extracted when `configure_hostcluster_structure` is called    
         ! table data
         REAL*8, ALLOCATABLE :: timestamps(:)
-        INTEGER :: closest_timestamp = 0 
+        INTEGER :: closest_timestamp_index = 0 
         REAL*8, ALLOCATABLE :: values(:)
         ! for a law
         ! PROCEDURE(parameter_law_iface), POINTER, NOPASS :: law_eval => NULL() ! default to null
@@ -321,7 +321,7 @@ CONTAINS
         HOST_FINALIZED = .FALSE.
 
         do i = 1,HOST_NPARAMS
-            STRUCTURE_PARAMETERS(i)%initial_value=params(i)
+            STRUCTURE_PARAMETERS(i)%current_value=params(i)
         END DO 
 
     END SUBROUTINE configure_hostcluster_structure
@@ -351,18 +351,30 @@ CONTAINS
         STRUCTURE_PARAMETERS(INDEX)%evolution_type = 1 
 
     END SUBROUTINE configure_hostcluster_structure_parameter_table
-    ! wire a specific parameter 
+      
     REAL*8 FUNCTION value_at(self, t)
-        CLASS(structural_parameter_t), INTENT(IN) :: self 
+        CLASS(structural_parameter_t), INTENT(INOUT) :: self 
         REAL*8, INTENT(IN) :: t 
+        INTEGER :: tempindex
+        REAL*8 :: alpha, T0, TF, DT
 
         SELECT CASE (self%evolution_type)
         CASE (0)
-            value_at = self%initial_value
+            value_at = self%current_value
         case(1)
             ! interpolate
+            tempindex = bracketed_index_search(t, self%closest_timestamp_index, self%timestamps)
+            self%closest_timestamp_index = tempindex
+            T0 = self%timestamps(self%closest_timestamp_index)
+            TF = self%timestamps(self%closest_timestamp_index+1)
+            DT = TF-T0
+            alpha = t-t0
+            self%current_value=linear_interp_scalar(   self%values(self%closest_timestamp_index),&
+                                    self%values(self%closest_timestamp_index+1),&
+                                    alpha)
+            value_at = self%current_value
         CASE DEFAULT
-            value_at = self%initial_value
+            value_at = self%current_value
         END SELECT
 
     end function value_at   

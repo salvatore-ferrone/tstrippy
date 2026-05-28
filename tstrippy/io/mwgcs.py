@@ -232,8 +232,39 @@ def _rng(seed=None, rng=None):
     return np.random.default_rng(seed)
 
 
-def _icrs_means(clusters=None):
+def _normalize_icrs_sample_outtype(outtype):
+    aliases = {
+        "skycoords": "skycoords",
+        "skycoordinates": "skycoords",
+        "astropy": "skycoords",
+        "dict": "dict",
+        "dictionary": "dict",
+        "array": "array",
+    }
+    key = str(outtype).strip().lower()
+    if key not in aliases:
+        raise ValueError(
+            "outtype must be one of: 'dict', 'array', 'skycoords', "
+            "'skycoordinates', 'astropy'"
+        )
+    return aliases[key]
+
+
+def _icrs_dict_from_sample_matrix(sample_matrix):
     from astropy import units as u
+
+    kin_units = units("kinematics")
+    return {
+        baumgardt_to_astropy_headers["ra"]: sample_matrix[:, 0] * u.Unit(kin_units["ra"]),
+        baumgardt_to_astropy_headers["dec"]: sample_matrix[:, 1] * u.Unit(kin_units["dec"]),
+        baumgardt_to_astropy_headers["rsun"]: sample_matrix[:, 2] * u.Unit(kin_units["rsun"]),
+        baumgardt_to_astropy_headers["mualpha"]: sample_matrix[:, 3] * u.Unit(kin_units["mualpha"]),
+        baumgardt_to_astropy_headers["mu_delta"]: sample_matrix[:, 4] * u.Unit(kin_units["mu_delta"]),
+        baumgardt_to_astropy_headers["rv"]: sample_matrix[:, 5] * u.Unit(kin_units["rv"]),
+    }
+
+
+def _icrs_means(clusters=None):
     idx = _resolve_clusters(clusters, table="kinematics")
     cat = _get_table("kinematics")["columns"]
     means = np.column_stack(
@@ -344,7 +375,14 @@ def icrs_sample(n_samples, clusters=None, seed=None, rng=None):
     """Sample ICRS phase-space vectors from per-cluster Gaussian errors.
 
     `seed` provides reproducible output. Pass `rng` for external RNG control.
+
+    RETURN SHAPE: 
+    ARRAY
+        [Nsample X Ncuster X 6 (phase_space)]
+    DICT
+        {sample: {"ra": []*u.deg}}
     """
+
     if n_samples < 1:
         raise ValueError("n_samples must be >= 1")
 
@@ -357,9 +395,48 @@ def icrs_sample(n_samples, clusters=None, seed=None, rng=None):
         samples.append(gen.multivariate_normal(mean=means[i], cov=c, size=n_samples))
 
     out = np.stack(samples, axis=1)
+
     if means.shape[0] == 1:
         return out[:, 0, :]
     return out
+
+def icrs_sample_catalog(n_samples, outtype="dict", seed=None, rng=None):
+    """
+        wrapper to icrs_sample and returns the entire cataloge
+
+    """
+    normalized_outtype = _normalize_icrs_sample_outtype(outtype)
+    samples = icrs_sample(n_samples=n_samples, clusters=None, seed=seed, rng=rng)
+    if normalized_outtype == "array":
+        return samples
+
+    out = {i: _icrs_dict_from_sample_matrix(samples[i, :, :]) for i in range(n_samples)}
+    if normalized_outtype == "dict":
+        return out
+
+    from astropy import coordinates
+    return [coordinates.SkyCoord(**out[i]) for i in range(n_samples)]
+
+
+def icrs_sample_cluster(n_samples, cluster, outtype="dict", seed=None, rng=None):
+    """
+    shape will now be 
+    """
+    normalized_outtype = _normalize_icrs_sample_outtype(outtype)
+    if not isinstance(cluster, str):
+        raise TypeError("cluster must be a string")
+
+    samples = icrs_sample(n_samples=n_samples, clusters=cluster, seed=seed, rng=rng)
+    if normalized_outtype == "array":
+        return samples
+
+    out = _icrs_dict_from_sample_matrix(samples)
+    if normalized_outtype == "dict":
+        return out
+
+    from astropy import coordinates
+    return coordinates.SkyCoord(**out)
+
 
 
 __all__ = [
@@ -372,4 +449,6 @@ __all__ = [
     "icrs",
     "covariance",
     "icrs_sample",
+    "icrs_sample_catalog",
+    "icrs_sample_cluster",
 ]

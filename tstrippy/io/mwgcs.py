@@ -18,6 +18,7 @@ baumgardt_to_astropy_headers = {
     "rv": "radial_velocity"
 }
 
+
 def _normalize_name(name):
     return re.sub(r"[^A-Za-z0-9]", "", str(name)).lower()
 
@@ -399,6 +400,7 @@ def icrs_sample(n_samples, clusters=None, seed=None, rng=None):
     if means.shape[0] == 1:
         return out[:, 0, :]
     return out
+
 
 def icrs_sample_catalog(n_samples, outtype="dict", seed=None, rng=None):
     """

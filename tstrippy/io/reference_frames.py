@@ -5,7 +5,7 @@ import yaml
 current_script_directory = Path(__file__).parent
 
 # Construct the path to the data file relative to the current script
-path_to_data = current_script_directory / ".." / "data" 
+path_to_data = current_script_directory / ".." / "data" / "MWreferenceframes"
 
 # Resolve the path to make it absolute (and normalize it)
 path_to_unit_basis = path_to_data / "unit_basis.yaml"

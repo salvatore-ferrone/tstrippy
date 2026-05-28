@@ -1,6 +1,5 @@
 import yaml
 import numpy as np
-import astropy.constants as const
 from astropy.units import Quantity, UnitBase
 import logging
 import os

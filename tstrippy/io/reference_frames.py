@@ -36,7 +36,14 @@ def MWrefframeFerrone2023():
         except yaml.YAMLError as exc:
             print(exc)
         galcen_distance=frame_data['value']['galcen_distance']*u.Unit(frame_data['unit']['galcen_distance'])
+        ra      =   frame_data['value']['ra']       *   u.Unit(frame_data['unit']['ra'])
+        dec     =   frame_data['value']['dec']      *   u.Unit(frame_data['unit']['dec'])
         z_sun   =   frame_data['value']['z_sun']    *   u.Unit(frame_data['unit']['z_sun'])
         vSun    =   frame_data['value']['vSun']     *   u.Unit(frame_data['unit']['vSun'])
         vLSR    =   frame_data['value']['vLSR']     *   u.Unit(frame_data['unit']['vLSR'])
-    return coordinates.Galactocentric(galcen_distance = galcen_distance, galcen_v_sun=vLSR+vSun, z_sun=z_sun)
+        galcen_coord = coordinates.ICRS(ra=ra.to(u.deg),dec=dec.to(u.deg))
+    return coordinates.Galactocentric(
+        galcen_coord = galcen_coord,
+        galcen_distance = galcen_distance, 
+        galcen_v_sun=vLSR+vSun, 
+        z_sun=z_sun)

@@ -1,4 +1,6 @@
 value:
+  ra: 266.4051
+  dec: -28.936175
   vLSR:
     - 0
     - 240
@@ -10,6 +12,8 @@ value:
   galcen_distance: 8340
   z_sun: 27
 unit:
+  ra: "deg"
+  dec: "deg"
   vLSR: km/s
   vSun: km/s
   galcen_distance: pc

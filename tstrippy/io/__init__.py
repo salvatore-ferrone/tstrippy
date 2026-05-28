@@ -17,7 +17,13 @@ except Exception as exc:
     milkyway_models = None
     warnings.warn(f"Failed to import tstrippy.io.milkyway_models: {exc}")
 try:
-    from . import reference_frames
+    from . import reference_frames as _reference_frames_module
+    reference_frames = _reference_frames_module.reference_frames
+    # Attach helper methods to keep a compact callable UX.
+    reference_frames.get_reference_frame = _reference_frames_module.get_reference_frame
+    reference_frames.available_reference_frames = _reference_frames_module.available_reference_frames
+    reference_frames.load_yaml = _reference_frames_module.load_yaml
+    reference_frames.MWrefframeFerrone2023 = _reference_frames_module.MWrefframeFerrone2023
 except Exception as exc:
     reference_frames = None
     warnings.warn(f"Failed to import tstrippy.io.reference_frames: {exc}")

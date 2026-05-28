@@ -1,6 +1,5 @@
 from pathlib import Path
 import re
-
 import numpy as np
 
 
@@ -10,6 +9,14 @@ _STR_PATH = _DATA_DIR / "mwgcs-structural"
 
 _CACHE = None
 
+baumgardt_to_astropy_headers = {
+    "ra": "ra",
+    "dec": "dec",
+    "rsun": "distance",
+    "mualpha": "pm_ra_cosdec",
+    "mu_delta": "pm_dec",
+    "rv": "radial_velocity"
+}
 
 def _normalize_name(name):
     return re.sub(r"[^A-Za-z0-9]", "", str(name)).lower()
@@ -52,13 +59,37 @@ def _is_number_token(text):
         return False
 
 
+def _parse_units_line(line):
+    text = line.lstrip("#").strip()
+    if not text:
+        return []
+
+    out = []
+    for token in text.split():
+        # Expand glued bracket tokens like "[mas/yr][mas/yr][mas/yr]".
+        grouped = re.findall(r"\[[^\]]*\]", token)
+        if grouped and "".join(grouped) == token:
+            out.extend(grouped)
+        else:
+            out.append(token)
+
+    # Normalize to plain unit labels without wrappers/quotes.
+    cleaned = []
+    for unit in out:
+        s = str(unit).strip().strip("\"'")
+        if s.startswith("[") and s.endswith("]"):
+            s = s[1:-1]
+        cleaned.append(s)
+    return cleaned
+
+
 def _parse_ascii_catalog(path):
     lines = Path(path).read_text(encoding="utf-8").splitlines()
     if len(lines) < 3:
         raise ValueError(f"Catalog file has insufficient header lines: {path}")
 
     raw_headers = lines[0].lstrip("#").strip().split()
-    raw_units = lines[1].lstrip("#").strip().split()
+    raw_units = _parse_units_line(lines[1])
 
     if len(raw_units) < len(raw_headers):
         raw_units = raw_units + [""] * (len(raw_headers) - len(raw_units))
@@ -202,6 +233,7 @@ def _rng(seed=None, rng=None):
 
 
 def _icrs_means(clusters=None):
+    from astropy import units as u
     idx = _resolve_clusters(clusters, table="kinematics")
     cat = _get_table("kinematics")["columns"]
     means = np.column_stack(
@@ -286,8 +318,18 @@ def icrs(clusters=None):
     Output shape is (N, 6) with columns in this order:
     [ra_deg, dec_deg, distance_kpc, pm_ra_masyr, pm_dec_masyr, rv_kms].
     """
+    from astropy import units as u
     _, means = _icrs_means(clusters)
-    return means
+    # instead, return a dictionary ready for astropy 
+    coordinates = {
+        baumgardt_to_astropy_headers["ra"]: means[:,0] * u.Unit(units("kinematics")['ra']),
+        baumgardt_to_astropy_headers["dec"]: means[:,1] * u.Unit(units("kinematics")['dec']),
+        baumgardt_to_astropy_headers["rsun"]: means[:,2] * u.Unit(units("kinematics")['rsun']),
+        baumgardt_to_astropy_headers["mualpha"]: means[:,3] * u.Unit(units("kinematics")['mualpha']),
+        baumgardt_to_astropy_headers["mu_delta"]: means[:,4] * u.Unit(units("kinematics")['mu_delta']),
+        baumgardt_to_astropy_headers["rv"]: means[:,5] * u.Unit(units("kinematics")['rv']),
+    }    
+    return coordinates
 
 
 def covariance(cluster):

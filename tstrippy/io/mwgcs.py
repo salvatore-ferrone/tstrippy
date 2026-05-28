@@ -19,6 +19,15 @@ baumgardt_to_astropy_headers = {
 }
 
 
+_baumgardt_structural_columns_with_errors = {
+    "Mass": "DM",
+    "v": "Delta_V",
+    "M/L_V": "DM/L",
+    "MF": "Delta_MF"
+}
+
+
+
 def _normalize_name(name):
     return re.sub(r"[^A-Za-z0-9]", "", str(name)).lower()
 
@@ -281,7 +290,7 @@ def _icrs_means(clusters=None):
     return idx, means
 
 
-def _covariance_for_index(i):
+def _kinematic_covariance_for_index(i):
     cat = _get_table("kinematics")["columns"]
 
     s_dist = float(cat["delta_r"][i])
@@ -364,12 +373,12 @@ def icrs(clusters=None):
     return coordinates
 
 
-def covariance(cluster):
+def kinematic_covariance(cluster):
     """Return 6x6 covariance matrix for (ra, dec, distance, pm_ra, pm_dec, rv)."""
     idx = _resolve_clusters(cluster, table="kinematics")
     if idx.size != 1:
         raise ValueError("covariance expects exactly one cluster")
-    return _covariance_for_index(int(idx[0]))
+    return _kinematic_covariance_for_index(int(idx[0]))
 
 
 def icrs_sample(n_samples, clusters=None, seed=None, rng=None):
@@ -392,7 +401,7 @@ def icrs_sample(n_samples, clusters=None, seed=None, rng=None):
 
     gen = _rng(seed=seed, rng=rng)
     for i in range(means.shape[0]):
-        c = _covariance_for_index(int(idx[i]))
+        c = _kinematic_covariance_for_index(int(idx[i]))
         samples.append(gen.multivariate_normal(mean=means[i], cov=c, size=n_samples))
 
     out = np.stack(samples, axis=1)
@@ -440,6 +449,26 @@ def icrs_sample_cluster(n_samples, cluster, outtype="dict", seed=None, rng=None)
     return coordinates.SkyCoord(**out)
 
 
+def sample_structural(n_samples, key, clusters=None, seed=None, rng=None):
+    """the structural parameters are not correlated"""
+
+    _valid_keys_with_errors = _structural_columns_with_errors.keys()
+    key = _resolve_column_key("structural", key)
+    if not isinstance(key, str):
+        raise ValueError("key must be string but was instead {:s}".format(str(type(key))))
+    if not key in _valid_keys_with_errors:
+        raise ValueError("{:s} does not have an assocaited uncertainty ".format(key))
+    error_key = _structural_columns_with_errors[key]
+    value = column("structural", key, occurrence=1, clusters=clusters)
+    uncertainty = column("structural", error_key, occurrence=1,clusters=clusters)
+    gen = _rng(seed=seed, rng=rng)
+    samples=gen.normal(value,uncertainty, size=(n_samples, len(value)))
+    return samples
+
+
+_structural_columns_with_errors = {}
+for key in _baumgardt_structural_columns_with_errors:
+    _structural_columns_with_errors[_normalize_column_name(key)] = _normalize_column_name(_baumgardt_structural_columns_with_errors[key])
 
 __all__ = [
     "names",
@@ -449,7 +478,7 @@ __all__ = [
     "kinematics",
     "structural",
     "icrs",
-    "covariance",
+    "kinematic_covariance",
     "icrs_sample",
     "icrs_sample_catalog",
     "icrs_sample_cluster",

@@ -54,8 +54,6 @@ def test_top_level_module_types():
     assert hasattr(tstrippy.simulator, "allocate_orbits")
     assert hasattr(tstrippy.simulator, "leapfrog")
     assert hasattr(tstrippy.simulator, "forest_ruth")
-    assert hasattr(tstrippy.simulator, "is_strictly_increasing")
-    assert hasattr(tstrippy.simulator, "is_strictly_decreasing")
 
 
 
@@ -78,7 +76,7 @@ def test_io_namespace_structure():
 
     assert isinstance(tstrippy.io.mwgcs, types.ModuleType)
     assert isinstance(tstrippy.io.milkyway_models, types.FunctionType)
-    assert isinstance(tstrippy.io.reference_frames, types.ModuleType)
+    assert isinstance(tstrippy.io.reference_frames, types.FunctionType)
     assert isinstance(tstrippy.io.write_simulation_hdf5, types.FunctionType)
 
 

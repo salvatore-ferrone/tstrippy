@@ -353,24 +353,28 @@ def structural(clusters=None, fields=None):
     return _slice_dict_columns("structural", idx, fields=fields)
 
 
-def icrs(clusters=None):
+def icrs(clusters=None, outtype="dict"):
     """Return astropy-ready ICRS matrix from kinematics.
 
     Output shape is (N, 6) with columns in this order:
     [ra_deg, dec_deg, distance_kpc, pm_ra_masyr, pm_dec_masyr, rv_kms].
     """
-    from astropy import units as u
     _, means = _icrs_means(clusters)
     # instead, return a dictionary ready for astropy 
-    coordinates = {
-        baumgardt_to_astropy_headers["ra"]: means[:,0] * u.Unit(units("kinematics")['ra']),
-        baumgardt_to_astropy_headers["dec"]: means[:,1] * u.Unit(units("kinematics")['dec']),
-        baumgardt_to_astropy_headers["rsun"]: means[:,2] * u.Unit(units("kinematics")['rsun']),
-        baumgardt_to_astropy_headers["mualpha"]: means[:,3] * u.Unit(units("kinematics")['mualpha']),
-        baumgardt_to_astropy_headers["mu_delta"]: means[:,4] * u.Unit(units("kinematics")['mu_delta']),
-        baumgardt_to_astropy_headers["rv"]: means[:,5] * u.Unit(units("kinematics")['rv']),
-    }    
-    return coordinates
+    normalized_outtype = _normalize_icrs_sample_outtype(outtype)
+
+    if normalized_outtype == "array":
+            return means
+        
+    from astropy import units as u
+    
+    mydict = _icrs_dict_from_sample_matrix(means) 
+    if normalized_outtype == "dict":
+        return mydict 
+    
+    from astropy import coordinates
+    
+    return coordinates.SkyCoord(**mydict)
 
 
 def kinematic_covariance(cluster):

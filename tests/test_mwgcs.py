@@ -17,8 +17,8 @@ def test_names_and_column_metadata():
 
 
 def test_icrs_and_case_insensitive_lookup():
-    a = mwgcs.icrs("NGC_104")
-    b = mwgcs.icrs("ngc104")
+    a = mwgcs.icrs("NGC_104",outtype="array")
+    b = mwgcs.icrs("ngc104",outtype="array")
 
     assert a.shape == (1, 6)
     assert b.shape == (1, 6)
@@ -26,7 +26,7 @@ def test_icrs_and_case_insensitive_lookup():
 
 
 def test_covariance_shape_and_sanity():
-    cov = mwgcs.covariance("NGC104")
+    cov = mwgcs.kinematic_covariance("NGC104")
     assert cov.shape == (6, 6)
     assert np.all(np.isfinite(cov))
     assert np.all(np.diag(cov) >= 0.0)

@@ -1,5 +1,8 @@
 MODULE sphericalharmonicsbfe
-    USE mathutils, ONLY: linear_interp_scalar, legendre_axisymmetric_basis, legendre_p_all_axisymmetric, gauss_legendre_nodes_weights
+    USE mathutils, ONLY: linear_interp_scalar, &
+                    legendre_axisymmetric_basis, &
+                    legendre_p_all_axisymmetric, &
+                    gauss_legendre_nodes_weights
     IMPLICIT NONE
 
     ABSTRACT INTERFACE

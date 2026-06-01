@@ -429,6 +429,7 @@ MODULE simulator
                 PRINT*, "ERROR: hostcluster finalize failed"
                 should_return = .TRUE.
             END IF
+            ! set the ionization state
             state%host_enabled = HOST_REGISTERED
         END IF
 
@@ -716,10 +717,10 @@ MODULE simulator
         CALL hostcluster_get_structure(n_params, model_name, constant_params)
     END SUBROUTINE get_hostcluster_structure 
 
-    SUBROUTINE configure_hostcluster_structure_parameter_table(index,ntimes,timestamps,values)
+    SUBROUTINE configure_hostcluster_structure_parameter_table(index,ntimes,timestamps_parameter,values)
         INTEGER, INTENT(IN) :: index, ntimes
-        REAL*8, INTENT(IN), DIMENSION(ntimes) :: timestamps,values
-        CALL hostcluster_configure_structure_parameter_table(index,ntimes,timestamps,values)
+        REAL*8, INTENT(IN), DIMENSION(ntimes) :: timestamps_parameter,values
+        CALL hostcluster_configure_structure_parameter_table(index,ntimes,timestamps_parameter,values)
     END SUBROUTINE configure_hostcluster_structure_parameter_table
 
     !!!! OUTPUTS

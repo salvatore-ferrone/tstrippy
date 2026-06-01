@@ -73,13 +73,13 @@ MODULE hostcluster
     ! cannot have a deffered dimension
     TYPE(structural_parameter_t), DIMENSION(MAX_STRUCTURE_PARAMETERS_HANDLERS) :: STRUCTURE_PARAMETERS 
 
-
     ! THE VARIABLES FOR THE KINEMATICS
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_TIMES
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_X, HOST_Y, HOST_Z
     REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_VX, HOST_VY, HOST_VZ
 
     INTEGER, PUBLIC :: HOST_CURRENT_KINEMATICS_TIME_INDEX = 1 
+    REAL*8, PUBLIC :: HOST_T_CURRENT = 0.0D0
     REAL*8, PUBLIC  :: HOST_X_CURRENT = 0.0D0
     REAL*8, PUBLIC  :: HOST_Y_CURRENT = 0.0D0
     REAL*8, PUBLIC  :: HOST_Z_CURRENT = 0.0D0
@@ -87,6 +87,12 @@ MODULE hostcluster
     REAL*8, PUBLIC  :: HOST_VY_CURRENT = 0.0D0
     REAL*8, PUBLIC  :: HOST_VZ_CURRENT = 0.0D0
 
+    ! THE VARIABLES TO KNOW WHEN THE PARTICLES ARE IONIZED OR NOT 
+    LOGICAL, PUBLIC, DIMENSION(:), ALLOCATABLE :: IONIZED
+    REAL*8, PUBLIC, DIMENSION(:), ALLOCATABLE :: TIME_OF_IONIZATION 
+    REAL*8, PUBLIC :: TIME_OF_IONIZATION_DEFAULT = -9999.0
+
+    
     PUBLIC :: clear
     PUBLIC :: add_hostcluster
     PUBLIC :: configure_hostcluster_kinematics
@@ -111,6 +117,10 @@ CONTAINS
 
         IF (ALLOCATED(HOST_PARAMS_CURRENT)) DEALLOCATE(HOST_PARAMS_CURRENT)
         IF (ALLOCATED(HOST_PARAMS_CONSTANT)) DEALLOCATE(HOST_PARAMS_CONSTANT)
+
+        IF (ALLOCATED(IONIZED)) DEALLOCATE(IONIZED)
+        IF (ALLOCATED(TIME_OF_IONIZATION)) DEALLOCATE(TIME_OF_IONIZATION)
+
 
 
         HOST_REGISTERED = .FALSE.
@@ -207,6 +217,83 @@ CONTAINS
 
     END SUBROUTINE eval_force    
 
+    !!! THE ENERGY OF THE PARTICLES WRT THE HOST  
+    SUBROUTINE relative_kinetic_energy(nparticles,vx,vy,vz,kinetic_energy)
+        integer, intent(in) :: nparticles
+        REAL*8, DIMENSION(nparticles),  intent(in)  :: vx,vy,vz
+        REAL*8, DIMENSION(nparticles),  intent(out) :: kinetic_energy
+        kinetic_energy = 0.5D0 * (  (vx - HOST_VX_CURRENT)**2 + &
+                                    (vy - HOST_VY_CURRENT)**2 + &
+                                    (vz - HOST_VZ_CURRENT)**2)
+    END SUBROUTINE relative_kinetic_energy
+
+    SUBROUTINE relative_potential_energy(nparticles,x,y,z,potential_energy)
+        integer, intent(in) :: nparticles
+        REAL*8, DIMENSION(nparticles),  intent(in)  :: x,y,z
+        REAL*8, DIMENSION(nparticles),  intent(out) :: potential_energy
+        REAL*8, dimension(nparticles) :: dx,dy,dz
+        dx = x-HOST_X_CURRENT
+        dy = y-HOST_Y_CURRENT
+        dz = z-HOST_Z_CURRENT
+        CALL model_potential(nparticles, dx, dy, dz, potential_energy)
+    END SUBROUTINE relative_potential_energy
+
+    SUBROUTINE two_body_energy(nparticles,x,y,z,vx,vy,vz,energy)
+        integer, intent(in) :: nparticles
+        REAL*8, DIMENSION(nparticles),  intent(in)  :: x,y,z,vx,vy,vz
+        REAL*8, DIMENSION(nparticles),  intent(out)  :: energy
+        REAL*8, DIMENSION(nparticles) :: kinetic_energy, potential_energy
+        CALL relative_potential_energy(nparticles,x,y,z,potential_energy)
+        CALL relative_kinetic_energy(nparticles,vx,vy,vz,kinetic_energy)
+        energy = kinetic_energy + potential_energy
+    END SUBROUTINE two_body_energy    
+    
+    !!!! Tracking the ionization state
+    SUBROUTINE initialize_ionization_state(nparticles)
+        integer, intent(in) :: nparticles
+        if (allocated(IONIZED)) DEALLOCATE(IONIZED)
+        IF (allocated(TIME_OF_IONIZATION)) DEALLOCATE(TIME_OF_IONIZATION)
+
+        ALLOCATE(TIME_OF_IONIZATION(nparticles))
+        ALLOCATE(IONIZED(nparticles))
+        IONIZED             =   .FALSE.
+        TIME_OF_IONIZATION  =   TIME_OF_IONIZATION_DEFAULT 
+    END SUBROUTINE initialize_ionization_state
+
+    SUBROUTINE are_ionized(nparticles,x,y,z,vx,vy,vz,unbound)
+        integer, INTENT(IN) :: nparticles
+        REAL*8, dimension(nparticles), intent(in) :: x,y,z,vx,vy,vz
+        logical, INTENT(OUT), dimension(nparticles) :: unbound
+        REAL*8, DIMENSION(nparticles) :: energy
+        unbound = .FALSE.
+        CALL two_body_energy(nparticles,x,y,z,vx,vy,vz, energy)
+        unbound = (energy.gt.0.0)
+    END SUBROUTINE are_ionized
+
+    SUBROUTINE update_ionization_state(nparticles,x,y,z,vx,vy,vz)
+        integer, INTENT(IN) :: nparticles
+        REAL*8, dimension(nparticles), intent(in) :: x,y,z,vx,vy,vz
+        LOGICAL, DIMENSION(nparticles) :: unbound, freshly_ionized
+        unbound         = .FALSE.
+        freshly_ionized = .FALSE.
+        CALL are_ionized(nparticles,x,y,z,vx,vy,vz,unbound)
+        ! see if we are freshly ionized
+        ! would be those that have not yet been ionized but are now unbound
+        freshly_ionized = (.NOT.IONIZED).AND.unbound
+        ! NOW UPDATE IONIZED
+        IONIZED = IONIZED.or.freshly_ionized
+        ! now go through and update the times for the freshly ionized particles
+        WHERE (FRESHLY_IONIZED) TIME_OF_IONIZATION = HOST_T_CURRENT
+    END SUBROUTINE update_ionization_state
+
+    SUBROUTINE get_ionization_state(nparticles, ionized_particles, ionization_time)
+        integer, INTENT(IN) :: nparticles
+        LOGICAL, DIMENSION(nparticles), INTENT(OUT) :: ionized_particles
+        REAL*8, DIMENSION(nparticles), INTENT(OUT) :: ionization_time
+        ionized_particles = IONIZED
+        ionization_time = TIME_OF_IONIZATION
+    END SUBROUTINE get_ionization_state
+
     !!!! HANDELING THE KINEMATICS
     SUBROUTINE configure_hostcluster_kinematics(ntimes, t, x, y, z, vx, vy, vz)
         INTEGER, INTENT(IN) :: ntimes
@@ -273,6 +360,7 @@ CONTAINS
         TF = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX+1)
         dt = TF-T0
         alpha = (query_time - T0) / dt
+        HOST_T_CURRENT = query_time
         HOST_X_CURRENT = linear_interp_scalar(HOST_X(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_X(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
         HOST_Y_CURRENT = linear_interp_scalar(HOST_Y(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_Y(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
         HOST_Z_CURRENT = linear_interp_scalar(HOST_Z(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_Z(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )

@@ -17,7 +17,10 @@ MODULE simulator
                            hostcluster_set_gravitational_constant => set_gravitational_constant,&
                            hostcluster_get_kinematics       => get_kinematics,&
                            hostcluster_get_structure        => get_structure,&
-                           hostcluster_configure_structure_parameter_table => configure_hostcluster_structure_parameter_table,&
+                           hostcluster_configure_structure_parameter_table  => configure_hostcluster_structure_parameter_table, &
+                           hostcluster_initialize_ionization_state          => initialize_ionization_state, &
+                           hostcluster_update_ionization_state              => update_ionization_state, &
+                           hostcluster_get_ionization_state                 => get_ionization_state, &
                            HOST_REGISTERED, &
                            HOST_FINALIZED
     USE mathutils, ONLY: is_strictly_increasing, is_strictly_decreasing
@@ -422,15 +425,26 @@ MODULE simulator
         state%gravity_finalized = GRAVITY_FINALIZED
 
         IF (state%host_enabled .OR. HOST_REGISTERED) THEN
+            ! note. this should never trigger. However, it's important to note that 
+            !   it doesn't make sense to use a host cluster without also using particles
+            if (.not.state%initial_conditions_set) then 
+                print*, "a host cluster can only be used when initial conditions are registered"
+                should_return = .TRUE.
+            END IF 
+
+            CALL hostcluster_initialize_ionization_state(Nparticles)
+            state%host_enabled = HOST_REGISTERED
+            
             IF (.NOT. HOST_FINALIZED) THEN
                 CALL hostcluster_finalize()
             END IF
+
             IF (.NOT. HOST_FINALIZED) THEN
                 PRINT*, "ERROR: hostcluster finalize failed"
                 should_return = .TRUE.
             END IF
             ! set the ionization state
-            state%host_enabled = HOST_REGISTERED
+
         END IF
 
         ! Resolve timestamps: build if user did not provide them
@@ -558,6 +572,10 @@ MODULE simulator
 
             ! ADD NOTE
             ! if there is a host cluster, check who is bound
+            IF (state%host_enabled) then
+                CALL hostcluster_update_state(currenttime)
+                CALL hostcluster_update_ionization_state(Nparticles,x,y,z,vx,vy,vz)
+            END IF 
 
             ! Save orbit snapshot every nskip_orbit_timestamps steps
             IF (n_particles_orbit > 0) THEN
@@ -722,6 +740,17 @@ MODULE simulator
         REAL*8, INTENT(IN), DIMENSION(ntimes) :: timestamps_parameter,values
         CALL hostcluster_configure_structure_parameter_table(index,ntimes,timestamps_parameter,values)
     END SUBROUTINE configure_hostcluster_structure_parameter_table
+
+    subroutine get_hostcluster_ionization_state(NP, ionized_particles, ionization_time)
+        INTEGER, INTENT(IN) :: NP
+        LOGICAL, DIMENSION(NP), INTENT(OUT) :: ionized_particles
+        REAL*8, DIMENSION(NP), INTENT(OUT) :: ionization_time
+        IF (Nparticles /= NP) then 
+            print*, "WARNING: get_hostcluster_ionization_state, nparticles mismatch"
+        END IF 
+        CALL hostcluster_get_ionization_state(NP, ionized_particles, ionization_time)
+        
+    end subroutine
 
     !!!! OUTPUTS
     SUBROUTINE initwritesnapshots(nskip, directory, basename)
@@ -1140,6 +1169,7 @@ MODULE simulator
     END SUBROUTINE gravity_force_provider
 
     SUBROUTINE hostcluster_force_provider(t, n, xin, yin, zin, ax, ay, az)
+        ! this ensures that the host state is updated each time the force is called
         REAL*8, INTENT(IN) :: t
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: xin, yin, zin

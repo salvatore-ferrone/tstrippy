@@ -16,6 +16,7 @@ MODULE hostcluster
     LOGICAL, PUBLIC :: HOST_FINALIZED = .FALSE.
     LOGICAL, PUBLIC :: HOST_KINEMATICS_SET = .FALSE.
     LOGICAL, PUBLIC :: HOST_STRUCTURE_SET = .FALSE.
+    LOGICAL, PUBLIC :: HOST_IONIZATION_STATE_SET = .FALSE.
     LOGICAL, PUBLIC :: KINEMATICS_FORWARD_ORBIT = .TRUE.
 
     REAL*8, PARAMETER, PRIVATE :: G_DEFAULT = 4.30091727D-6
@@ -127,6 +128,7 @@ CONTAINS
         HOST_FINALIZED = .FALSE.
         HOST_KINEMATICS_SET = .FALSE.
         HOST_STRUCTURE_SET = .FALSE.
+        HOST_IONIZATION_STATE_SET = .FALSE. 
         G_HOSTCLUSTER = G_DEFAULT
         G_IS_DEFAULT = .TRUE.
         HOST_NPARAMS = 0
@@ -184,6 +186,10 @@ CONTAINS
             RETURN
         END IF
 
+        if (.NOT. HOST_IONIZATION_STATE_SET) THEN
+            PRINT*, "WARNING: finalize_hostcluster failed to initialize the ionization state of the particles"
+            RETURN 
+        END IF 
         HOST_FINALIZED = .TRUE.
     END SUBROUTINE finalize_hostcluster
 
@@ -258,6 +264,7 @@ CONTAINS
         ALLOCATE(IONIZED(nparticles))
         IONIZED             =   .FALSE.
         TIME_OF_IONIZATION  =   TIME_OF_IONIZATION_DEFAULT 
+        HOST_IONIZATION_STATE_SET = .TRUE. 
     END SUBROUTINE initialize_ionization_state
 
     SUBROUTINE are_ionized(nparticles,x,y,z,vx,vy,vz,unbound)

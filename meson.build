@@ -145,6 +145,7 @@ py.install_sources(
         'tstrippy/code/bfe.py',
         'tstrippy/code/sampling.py',
         'tstrippy/code/orbits.py',
+        'tstrippy/code/analysis.py',
     ),
     subdir: python_install_subdir / 'code'
 )

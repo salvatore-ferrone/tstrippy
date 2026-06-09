@@ -2,7 +2,7 @@
 
 from importlib import import_module
 
-__all__ = ["sampling", "bfe", "orbits", "analysis"]
+__all__ = ["sampling", "bfe", "orbits", "analysis", "workflows"]
 
 
 def __getattr__(name):

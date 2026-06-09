@@ -146,6 +146,7 @@ py.install_sources(
         'tstrippy/code/sampling.py',
         'tstrippy/code/orbits.py',
         'tstrippy/code/analysis.py',
+        'tstrippy/code/workflows.py',
     ),
     subdir: python_install_subdir / 'code'
 )

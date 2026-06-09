@@ -76,7 +76,6 @@ def compute_host_orbit(simulator, initialconditions, mwmodel, scheme, trim_orbit
         raise ValueError("initialconditions must be a sequence of length 6")
     if not isinstance(scheme, (list, tuple)) or len(scheme) != 2:
         raise ValueError("scheme must be a 2-item sequence: [name, [t0, dt, nsteps]]")
-        raise ValueError("max_orbit_steps must be an integer >= 2")
     _validate_components(mwmodel)
 
     simulator.clear()

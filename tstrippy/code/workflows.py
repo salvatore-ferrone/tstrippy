@@ -35,7 +35,7 @@ def compute_backward_and_forward_host_orbit(simulator, schemeName, dt, NstepsBac
     simulator.finalize()
     simulator.run()
     orbits=simulator.orbits.copy()
-    timestamps_backward=simulator.timestamps.copy()
+    timestamps_backward=simulator.orbits_timestamps.copy()
     orbits_backward = orbits[:,:,0] # only one particle. go down a dimension
     # now do it forward
     simulator.clear()
@@ -47,7 +47,7 @@ def compute_backward_and_forward_host_orbit(simulator, schemeName, dt, NstepsBac
     simulator.finalize()
     simulator.run()
     orbits=simulator.orbits.copy()
-    timestamps_forward=simulator.timestamps.copy()
+    timestamps_forward=simulator.orbits_timestamps.copy()
     orbits_forward = orbits[:,:,0] # only one particle. go down a dimension
     simulator.clear()
     # concatenate the two
@@ -88,7 +88,7 @@ def compute_host_orbit(simulator, initialconditions, mwmodel, scheme, trim_orbit
     simulator.finalize()
     simulator.run()
     orbits=simulator.orbits.copy()
-    timestamps=simulator.timestamps.copy()
+    timestamps=simulator.orbits_timestamps.copy()
     simulator.clear()
     orbits = orbits[:,:,0]
     return timestamps, orbits.T
@@ -117,12 +117,9 @@ def generate_vanilla_stream(simulator, mwmodel, scheme, initialconditions, hostc
         simulator.add_component(comp['name'],comp['parameters'])
     simulator.configure_hostcluster_kinematics(*hostcluster_kinematics)
     simulator.configure_hostcluster_structure(*hostcluster_structure)
-    for hostcluster_structure_parameter_table in hostcluster_structure_parameter_tables:
-        if not isinstance(hostcluster_structure_parameter_table, (list, tuple)):
-            raise TypeError("Each hostcluster structure parameter table must be a list/tuple")
-        if len(hostcluster_structure_parameter_table) == 0:
-            raise ValueError("hostcluster structure parameter table cannot be empty")
-        simulator.configure_hostcluster_structure_parameter_table(*hostcluster_structure_parameter_table)
+    if hostcluster_structure_parameter_tables is not None:
+        for hostcluster_structure_parameter_table in hostcluster_structure_parameter_tables:
+            simulator.configure_hostcluster_structure_parameter_table(*hostcluster_structure_parameter_table)
     simulator.trim_orbits(trim_orbits)
     simulator.finalize()
     simulator.run()

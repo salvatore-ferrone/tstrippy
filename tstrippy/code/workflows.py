@@ -117,9 +117,12 @@ def generate_vanilla_stream(simulator, mwmodel, scheme, initialconditions, hostc
         simulator.add_component(comp['name'],comp['parameters'])
     simulator.configure_hostcluster_kinematics(*hostcluster_kinematics)
     simulator.configure_hostcluster_structure(*hostcluster_structure)
-    if hostcluster_structure_parameter_tables is not None:
-        for hostcluster_structure_parameter_table in hostcluster_structure_parameter_tables:
-            simulator.configure_hostcluster_structure_parameter_table(*hostcluster_structure_parameter_table)
+    _configure_hostcluster_structure_parameter_tables(
+        simulator,
+        hostcluster_structure_parameter_tables,
+    )
+
+
     simulator.trim_orbits(trim_orbits)
     simulator.finalize()
     simulator.run()
@@ -143,6 +146,97 @@ def _downsample_time_series(timestamps, values, max_steps):
 
 
 # checks
+def _normalize_hostcluster_structure_parameter_tables(hostcluster_structure_parameter_tables):
+    """Normalize None/single-table/list-of-tables into a list of tables."""
+    if hostcluster_structure_parameter_tables is None:
+        return []
+
+    if _looks_like_single_parameter_table(hostcluster_structure_parameter_tables):
+        return [hostcluster_structure_parameter_tables]
+
+    if isinstance(hostcluster_structure_parameter_tables, (list, tuple)):
+        return list(hostcluster_structure_parameter_tables)
+
+    print("hostcluster_structure_parameter_tables value:", hostcluster_structure_parameter_tables)
+    raise TypeError(
+        "hostcluster_structure_parameter_tables must be None, a single parameter table, "
+        "or a list/tuple of parameter tables; "
+        f"got {type(hostcluster_structure_parameter_tables).__name__} "
+        f"with value {hostcluster_structure_parameter_tables!r}"
+    )
+
+
+def _looks_like_single_parameter_table(value):
+    """A parameter table is [index, timestamps, parameter_values]."""
+    return isinstance(value, (list, tuple)) and len(value) == 3
+
+
+def _validate_parameter_table(table, idx=None):
+    """Validate one parameter table and return normalized values."""
+    label = f"table[{idx}]" if idx is not None else "table"
+    if not isinstance(table, (list, tuple)) or len(table) != 3:
+        print(f"{label} value:", table)
+        raise TypeError(
+            f"{label} must be a 3-item list/tuple: [index, timestamps, parameter_values]; "
+            f"got {type(table).__name__} with value {table!r}"
+        )
+
+    index, timestamps, parameter_values = table
+
+    if not isinstance(index, (int, np.integer)):
+        print(f"{label} index value:", index)
+        raise TypeError(
+            f"{label}[0] (index) must be an integer; "
+            f"got {type(index).__name__} with value {index!r}"
+        )
+
+    timestamps_arr = np.asarray(timestamps)
+    parameter_values_arr = np.asarray(parameter_values)
+
+    if timestamps_arr.ndim != 1:
+        print(f"{label} timestamps value:", timestamps)
+        raise ValueError(
+            f"{label}[1] (timestamps) must be 1D; "
+            f"got array with shape {timestamps_arr.shape}"
+        )
+
+    if parameter_values_arr.ndim != 1:
+        print(f"{label} parameter_values value:", parameter_values)
+        raise ValueError(
+            f"{label}[2] (parameter_values) must be 1D; "
+            f"got array with shape {parameter_values_arr.shape}"
+        )
+
+    if timestamps_arr.shape[0] != parameter_values_arr.shape[0]:
+        print(f"{label} timestamps value:", timestamps)
+        print(f"{label} parameter_values value:", parameter_values)
+        raise ValueError(
+            f"{label} timestamps and parameter_values must have the same length; "
+            f"got {timestamps_arr.shape[0]} and {parameter_values_arr.shape[0]}"
+        )
+
+    return int(index), timestamps_arr, parameter_values_arr
+
+
+def _configure_hostcluster_structure_parameter_tables(simulator, hostcluster_structure_parameter_tables):
+    """Normalize, validate, and upload host cluster structure parameter tables."""
+    tables = _normalize_hostcluster_structure_parameter_tables(hostcluster_structure_parameter_tables)
+    for i, table in enumerate(tables):
+        index, timestamps, parameter_values = _validate_parameter_table(table, idx=i)
+        try:
+            simulator.configure_hostcluster_structure_parameter_table(
+                index,
+                timestamps,
+                parameter_values,
+            )
+        except Exception as exc:
+            print(f"failed to upload hostcluster_structure_parameter_table at table[{i}]")
+            print("table value:", table)
+            raise RuntimeError(
+                f"Failed to configure hostcluster_structure_parameter_table at table[{i}] "
+                f"(index={index})"
+            ) from exc
+
 def _require_methods(obj, methods, obj_name):
     missing = [name for name in methods if not hasattr(obj, name)]
     if missing:

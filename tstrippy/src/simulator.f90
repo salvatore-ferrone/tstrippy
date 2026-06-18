@@ -2,6 +2,8 @@ MODULE simulator
     USE gravity, ONLY: gravity_clear => clear, &
                        gravity_set_gravitational_constant => set_gravitational_constant, &
                        gravity_add_component => add_component, &
+                       gravity_add_component_agama => add_component_agama, &
+                       gravity_add_component_agama_from_file => add_component_agama_from_file, &
                        gravity_finalize => finalize, &
                        gravity_force => force, &
                        gravity_potential => potential, &
@@ -685,6 +687,23 @@ MODULE simulator
         state%gravity_finalized = GRAVITY_FINALIZED
         state%finalized = .FALSE.
     END SUBROUTINE add_component
+
+    SUBROUTINE add_component_agama(params)
+        CHARACTER(LEN=*), INTENT(IN) :: params
+        CALL gravity_add_component_agama(params)
+        CALL clear_force_registry()
+        state%gravity_finalized = GRAVITY_FINALIZED
+        state%finalized = .FALSE.
+    END SUBROUTINE add_component_agama   
+    
+
+    SUBROUTINE add_component_agama_from_file(inifilename)
+        CHARACTER(LEN=*), INTENT(IN) :: inifilename
+        CALL gravity_add_component_agama_from_file(inifilename)
+        CALL clear_force_registry()
+        state%gravity_finalized = GRAVITY_FINALIZED
+        state%finalized = .FALSE.
+    END SUBROUTINE add_component_agama_from_file        
 
     !!!!! THE HOST CLUSTER MODULE
     SUBROUTINE add_hostcluster()

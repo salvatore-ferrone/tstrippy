@@ -1,4 +1,12 @@
 MODULE gravity
+    USE agamabackend, ONLY: agama_clear => clear, &
+                      agama_add_component_from_param => add_component_from_param, &
+                      agama_add_component_from_file => add_component_from_file, &
+                      agama_finalize => finalize, &
+                      agama_force_component => force_component, &
+                      agama_potential_component => potential_component, &
+                      agama_density_component => density_component, &
+                      agama_ncomponents => ncomponents
     USE sphericalharmonicsbfe, ONLY: BASIS_GRID_SET, BASIS_EXPANSION_INITIALIZED, &
                                      setsphericalharmonicbasisgravityconstant, &
                                      clearsphericalharmonicbasis, &
@@ -31,6 +39,7 @@ MODULE gravity
     INTEGER, PARAMETER, PRIVATE :: BACKEND_ANALYTIC = 1
     INTEGER, PARAMETER, PRIVATE :: BACKEND_SH = 2
     INTEGER, PARAMETER, PRIVATE :: BACKEND_BESSEL = 3
+    INTEGER, PARAMETER, PRIVATE :: BACKEND_AGAMA = 4
     REAL*8, PARAMETER, PRIVATE :: BESSEL_DEFAULT_R_SCALE = 1.0D0
     REAL*8, PARAMETER, PRIVATE :: BESSEL_DEFAULT_Z_SCALE = 1.0D0
     REAL*8, PARAMETER, PRIVATE :: BESSEL_DEFAULT_SCALE_DIVISOR = 3.0D0
@@ -77,6 +86,8 @@ MODULE gravity
     LOGICAL, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: BESSEL_SCALE_OVERRIDE_SET = .FALSE.
     REAL*8, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: BESSEL_SCALE_OVERRIDE_R = 0.0D0
     REAL*8, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: BESSEL_SCALE_OVERRIDE_Z = 0.0D0
+    CHARACTER(LEN=256), DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: AGAMA_COMPONENT_SPECS = ''
+    LOGICAL, DIMENSION(GRAVITY_MAX_NCOMP), PRIVATE :: AGAMA_COMPONENT_SPEC_IS_FILE = .FALSE.
 
     INTEGER, PARAMETER, PRIVATE :: MAX_COMPONENT_HANDLERS = 16
     TYPE(component_handler_t), DIMENSION(MAX_COMPONENT_HANDLERS), PRIVATE :: COMPONENT_HANDLERS
@@ -84,12 +95,13 @@ MODULE gravity
     LOGICAL, PRIVATE :: COMPONENT_HANDLERS_INITIALIZED = .FALSE.
 
     PUBLIC :: ibata2024halo_density
-    PRIVATE :: ensure_component_handlers_initialized, register_handler_analytic, register_handler_sh, register_handler_bessel
-    PRIVATE :: handler_index_from_name, component_is_sh, component_is_bessel
+    PRIVATE :: ensure_component_handlers_initialized, register_handler_analytic, register_handler_sh, register_handler_bessel, register_handler_agama
+    PRIVATE :: handler_index_from_name, component_is_sh, component_is_bessel, component_is_agama
     PRIVATE :: ensure_sh_component_tables_loaded, eval_component_force, eval_component_potential
     PRIVATE :: sh_force_from_tables, sh_potential_from_tables
     PRIVATE :: bessel_force_wrapper, bessel_potential_wrapper
     PRIVATE :: count_sh_components, sh_slot_for_component, count_bessel_components, bessel_slot_for_component
+    PRIVATE :: count_agama_components, agama_slot_for_component
 
 CONTAINS
 
@@ -114,6 +126,7 @@ CONTAINS
         CALL register_handler_sh("ibata2024halo", 6, ibata2024halo_density)
         CALL register_handler_bessel("exponentialdisk", 3, exponentialdisk_density)
         CALL register_handler_bessel("mcmilan2017disk", 4, mcmilan2017disk_density)
+        CALL register_handler_agama("agama", 0)
 
         COMPONENT_HANDLERS_INITIALIZED = .TRUE.
     END SUBROUTINE ensure_component_handlers_initialized
@@ -179,6 +192,73 @@ CONTAINS
         COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%density_proc => density_proc
     END SUBROUTINE register_handler_bessel
 
+    SUBROUTINE register_handler_agama(model_name, nparams)
+        CHARACTER(LEN=*), INTENT(IN) :: model_name
+        INTEGER, INTENT(IN) :: nparams
+
+        IF (N_COMPONENT_HANDLERS >= MAX_COMPONENT_HANDLERS) THEN
+            WRITE(*,'(A)') "WARNING: register_handler_agama: exceeded MAX_COMPONENT_HANDLERS"
+            RETURN
+        END IF
+
+        N_COMPONENT_HANDLERS = N_COMPONENT_HANDLERS + 1
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%model_name = model_name
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%nparams = nparams
+        COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%backend = BACKEND_AGAMA
+    END SUBROUTINE register_handler_agama
+
+    SUBROUTINE add_component_agama(params)
+        CHARACTER(LEN=*), INTENT(IN) :: params
+        INTEGER :: i_handler
+
+        IF (GRAVITY_FINALIZED) THEN
+            WRITE(*,'(A)') "WARNING: add_component_agama: cannot add components after finalize"
+            RETURN
+        END IF
+        IF (GRAVITY_NCOMP >= GRAVITY_MAX_NCOMP) THEN
+            WRITE(*,'(A)') "WARNING: add_component_agama: maximum number of components reached"
+            RETURN
+        END IF
+
+        i_handler = handler_index_from_name("agama")
+        IF (i_handler <= 0) THEN
+            WRITE(*,'(A)') "WARNING: add_component_agama: agama backend is not registered"
+            RETURN
+        END IF
+
+        GRAVITY_NCOMP = GRAVITY_NCOMP + 1
+        COMPONENT_HANDLER_SLOT(GRAVITY_NCOMP) = i_handler
+        COMPONENT_MODEL_NAMES(GRAVITY_NCOMP) = "agama"
+        AGAMA_COMPONENT_SPECS(GRAVITY_NCOMP) = ADJUSTL(params)
+        AGAMA_COMPONENT_SPEC_IS_FILE(GRAVITY_NCOMP) = .FALSE.
+    END SUBROUTINE add_component_agama
+
+    SUBROUTINE add_component_agama_from_file(inifilename)
+        CHARACTER(LEN=*), INTENT(IN) :: inifilename
+        INTEGER :: i_handler
+
+        IF (GRAVITY_FINALIZED) THEN
+            WRITE(*,'(A)') "WARNING: add_component_agama_from_file: cannot add components after finalize"
+            RETURN
+        END IF
+        IF (GRAVITY_NCOMP >= GRAVITY_MAX_NCOMP) THEN
+            WRITE(*,'(A)') "WARNING: add_component_agama_from_file: maximum number of components reached"
+            RETURN
+        END IF
+
+        i_handler = handler_index_from_name("agama")
+        IF (i_handler <= 0) THEN
+            WRITE(*,'(A)') "WARNING: add_component_agama_from_file: agama backend is not registered"
+            RETURN
+        END IF
+
+        GRAVITY_NCOMP = GRAVITY_NCOMP + 1
+        COMPONENT_HANDLER_SLOT(GRAVITY_NCOMP) = i_handler
+        COMPONENT_MODEL_NAMES(GRAVITY_NCOMP) = "agama"
+        AGAMA_COMPONENT_SPECS(GRAVITY_NCOMP) = ADJUSTL(inifilename)
+        AGAMA_COMPONENT_SPEC_IS_FILE(GRAVITY_NCOMP) = .TRUE.
+    END SUBROUTINE add_component_agama_from_file
+
     INTEGER FUNCTION handler_index_from_name(model_name)
         
         CHARACTER(LEN=*), INTENT(IN) :: model_name
@@ -220,6 +300,19 @@ CONTAINS
         component_is_bessel = (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_BESSEL)
     END FUNCTION component_is_bessel
 
+    LOGICAL FUNCTION component_is_agama(i_comp)
+
+        INTEGER, INTENT(IN) :: i_comp
+        INTEGER :: i_handler
+
+        component_is_agama = .FALSE.
+        IF (i_comp < 1 .OR. i_comp > GRAVITY_NCOMP) RETURN
+        i_handler = COMPONENT_HANDLER_SLOT(i_comp)
+        IF (i_handler < 1 .OR. i_handler > N_COMPONENT_HANDLERS) RETURN
+
+        component_is_agama = (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_AGAMA)
+    END FUNCTION component_is_agama
+
     ! MODULE-STATE subroutines
     SUBROUTINE clear()
         
@@ -234,8 +327,11 @@ CONTAINS
         BESSEL_SCALE_OVERRIDE_SET = .FALSE.
         BESSEL_SCALE_OVERRIDE_R = 0.0D0
         BESSEL_SCALE_OVERRIDE_Z = 0.0D0
+        AGAMA_COMPONENT_SPECS = ''
+        AGAMA_COMPONENT_SPEC_IS_FILE = .FALSE.
         CALL clearsphericalharmonicbasis()
         CALL bessel_clear()
+        CALL agama_clear()
     END SUBROUTINE clear
 
     SUBROUTINE set_gravitational_constant(g)
@@ -291,7 +387,7 @@ CONTAINS
 
     SUBROUTINE finalize()
         
-        INTEGER :: i, n_sh, n_bessel, i_sh, i_bessel, i_sh_slot, i_handler
+        INTEGER :: i, n_sh, n_bessel, n_agama, i_sh, i_bessel, i_sh_slot, i_handler
         REAL*8 :: bessel_r_scale, bessel_z_scale
         IF (GRAVITY_NCOMP < 1) THEN
             WRITE(*,'(A)') "WARNING: finalize: no components registered"
@@ -300,6 +396,7 @@ CONTAINS
 
         n_sh = 0
         n_bessel = 0
+        n_agama = 0
         i_sh = 0
         i_bessel = 0
         DO i = 1, GRAVITY_NCOMP
@@ -315,6 +412,15 @@ CONTAINS
             IF (component_is_bessel(i)) THEN
                 n_bessel = n_bessel + 1
                 i_bessel = i
+            END IF
+            IF (component_is_agama(i)) THEN
+                n_agama = n_agama + 1
+                i_handler = COMPONENT_HANDLER_SLOT(i)
+                IF (AGAMA_COMPONENT_SPEC_IS_FILE(i)) THEN
+                    CALL agama_add_component_from_file(TRIM(AGAMA_COMPONENT_SPECS(i)))
+                ELSE
+                    CALL agama_add_component_from_param(TRIM(AGAMA_COMPONENT_SPECS(i)))
+                END IF
             END IF
         END DO
 
@@ -378,6 +484,10 @@ CONTAINS
             END DO
         END IF
 
+        IF (n_agama >= 1) THEN
+            CALL agama_finalize()
+        END IF
+
         GRAVITY_FINALIZED = .TRUE.
     END SUBROUTINE finalize
 
@@ -424,6 +534,12 @@ CONTAINS
             CALL bessel_load_component(i_bessel_slot)
         END IF
 
+        IF (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_AGAMA) THEN
+            CALL agama_force_component(agama_slot_for_component(i_comp), n, x, y, z, force_c(:,1), force_c(:,2), force_c(:,3))
+            force_c = GRAVITY_G * force_c
+            RETURN
+        END IF
+
         CALL COMPONENT_HANDLERS(i_handler)%force_proc( &
             GRAVITY_PARAMS(1:COMPONENT_HANDLERS(i_handler)%nparams, i_comp), n, x, y, z, force_c)
     END SUBROUTINE eval_component_force
@@ -448,6 +564,12 @@ CONTAINS
         IF (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_BESSEL) THEN
             i_bessel_slot = bessel_slot_for_component(i_comp)
             CALL bessel_load_component(i_bessel_slot)
+        END IF
+
+        IF (COMPONENT_HANDLERS(i_handler)%backend == BACKEND_AGAMA) THEN
+            CALL agama_potential_component(agama_slot_for_component(i_comp), n, x, y, z, phi_c)
+            phi_c = GRAVITY_G * phi_c
+            RETURN
         END IF
 
         CALL COMPONENT_HANDLERS(i_handler)%potential_proc( &
@@ -560,6 +682,8 @@ CONTAINS
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
 
+        IF (SIZE(params) < 0) RETURN
+
         CALL sphericalharmonicbasisforce(n, x, y, z, force(:,1), force(:,2), force(:,3))
     END SUBROUTINE sh_force_from_tables
 
@@ -569,6 +693,8 @@ CONTAINS
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
+
+        IF (SIZE(params) < 0) RETURN
 
         CALL sphericalharmonicbasispotential(n, x, y, z, phi)
     END SUBROUTINE sh_potential_from_tables
@@ -647,6 +773,8 @@ CONTAINS
         REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
         REAL*8, DIMENSION(n) :: ax, ay, az
 
+        IF (SIZE(params) < 0) RETURN
+
         CALL bessel_force(n, x, y, z, ax, ay, az)
         force(:,1) = ax
         force(:,2) = ay
@@ -659,6 +787,8 @@ CONTAINS
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
         REAL*8, INTENT(OUT), DIMENSION(n) :: phi
+
+        IF (SIZE(params) < 0) RETURN
 
         CALL bessel_potential(n, x, y, z, phi)
     END SUBROUTINE bessel_potential_wrapper
@@ -674,6 +804,33 @@ CONTAINS
             END IF
         END DO
     END FUNCTION count_bessel_components
+
+    INTEGER FUNCTION count_agama_components()
+
+        INTEGER :: i
+
+        count_agama_components = 0
+        DO i = 1, GRAVITY_NCOMP
+            IF (component_is_agama(i)) THEN
+                count_agama_components = count_agama_components + 1
+            END IF
+        END DO
+    END FUNCTION count_agama_components
+
+    INTEGER FUNCTION agama_slot_for_component(i_comp)
+
+        INTEGER, INTENT(IN) :: i_comp
+        INTEGER :: i
+
+        agama_slot_for_component = 0
+        IF (i_comp < 1 .OR. i_comp > GRAVITY_NCOMP) RETURN
+
+        DO i = 1, i_comp
+            IF (component_is_agama(i)) THEN
+                agama_slot_for_component = agama_slot_for_component + 1
+            END IF
+        END DO
+    END FUNCTION agama_slot_for_component
 
     INTEGER FUNCTION bessel_slot_for_component(i_comp)
         

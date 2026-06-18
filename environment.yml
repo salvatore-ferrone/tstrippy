@@ -6,10 +6,22 @@ dependencies:
   - numpy>=2.0
   - astropy>=7.0
   - pyyaml>=5.1
-  - gfortran>=11  # Critical for running the compiled code
-  - meson # will get rid of this once the meson package is available on conda-forge
-  - pytest
   - hdf5
+  - pytest
+  - meson
+  - ninja
+  - make
+  - pkg-config
+
+  # compiler toolchain (important for Agama + OpenMP on macOS)
+  - c-compiler
+  - cxx-compiler
+  - fortran-compiler
+  - llvm-openmp
+  - gsl
+  - eigen
+
+  # needed because Agama builds via setup.py/pip
+  - setuptools
+  - wheel
   - pip
-  # - pip:
-    # - git+https://github.com/salvatore-ferrone/tstrippy.git

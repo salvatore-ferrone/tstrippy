@@ -9,6 +9,9 @@ echo "..."
 echo ""
 
 
+if [[ "$1" == "--clean" ]]; then
+    rm -rf builddir
+fi
 
 rm -rf builddir
 

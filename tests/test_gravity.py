@@ -252,3 +252,42 @@ def test_exponential_disk_bessel_phi_even_and_az_odd_in_z():
     assert np.all(np.isfinite(phi))
     assert phi[0] == pytest.approx(phi[1], rel=5e-4, abs=5e-7)
     assert az[0] == pytest.approx(-az[1], rel=5e-4, abs=5e-7)
+
+
+def test_agama_disk_force_and_potential_are_finite():
+    g = tstrippy.gravity
+    g.add_component_agama("type=Disk surfaceDensity=5.0e8 scaleRadius=3.0 scaleHeight=0.3")
+    g.finalize()
+
+    x = np.array([8.0])
+    y = np.array([0.0])
+    z = np.array([0.4])
+
+    ax, ay, az = g.force(x, y, z)
+    phi = g.potential(x, y, z)
+
+    assert np.isfinite(ax[0])
+    assert np.isfinite(ay[0])
+    assert np.isfinite(az[0])
+    assert np.isfinite(phi[0])
+
+
+def test_agama_ini_file_entry_point(tmp_path):
+    ini_path = tmp_path / "agama.ini"
+    ini_path.write_text("[Potential]\ntype = Disk\nsurfaceDensity = 5.0e8\nscaleRadius = 3.0\nscaleHeight = 0.3\n")
+
+    g = tstrippy.gravity
+    g.add_component_agama_from_file(str(ini_path))
+    g.finalize()
+
+    x = np.array([8.0])
+    y = np.array([0.0])
+    z = np.array([0.4])
+
+    ax, ay, az = g.force(x, y, z)
+    phi = g.potential(x, y, z)
+
+    assert np.isfinite(ax[0])
+    assert np.isfinite(ay[0])
+    assert np.isfinite(az[0])
+    assert np.isfinite(phi[0])

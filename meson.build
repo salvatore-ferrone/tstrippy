@@ -21,9 +21,15 @@ ext_suffix_code = '''
 import sysconfig
 print(sysconfig.get_config_var('EXT_SUFFIX'))
 '''
+python_prefix_code = '''
+import sys
+print(sys.prefix)
+'''
 
 install_dir = run_command(py, '-c', python_code, check: true).stdout().strip()
 ext_suffix = run_command(py, '-c', ext_suffix_code, check: true).stdout().strip()
+python_prefix = run_command(py, '-c', python_prefix_code, check: true).stdout().strip()
+python_lib_dir = python_prefix / 'lib'
 message('Python install dir: ' + install_dir)
 message('Python extension suffix: ' + ext_suffix)
 
@@ -53,18 +59,74 @@ message('Running direct meson build')
 # Paths for direct meson install (absolute paths)
 module_install_dir = install_dir / pkg_name / 'lib'
 python_install_subdir = install_dir / pkg_name
+fs = import('fs')
+
+# Optional Agama wiring
+agama_opt = get_option('agama')
+agama_dir = meson.project_source_root() / 'external' / 'agama'
+agama_a = agama_dir / 'agama.a'
+agama_so = agama_dir / 'agama.so'
+openblas_so = python_lib_dir / 'libopenblas.0.dylib'
+gsl_a = python_lib_dir / 'libgsl.a'
+gslcblas_a = python_lib_dir / 'libgslcblas.a'
+libomp_so = python_lib_dir / 'libomp.dylib'
+agama_enabled = false
+agama_link_flags = ''
+
+if not agama_opt.disabled()
+    if fs.exists(agama_a)
+        agama_enabled = true
+        if fs.exists(openblas_so)
+            agama_link_flags = '-Wl,-rpath,' + python_lib_dir + ' ' + agama_a + ' ' + gsl_a + ' ' + gslcblas_a + ' ' + openblas_so + ' ' + libomp_so + ' -lc++'
+        else
+            agama_link_flags = '-Wl,-rpath,' + python_lib_dir + ' ' + agama_a + ' ' + gsl_a + ' ' + gslcblas_a + ' -lopenblas ' + libomp_so + ' -lc++'
+        endif
+        message('Agama backend enabled via ' + agama_a)
+    elif fs.exists(agama_so)
+        agama_enabled = true
+        agama_link_flags = '-Wl,-rpath,' + agama_dir + ' ' + agama_so
+        message('Agama backend enabled via ' + agama_so)
+    elif agama_opt.enabled()
+        error('Agama backend explicitly enabled, but external/agama/agama.a or external/agama/agama.so was not found. Build Agama first with make lib in external/agama.')
+    else
+        warning('Agama backend not found at external/agama/agama.so; continuing without Agama support')
+    endif
+endif
 
 
 # Setup environment for f2py
-fc_env = environment()
-fc_env.set('FC', 'gfortran')
-fc_env.set('FFLAGS', '-Wno-unused-variable -fPIC')
-fc_env.set('CFLAGS', '-Wno-misleading-indentation')  # Suppress misleading indentation warning
+base_ldflags = ''
 
 # Suppress compact unwind warnings from macOS linker
 if host_machine.system() == 'darwin'
     # For macOS, add linker flags to suppress unwind warnings
-    fc_env.set('LDFLAGS', '-Wl,-no_compact_unwind')
+    base_ldflags = base_ldflags + ' -Wl,-no_compact_unwind'
+endif
+
+fc_env_base = environment()
+fc_env_base.set('FC', 'gfortran')
+fc_env_base.set('FFLAGS', '-Wno-unused-variable -fPIC')
+fc_env_base.set('CFLAGS', '-Wno-misleading-indentation')  # Suppress misleading indentation warning
+if base_ldflags.strip() != ''
+    fc_env_base.set('LDFLAGS', base_ldflags.strip())
+endif
+
+fc_env_agama = environment()
+fc_env_agama.set('FC', 'gfortran')
+fc_env_agama.set('FFLAGS', '-Wno-unused-variable -fPIC')
+fc_env_agama.set('CFLAGS', '-Wno-misleading-indentation')  # Suppress misleading indentation warning
+
+agama_ldflags = base_ldflags
+if agama_enabled
+    agama_ldflags = agama_ldflags + ' ' + agama_link_flags
+endif
+if agama_ldflags.strip() != ''
+    fc_env_agama.set('LDFLAGS', agama_ldflags.strip())
+endif
+
+agamabackend_sources = []
+if agama_enabled
+    agamabackend_sources += ['tstrippy/src/agamabackend.f90']
 endif
 
 mathutils_sources = [
@@ -75,7 +137,7 @@ mathutils_build = custom_target('mathutils',
     output:mathutils_out,
     input: mathutils_sources,
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils'],
-    env: fc_env,
+    env: fc_env_base,
     install: true,
     install_dir: module_install_dir)
 
@@ -83,14 +145,15 @@ gravity_sources = [
     'tstrippy/src/mathutils.f90',
     'tstrippy/src/sphericalharmonicsbfe.f90',
     'tstrippy/src/besselbfe.f90',
-    'tstrippy/src/gravity.f90'
+    'tstrippy/src/agamabackend.f90',
+    'tstrippy/src/gravity.f90',
 ]
 gravity_out = 'gravity' + ext_suffix
 gravity_build = custom_target('gravity',
     output: gravity_out,
     input: gravity_sources,
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'gravity'],
-    env: fc_env,
+    env: fc_env_agama,
     install: true,
     install_dir: module_install_dir
 )
@@ -99,6 +162,7 @@ simulator_sources = [
     'tstrippy/src/mathutils.f90',
     'tstrippy/src/sphericalharmonicsbfe.f90',
     'tstrippy/src/besselbfe.f90',
+    'tstrippy/src/agamabackend.f90',
     'tstrippy/src/gravity.f90',
     'tstrippy/src/hostcluster.f90',
     'tstrippy/src/simulator.f90'
@@ -108,7 +172,7 @@ simulator_build = custom_target('simulator',
     output: simulator_out,
     input: simulator_sources,
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'simulator'],
-    env: fc_env,
+    env: fc_env_agama,
     install: true,
     install_dir: module_install_dir
 )
@@ -152,7 +216,6 @@ py.install_sources(
 )
 
 # for listing files 
-fs = import('fs')
 
 # colelct all files in the MW referenceframes 
 

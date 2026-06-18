@@ -252,3 +252,21 @@ def test_exponential_disk_bessel_phi_even_and_az_odd_in_z():
     assert np.all(np.isfinite(phi))
     assert phi[0] == pytest.approx(phi[1], rel=5e-4, abs=5e-7)
     assert az[0] == pytest.approx(-az[1], rel=5e-4, abs=5e-7)
+
+
+def test_agama_disk_force_and_potential_are_finite():
+    g = tstrippy.gravity
+    g.add_component("agamadisk", np.array([5.0e8, 3.0, 0.3]))
+    g.finalize()
+
+    x = np.array([8.0])
+    y = np.array([0.0])
+    z = np.array([0.4])
+
+    ax, ay, az = g.force(x, y, z)
+    phi = g.potential(x, y, z)
+
+    assert np.isfinite(ax[0])
+    assert np.isfinite(ay[0])
+    assert np.isfinite(az[0])
+    assert np.isfinite(phi[0])

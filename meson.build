@@ -145,8 +145,9 @@ gravity_sources = [
     'tstrippy/src/mathutils.f90',
     'tstrippy/src/sphericalharmonicsbfe.f90',
     'tstrippy/src/besselbfe.f90',
+    'tstrippy/src/agamabackend.f90',
     'tstrippy/src/gravity.f90',
-] + agamabackend_sources
+]
 gravity_out = 'gravity' + ext_suffix
 gravity_build = custom_target('gravity',
     output: gravity_out,
@@ -161,6 +162,7 @@ simulator_sources = [
     'tstrippy/src/mathutils.f90',
     'tstrippy/src/sphericalharmonicsbfe.f90',
     'tstrippy/src/besselbfe.f90',
+    'tstrippy/src/agamabackend.f90',
     'tstrippy/src/gravity.f90',
     'tstrippy/src/hostcluster.f90',
     'tstrippy/src/simulator.f90'
@@ -170,7 +172,7 @@ simulator_build = custom_target('simulator',
     output: simulator_out,
     input: simulator_sources,
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'simulator'],
-    env: fc_env_base,
+    env: fc_env_agama,
     install: true,
     install_dir: module_install_dir
 )

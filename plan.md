@@ -1,6 +1,20 @@
 # TSTRIPPY Development Plan
 Date: 2026-05-05, Updated 2026-05-21
 
+## Session Status (2026-06-18)
+
+**Agama backend integrated and validated; next focus is flying spheres / perturbers**
+
+✅ **Completed since the last plan update**:
+- Implemented the Agama backend path in `gravity` and `simulator`.
+- Added generic Agama model loading via inline INI specs and external INI files.
+- Verified the Agama gravity path with targeted smoke and pytest coverage.
+- Scaled Agama force/potential outputs by the project gravitational constant.
+
+▶ **Immediate next milestone**:
+- Build the new `flyingspheres` perturber module as a multi-object force provider with per-object kinematics and structure tables.
+- Keep the first implementation general enough for multiple spherical profiles and future close-encounter diagnostics.
+
 ## Session Status (2026-05-21)
 
 **Simulator/Hostcluster contract lock: table-first per-parameter override path**

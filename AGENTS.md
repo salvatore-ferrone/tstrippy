@@ -6,9 +6,8 @@ Help AI coding agents be productive in tstrippy with minimal setup, correct buil
 ## Read First
 Before making changes, read these project docs:
 
-1. [ARCHITECTURE.md](ARCHITECTURE.md)
-2. [plan.md](plan.md)
-3. [README.md](README.md)
+1. [plan.md](plan.md)
+2. [README.md](README.md)
 
 Prefer linking to these docs in PR notes and chat summaries instead of duplicating long explanations.
 

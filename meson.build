@@ -67,35 +67,47 @@ if host_machine.system() == 'darwin'
     fc_env.set('LDFLAGS', '-Wl,-no_compact_unwind')
 endif
 
-
-
-potentials_sources = [
-    'tstrippy/src/potentials.f90'
+mathutils_sources = [
+    'tstrippy/src/mathutils.f90',
 ]
-potentials_out = 'potentials' + ext_suffix
+mathutils_out = 'mathutils' + ext_suffix
+mathutils_build = custom_target('mathutils',
+    output:mathutils_out,
+    input: mathutils_sources,
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils'],
+    env: fc_env,
+    install: true,
+    install_dir: module_install_dir)
 
-potentials_build = custom_target('potentials',
-    output: potentials_out,
-    input: potentials_sources,
-    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'potentials'],
+gravity_sources = [
+    'tstrippy/src/mathutils.f90',
+    'tstrippy/src/sphericalharmonicsbfe.f90',
+    'tstrippy/src/besselbfe.f90',
+    'tstrippy/src/gravity.f90'
+]
+gravity_out = 'gravity' + ext_suffix
+gravity_build = custom_target('gravity',
+    output: gravity_out,
+    input: gravity_sources,
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'gravity'],
     env: fc_env,
     install: true,
     install_dir: module_install_dir
 )
 
-integrator_sources = [
-    'tstrippy/src/potentials.f90',
-    'tstrippy/src/perturbers.f90',
+simulator_sources = [
     'tstrippy/src/mathutils.f90',
-    'tstrippy/src/hostperturber.f90',
-    'tstrippy/src/galacticbar.f90',
-    'tstrippy/src/integrator.f90'
+    'tstrippy/src/sphericalharmonicsbfe.f90',
+    'tstrippy/src/besselbfe.f90',
+    'tstrippy/src/gravity.f90',
+    'tstrippy/src/hostcluster.f90',
+    'tstrippy/src/simulator.f90'
 ]
-integrator_out = 'integrator' + ext_suffix
-integrator_build = custom_target('integrator',
-    output: integrator_out,
-    input: integrator_sources,
-    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'integrator'],
+simulator_out = 'simulator' + ext_suffix
+simulator_build = custom_target('simulator',
+    output: simulator_out,
+    input: simulator_sources,
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'simulator'],
     env: fc_env,
     install: true,
     install_dir: module_install_dir
@@ -118,26 +130,64 @@ py.install_sources(
 
 py.install_sources(
     files(
-        'tstrippy/Parsers/__init__.py',
-        'tstrippy/Parsers/baumgardtMWGCs.py',    
-        'tstrippy/Parsers/potential_parameters.py',
+        'tstrippy/io/__init__.py',
+        'tstrippy/io/mwgcs.py',    
+        'tstrippy/io/milkyway_models.py',
+        'tstrippy/io/reference_frames.py',
+        'tstrippy/io/write_simulation_hdf5.py',
     ),
-    subdir: python_install_subdir / 'Parsers'
+    subdir: python_install_subdir / 'io'
 )
 
 py.install_sources(
     files(
         'tstrippy/code/__init__.py',
-        'tstrippy/code/ergodic.py',
+        'tstrippy/code/bfe.py',
+        'tstrippy/code/sampling.py',
+        'tstrippy/code/orbits.py',
+        'tstrippy/code/analysis.py',
+        'tstrippy/code/workflows.py',
     ),
     subdir: python_install_subdir / 'code'
 )
 
+# for listing files 
+fs = import('fs')
+
+# colelct all files in the MW referenceframes 
+
+
 # And data files
+# install_data(
+#     files('tstrippy/data/mwgcs-kinematics',
+#           'tstrippy/data/mwgcs-structural',
+#           'tstrippy/data/MWreferenceframes/MWrefframeFerrone2023.yaml',
+#           'tstrippy/data/MWmodels/pouliasis2017pii.yaml',
+#           'tstrippy/data/MWmodels/ibata2024mostprob.yaml',
+#           'tstrippy/data/unit_basis.yaml'),
+#     install_dir: python_install_subdir / 'data'
+# )
+
+# And data files
+# Keep top-level data files explicit, and install model/reference-frame
+# directories as subtrees so new files are picked up automatically.
 install_data(
-    files('tstrippy/data/2023-03-28-merged.fits',
-          'tstrippy/data/MWrefframe001.yaml',
-          'tstrippy/data/pouliasis2017pii.yaml',
-          'tstrippy/data/unit_basis.yaml'),
+    files(
+        'tstrippy/data/2023-03-28-merged.fits',
+        'tstrippy/data/README_baumgardt_catalog.md',
+        'tstrippy/data/mwgcs-kinematics',
+        'tstrippy/data/mwgcs-structural',
+        'tstrippy/data/unit_basis.yaml',
+    ),
+    install_dir: python_install_subdir / 'data'
+)
+
+install_subdir(
+    'tstrippy/data/MWmodels',
+    install_dir: python_install_subdir / 'data'
+)
+
+install_subdir(
+    'tstrippy/data/MWreferenceframes',
     install_dir: python_install_subdir / 'data'
 )

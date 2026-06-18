@@ -1,0 +1,44 @@
+name: pouliasis2017p2
+components:
+- name: allensantillianhalo
+  parameters:
+  - 209257687021.82178
+  - 14.0
+  - 100.0
+  - 2.02
+  parameter_names:
+  - M
+  - a
+  - rcut
+  - gamma
+  parameter_units:
+  - solMass
+  - kpc
+  - kpc
+  - ''
+- name: miyamotonagai
+  parameters:
+  - 37201366581.6572
+  - 4.8
+  - 0.25
+  parameter_names:
+  - M
+  - a
+  - b
+  parameter_units:
+  - solMass
+  - kpc
+  - kpc
+- name: miyamotonagai
+  parameters:
+  - 39526451993.01078
+  - 2.0
+  - 0.8
+  parameter_names:
+  - M
+  - a
+  - b
+  parameter_units:
+  - solMass
+  - kpc
+  - kpc

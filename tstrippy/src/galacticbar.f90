@@ -9,7 +9,7 @@ MODULE galacticbar
     ! theta = theta0 + b*t + c*t^2 + d*t^3 + ...
     ! THUS  barorientationpolynomailcoeffs(1) = theta0
     ! use constants
-    use potentials
+    use gravity
     IMPLICIT NONE
     PRIVATE 
     ! DECLARE SUBROUTINES
@@ -29,8 +29,8 @@ MODULE galacticbar
         REAL*8, dimension(:), intent(in) :: barpolycoeff
         INTEGER :: npotentialparameters, npolycoeffs
         IF (barpotentialname.EQ."longmuralibar") then 
-            barpotential => longmuralibar
-            npotentialparameters = 5
+            barpotential => longmuralibarforce
+            npotentialparameters = 4
             ! make sure that the number of parameters is correct
             IF (size(barpotenparams).NE.npotentialparameters) then
                 WRITE(*,*) "ERROR: INCORRECT NUMBER OF PARAMETERS FOR LONGMURALIBAR"

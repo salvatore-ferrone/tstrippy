@@ -1,6 +1,7 @@
 sphinx
 nbsphinx
-ipython
-jupyter
-matplotlib
 numpy
+matplotlib
+astropy
+pyyaml
+ipykernel

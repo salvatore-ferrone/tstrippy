@@ -1,0 +1,567 @@
+MODULE hostcluster
+    ! Contract (table-first, extensible for laws):
+    ! 1) configure_hostcluster_kinematics(...) is required
+    ! 2) configure_hostcluster_structure(model_name, params) sets constant baseline params
+    ! 3) Per-parameter overrides are optional and replace previous values with a warning:
+    !      configure_hostcluster_structure_param_table(param_index, times, values)
+    !      configure_hostcluster_structure_param_law(param_index, law_name, law_parameters)
+    ! 4) Per-parameter precedence at runtime: table > law(stub) > constant
+    ! 5) finalize_hostcluster() validates lifecycle/state only (minimal physics policing)
+    
+    USE mathutils, only : linear_interp_scalar, is_strictly_monotonic, is_strictly_decreasing, bracketed_index_search
+    IMPLICIT NONE
+
+    ! MODULE STATE VARIABLES 
+    LOGICAL, PUBLIC :: HOST_REGISTERED = .FALSE.
+    LOGICAL, PUBLIC :: HOST_FINALIZED = .FALSE.
+    LOGICAL, PUBLIC :: HOST_KINEMATICS_SET = .FALSE.
+    LOGICAL, PUBLIC :: HOST_STRUCTURE_SET = .FALSE.
+    LOGICAL, PUBLIC :: HOST_IONIZATION_STATE_SET = .FALSE.
+    LOGICAL, PUBLIC :: KINEMATICS_FORWARD_ORBIT = .TRUE.
+
+    REAL*8, PARAMETER, PRIVATE :: G_DEFAULT = 4.30091727D-6
+    REAL*8, PUBLIC  :: G_HOSTCLUSTER = G_DEFAULT
+    LOGICAL, PUBLIC :: G_IS_DEFAULT = .TRUE.
+
+    ! for the different laws that can be used for the time evolution of the structural parameters
+    ABSTRACT INTERFACE 
+        SUBROUTINE parameter_law_iface(lawparams,time,param)
+            REAL*8, INTENT(IN), DIMENSION(:) :: lawparams 
+            REAL*8, INTENT(IN) :: time 
+            REAL*8, INTENT(OUT) :: param
+        END subroutine parameter_law_iface
+
+        SUBROUTINE force_eval_iface(n,x,y,z,force)
+            INTEGER, INTENT(IN) :: n
+            REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+            REAL*8, INTENT(OUT), DIMENSION(n,3) :: force            
+        END SUBROUTINE force_eval_iface
+
+        SUBROUTINE potential_eval_iface(n, x, y, z, phi)
+            INTEGER, INTENT(IN) :: n
+            REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+            REAL*8, INTENT(OUT), DIMENSION(n) :: phi
+        END SUBROUTINE potential_eval_iface
+
+    END INTERFACE
+
+    ! make a derived type to handle the host parameters
+    TYPE, PRIVATE :: structural_parameter_t
+        CHARACTER(LEN=64) :: name 
+         ! 0: constant, 1: table, 2: law
+        INTEGER :: evolution_type = 0 ! default at constant 
+        REAL*8 :: current_value ! the value extracted when `configure_hostcluster_structure` is called    
+        ! table data
+        REAL*8, ALLOCATABLE :: timestamps(:)
+        INTEGER :: closest_timestamp_index = 0 
+        REAL*8, ALLOCATABLE :: values(:)
+        ! for a law
+        ! PROCEDURE(parameter_law_iface), POINTER, NOPASS :: law_eval => NULL() ! default to null
+        contains 
+            PROCEDURE :: value_at
+    END TYPE structural_parameter_t
+
+    ! set the procedure for setting the force and potential evaluator
+    PROCEDURE(force_eval_iface), pointer, private :: model_force => NULL()
+    PROCEDURE(potential_eval_iface), pointer, private :: model_potential => NULL()
+
+    ! FOR THE STRUCTURAL PARAMETER DEFAULTS
+    INTEGER, PUBLIC :: HOST_NPARAMS = 0
+    CHARACTER(LEN=64), PUBLIC :: HOST_MODEL_NAME = ""
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_PARAMS_CURRENT
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_PARAMS_CONSTANT
+    INTEGER, PARAMETER, PRIVATE :: MAX_STRUCTURE_PARAMETERS_HANDLERS = 16
+    ! cannot have a deffered dimension
+    TYPE(structural_parameter_t), DIMENSION(MAX_STRUCTURE_PARAMETERS_HANDLERS) :: STRUCTURE_PARAMETERS 
+
+    ! THE VARIABLES FOR THE KINEMATICS
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_TIMES
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_X, HOST_Y, HOST_Z
+    REAL*8, DIMENSION(:), PUBLIC, ALLOCATABLE :: HOST_VX, HOST_VY, HOST_VZ
+
+    INTEGER, PUBLIC :: HOST_CURRENT_KINEMATICS_TIME_INDEX = 1 
+    REAL*8, PUBLIC :: HOST_T_CURRENT = 0.0D0
+    REAL*8, PUBLIC  :: HOST_X_CURRENT = 0.0D0
+    REAL*8, PUBLIC  :: HOST_Y_CURRENT = 0.0D0
+    REAL*8, PUBLIC  :: HOST_Z_CURRENT = 0.0D0
+    REAL*8, PUBLIC  :: HOST_VX_CURRENT = 0.0D0
+    REAL*8, PUBLIC  :: HOST_VY_CURRENT = 0.0D0
+    REAL*8, PUBLIC  :: HOST_VZ_CURRENT = 0.0D0
+
+    ! THE VARIABLES TO KNOW WHEN THE PARTICLES ARE IONIZED OR NOT 
+    LOGICAL, PUBLIC, DIMENSION(:), ALLOCATABLE :: IONIZED
+    REAL*8, PUBLIC, DIMENSION(:), ALLOCATABLE :: TIME_OF_IONIZATION 
+    REAL*8, PUBLIC :: TIME_OF_IONIZATION_DEFAULT = -9999.0
+
+    
+    PUBLIC :: clear
+    PUBLIC :: add_hostcluster
+    PUBLIC :: configure_hostcluster_kinematics
+    PUBLIC :: configure_hostcluster_structure
+    PUBLIC :: finalize_hostcluster
+    PUBLIC :: update_hostcluster_state
+    PUBLIC :: eval_force
+    PUBLIC :: get_kinematics
+
+
+CONTAINS
+
+    !!! GENERAL MODULE ROUTINES 
+    SUBROUTINE clear()
+        IF (ALLOCATED(HOST_TIMES)) DEALLOCATE(HOST_TIMES)
+        IF (ALLOCATED(HOST_X)) DEALLOCATE(HOST_X)
+        IF (ALLOCATED(HOST_Y)) DEALLOCATE(HOST_Y)
+        IF (ALLOCATED(HOST_Z)) DEALLOCATE(HOST_Z)
+        IF (ALLOCATED(HOST_VX)) DEALLOCATE(HOST_VX)
+        IF (ALLOCATED(HOST_VY)) DEALLOCATE(HOST_VY)
+        IF (ALLOCATED(HOST_VZ)) DEALLOCATE(HOST_VZ)
+
+        IF (ALLOCATED(HOST_PARAMS_CURRENT)) DEALLOCATE(HOST_PARAMS_CURRENT)
+        IF (ALLOCATED(HOST_PARAMS_CONSTANT)) DEALLOCATE(HOST_PARAMS_CONSTANT)
+
+        IF (ALLOCATED(IONIZED)) DEALLOCATE(IONIZED)
+        IF (ALLOCATED(TIME_OF_IONIZATION)) DEALLOCATE(TIME_OF_IONIZATION)
+
+
+
+        HOST_REGISTERED = .FALSE.
+        HOST_FINALIZED = .FALSE.
+        HOST_KINEMATICS_SET = .FALSE.
+        HOST_STRUCTURE_SET = .FALSE.
+        HOST_IONIZATION_STATE_SET = .FALSE. 
+        G_HOSTCLUSTER = G_DEFAULT
+        G_IS_DEFAULT = .TRUE.
+        HOST_NPARAMS = 0
+        HOST_MODEL_NAME = ""
+        HOST_X_CURRENT = 0.0D0
+        HOST_Y_CURRENT = 0.0D0
+        HOST_Z_CURRENT = 0.0D0
+        HOST_VX_CURRENT = 0.0D0
+        HOST_VY_CURRENT = 0.0D0
+        HOST_VZ_CURRENT = 0.0D0
+    END SUBROUTINE clear
+
+    SUBROUTINE set_gravitational_constant(g)
+
+        REAL*8, INTENT(IN) :: g
+        
+        IF (HOST_FINALIZED) THEN
+            WRITE(*,'(A)') "WARNING: set_gravitational_constant: cannot change G after finalize"
+            RETURN
+        END IF
+        IF (g <= 0.0D0) THEN
+            WRITE(*,'(A)') "WARNING: set_gravitational_constant: G must be positive"
+            RETURN
+        END IF
+        
+        G_HOSTCLUSTER = g
+        G_IS_DEFAULT = .FALSE.
+    END SUBROUTINE set_gravitational_constant
+
+    SUBROUTINE add_hostcluster()
+        HOST_REGISTERED = .TRUE.
+        HOST_FINALIZED = .FALSE.
+    END SUBROUTINE add_hostcluster
+
+    SUBROUTINE finalize_hostcluster()
+        HOST_FINALIZED = .FALSE.
+
+        IF (.NOT. HOST_REGISTERED) THEN
+            PRINT*, "WARNING: finalize_hostcluster called before add_hostcluster"
+            RETURN
+        END IF
+
+        IF (.NOT. HOST_KINEMATICS_SET) THEN
+            PRINT*, "WARNING: finalize_hostcluster requires host kinematics"
+            RETURN
+        END IF
+
+        IF (LEN_TRIM(HOST_MODEL_NAME) < 1) THEN
+            PRINT*, "WARNING: finalize_hostcluster requires backend selection"
+            RETURN
+        END IF
+
+        IF (.NOT. HOST_STRUCTURE_SET) THEN
+            PRINT*, "WARNING: finalize_hostcluster requires model and constant parameters"
+            RETURN
+        END IF
+
+        if (.NOT. HOST_IONIZATION_STATE_SET) THEN
+            PRINT*, "WARNING: finalize_hostcluster failed to initialize the ionization state of the particles"
+            RETURN 
+        END IF 
+        HOST_FINALIZED = .TRUE.
+    END SUBROUTINE finalize_hostcluster
+
+    SUBROUTINE update_hostcluster_state(t)
+        REAL*8, INTENT(IN) :: t
+        INTEGER :: i 
+        IF (.NOT. HOST_FINALIZED) RETURN
+        IF (.NOT. ALLOCATED(HOST_TIMES)) RETURN
+        CALL query_current_kinematics(t)
+        DO i=1,HOST_NPARAMS
+            HOST_PARAMS_CURRENT(i) = STRUCTURE_PARAMETERS(i)%value_at(t)
+        END DO 
+    END SUBROUTINE update_hostcluster_state
+
+    SUBROUTINE eval_force(nparticles, x, y, z, ax, ay, az)
+        INTEGER, INTENT(IN) :: nparticles
+        REAL*8, INTENT(IN), DIMENSION(nparticles) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(nparticles) :: ax, ay, az
+        REAL*8, DIMENSION(nparticles,3) :: force_temp
+
+        REAL*8, DIMENSION(nparticles) :: dx,dy,dz
+
+        dx = x - HOST_X_CURRENT
+        dy = y - HOST_Y_CURRENT
+        dz = z - HOST_Z_CURRENT
+
+        call model_force(nparticles,dx,dy,dz,force_temp)
+        ax = force_temp(:,1)
+        ay = force_temp(:,2)
+        az = force_temp(:,3)
+
+    END SUBROUTINE eval_force    
+
+    !!! THE ENERGY OF THE PARTICLES WRT THE HOST  
+    SUBROUTINE relative_kinetic_energy(nparticles,vx,vy,vz,kinetic_energy)
+        integer, intent(in) :: nparticles
+        REAL*8, DIMENSION(nparticles),  intent(in)  :: vx,vy,vz
+        REAL*8, DIMENSION(nparticles),  intent(out) :: kinetic_energy
+        kinetic_energy = 0.5D0 * (  (vx - HOST_VX_CURRENT)**2 + &
+                                    (vy - HOST_VY_CURRENT)**2 + &
+                                    (vz - HOST_VZ_CURRENT)**2)
+    END SUBROUTINE relative_kinetic_energy
+
+    SUBROUTINE relative_potential_energy(nparticles,x,y,z,potential_energy)
+        integer, intent(in) :: nparticles
+        REAL*8, DIMENSION(nparticles),  intent(in)  :: x,y,z
+        REAL*8, DIMENSION(nparticles),  intent(out) :: potential_energy
+        REAL*8, dimension(nparticles) :: dx,dy,dz
+        dx = x-HOST_X_CURRENT
+        dy = y-HOST_Y_CURRENT
+        dz = z-HOST_Z_CURRENT
+        CALL model_potential(nparticles, dx, dy, dz, potential_energy)
+    END SUBROUTINE relative_potential_energy
+
+    SUBROUTINE two_body_energy(nparticles,x,y,z,vx,vy,vz,energy)
+        integer, intent(in) :: nparticles
+        REAL*8, DIMENSION(nparticles),  intent(in)  :: x,y,z,vx,vy,vz
+        REAL*8, DIMENSION(nparticles),  intent(out)  :: energy
+        REAL*8, DIMENSION(nparticles) :: kinetic_energy, potential_energy
+        CALL relative_potential_energy(nparticles,x,y,z,potential_energy)
+        CALL relative_kinetic_energy(nparticles,vx,vy,vz,kinetic_energy)
+        energy = kinetic_energy + potential_energy
+    END SUBROUTINE two_body_energy    
+    
+    !!!! Tracking the ionization state
+    SUBROUTINE initialize_ionization_state(nparticles)
+        integer, intent(in) :: nparticles
+        if (allocated(IONIZED)) DEALLOCATE(IONIZED)
+        IF (allocated(TIME_OF_IONIZATION)) DEALLOCATE(TIME_OF_IONIZATION)
+
+        ALLOCATE(TIME_OF_IONIZATION(nparticles))
+        ALLOCATE(IONIZED(nparticles))
+        IONIZED             =   .FALSE.
+        TIME_OF_IONIZATION  =   TIME_OF_IONIZATION_DEFAULT 
+        HOST_IONIZATION_STATE_SET = .TRUE. 
+    END SUBROUTINE initialize_ionization_state
+
+    SUBROUTINE are_ionized(nparticles,x,y,z,vx,vy,vz,unbound)
+        integer, INTENT(IN) :: nparticles
+        REAL*8, dimension(nparticles), intent(in) :: x,y,z,vx,vy,vz
+        logical, INTENT(OUT), dimension(nparticles) :: unbound
+        REAL*8, DIMENSION(nparticles) :: energy
+        unbound = .FALSE.
+        CALL two_body_energy(nparticles,x,y,z,vx,vy,vz, energy)
+        unbound = (energy.gt.0.0)
+    END SUBROUTINE are_ionized
+
+    SUBROUTINE update_ionization_state(nparticles,x,y,z,vx,vy,vz)
+        integer, INTENT(IN) :: nparticles
+        REAL*8, dimension(nparticles), intent(in) :: x,y,z,vx,vy,vz
+        LOGICAL, DIMENSION(nparticles) :: unbound, freshly_ionized
+        unbound         = .FALSE.
+        freshly_ionized = .FALSE.
+        CALL are_ionized(nparticles,x,y,z,vx,vy,vz,unbound)
+        ! see if we are freshly ionized
+        ! would be those that have not yet been ionized but are now unbound
+        freshly_ionized = (.NOT.IONIZED).AND.unbound
+        ! NOW UPDATE IONIZED
+        IONIZED = IONIZED.or.freshly_ionized
+        ! now go through and update the times for the freshly ionized particles
+        WHERE (FRESHLY_IONIZED) TIME_OF_IONIZATION = HOST_T_CURRENT
+    END SUBROUTINE update_ionization_state
+
+    SUBROUTINE get_ionization_state(nparticles, ionized_particles, ionization_time)
+        integer, INTENT(IN) :: nparticles
+        LOGICAL, DIMENSION(nparticles), INTENT(OUT) :: ionized_particles
+        REAL*8, DIMENSION(nparticles), INTENT(OUT) :: ionization_time
+        ionized_particles = IONIZED
+        ionization_time = TIME_OF_IONIZATION
+    END SUBROUTINE get_ionization_state
+
+    !!!! HANDELING THE KINEMATICS
+    SUBROUTINE configure_hostcluster_kinematics(ntimes, t, x, y, z, vx, vy, vz)
+        INTEGER, INTENT(IN) :: ntimes
+        REAL*8, INTENT(IN), DIMENSION(ntimes) :: t, x, y, z, vx, vy, vz
+
+        IF (.NOT. HOST_REGISTERED) THEN
+            PRINT*, "WARNING: hostcluster not registered. Call add_hostcluster first"
+            RETURN
+        END IF
+
+        IF (ntimes < 2) THEN
+            PRINT*, "WARNING: configure_hostcluster_kinematics requires ntimes >= 2"
+            RETURN
+        END IF
+
+        IF (.NOT. is_strictly_monotonic(t)) THEN
+            PRINT*, "WARNING: configure_hostcluster_kinematics requires strictly monotonic times"
+            RETURN
+        END IF
+
+        IF (ALLOCATED(HOST_TIMES)) DEALLOCATE(HOST_TIMES)
+        IF (ALLOCATED(HOST_X)) DEALLOCATE(HOST_X)
+        IF (ALLOCATED(HOST_Y)) DEALLOCATE(HOST_Y)
+        IF (ALLOCATED(HOST_Z)) DEALLOCATE(HOST_Z)
+        IF (ALLOCATED(HOST_VX)) DEALLOCATE(HOST_VX)
+        IF (ALLOCATED(HOST_VY)) DEALLOCATE(HOST_VY)
+        IF (ALLOCATED(HOST_VZ)) DEALLOCATE(HOST_VZ)
+        
+        ALLOCATE(HOST_TIMES(ntimes), HOST_X(ntimes), HOST_Y(ntimes), HOST_Z(ntimes))
+        ALLOCATE(HOST_VX(ntimes), HOST_VY(ntimes), HOST_VZ(ntimes))
+        
+        HOST_TIMES = t
+        HOST_X = x
+        HOST_Y = y
+        HOST_Z = z
+        HOST_VX = vx
+        HOST_VY = vy
+        HOST_VZ = vz
+        
+        HOST_X_CURRENT = x(1)
+        HOST_Y_CURRENT = y(1)
+        HOST_Z_CURRENT = z(1)
+        HOST_VX_CURRENT = vx(1)
+        HOST_VY_CURRENT = vy(1)
+        HOST_VZ_CURRENT = vz(1)
+        
+        if (is_strictly_decreasing(HOST_TIMES)) KINEMATICS_FORWARD_ORBIT=.FALSE.
+        
+        HOST_KINEMATICS_SET = .TRUE.
+        HOST_FINALIZED = .FALSE.
+    END SUBROUTINE configure_hostcluster_kinematics
+
+    SUBROUTINE query_current_kinematics(query_time)
+        REAL*8, INTENT(IN) :: query_time
+        REAL*8 :: T0, TF,alpha, dt
+        INTEGER :: n
+
+        n = SIZE(HOST_TIMES)
+
+        ! do quick search, which which will be between O(1) to O(N_TIME_STAMPS), works if forward or backward
+        HOST_CURRENT_KINEMATICS_TIME_INDEX = bracketed_index_search(query_time, HOST_CURRENT_KINEMATICS_TIME_INDEX, HOST_TIMES)
+
+        T0 = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX)
+        TF = HOST_TIMES(HOST_CURRENT_KINEMATICS_TIME_INDEX+1)
+        dt = TF-T0
+        alpha = (query_time - T0) / dt
+        HOST_T_CURRENT = query_time
+        HOST_X_CURRENT = linear_interp_scalar(HOST_X(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_X(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
+        HOST_Y_CURRENT = linear_interp_scalar(HOST_Y(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_Y(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
+        HOST_Z_CURRENT = linear_interp_scalar(HOST_Z(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_Z(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
+        HOST_VX_CURRENT = linear_interp_scalar(HOST_VX(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_VX(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
+        HOST_VY_CURRENT = linear_interp_scalar(HOST_VY(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_VY(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
+        HOST_VZ_CURRENT = linear_interp_scalar(HOST_VZ(HOST_CURRENT_KINEMATICS_TIME_INDEX),HOST_VZ(HOST_CURRENT_KINEMATICS_TIME_INDEX+1), alpha )
+    END SUBROUTINE query_current_kinematics
+
+    !!!! ROUTINES FOR HANDLING CHANGING STRUCTURAL PARAMETERS 
+    SUBROUTINE configure_hostcluster_structure(model_name, params, nparams)
+        CHARACTER(LEN=*), INTENT(IN) :: model_name
+        INTEGER, INTENT(IN) :: nparams
+        REAL*8, INTENT(IN), DIMENSION(nparams) :: params
+        INTEGER :: i 
+
+        IF (.NOT. HOST_REGISTERED) THEN
+            PRINT*, "WARNING: hostcluster not registered. Call add_hostcluster first"
+            RETURN
+        END IF
+
+        IF (nparams < 1) THEN
+            PRINT*, "WARNING: configure_hostcluster_structure requires nparams >= 1"
+            RETURN
+        END IF
+
+        IF (HOST_STRUCTURE_SET) THEN
+            PRINT*, "WARNING: hostcluster model updated; clearing previous parameter overrides"
+        END IF
+
+        SELECT CASE (TRIM(MODEL_NAME))
+        CASE ("plummer")
+            model_force => plummer_force
+            model_potential => plummer_potential
+        CASE DEFAULT
+            PRINT*, "ERROR: unknown hostcluster model: ", TRIM(model_name)
+            NULLIFY(model_force)
+            NULLIFY(model_potential)
+        END SELECT
+
+        if (ALLOCATED(HOST_PARAMS_CONSTANT)) DEALLOCATE(HOST_PARAMS_CONSTANT) 
+        if (ALLOCATED(HOST_PARAMS_CURRENT)) DEALLOCATE(HOST_PARAMS_CURRENT) 
+        ALLOCATE(HOST_PARAMS_CURRENT(nparams))
+        ALLOCATE(HOST_PARAMS_CONSTANT(nparams))
+        HOST_PARAMS_CONSTANT = params
+        HOST_PARAMS_CURRENT = params
+        HOST_MODEL_NAME = TRIM(model_name)        
+        HOST_STRUCTURE_SET = .TRUE.
+        HOST_NPARAMS = nparams
+        HOST_FINALIZED = .FALSE.
+
+        do i = 1,HOST_NPARAMS
+            STRUCTURE_PARAMETERS(i)%current_value=params(i)
+        END DO 
+
+    END SUBROUTINE configure_hostcluster_structure
+
+    SUBROUTINE configure_hostcluster_structure_parameter_table(index,ntimes,timestamps,values)
+        INTEGER, INTENT(IN) :: index, ntimes
+        REAL*8, INTENT(IN), DIMENSION(ntimes) :: timestamps,values
+
+        IF (.NOT.HOST_STRUCTURE_SET) THEN
+            PRINT*, "ERROR IN configure_hostcluster_structure_parameter_table"
+            PRINT*, "   call configure_hostcluster_structure first"
+        END IF 
+
+        IF (index.gt.HOST_NPARAMS) THEN 
+            print*, "ERROR IN configure_hostcluster_structure_parameter_table"
+            print*, "   index.gt.HOST_NPARAMS"
+            RETURN 
+        END IF
+
+        IF (INDEX.LT.1) THEN 
+            PRINT*, "ERROR IN configure_hostcluster_structure_parameter_table"
+            print*, "INDEX must be >0 "
+        END IF 
+
+        STRUCTURE_PARAMETERS(index)%values = values 
+        STRUCTURE_PARAMETERS(index)%timestamps = timestamps 
+        STRUCTURE_PARAMETERS(INDEX)%evolution_type = 1 
+
+    END SUBROUTINE configure_hostcluster_structure_parameter_table
+      
+    REAL*8 FUNCTION value_at(self, t)
+        CLASS(structural_parameter_t), INTENT(INOUT) :: self 
+        REAL*8, INTENT(IN) :: t 
+        INTEGER :: tempindex
+        REAL*8 :: alpha, T0, TF, DT
+
+        SELECT CASE (self%evolution_type)
+        CASE (0)
+            value_at = self%current_value
+        case(1)
+            ! interpolate
+            tempindex = bracketed_index_search(t, self%closest_timestamp_index, self%timestamps)
+            self%closest_timestamp_index = tempindex
+            T0 = self%timestamps(self%closest_timestamp_index)
+            TF = self%timestamps(self%closest_timestamp_index+1)
+            DT = TF-T0
+            alpha = t-t0
+            self%current_value=linear_interp_scalar(   self%values(self%closest_timestamp_index),&
+                                    self%values(self%closest_timestamp_index+1),&
+                                    alpha)
+            value_at = self%current_value
+        CASE DEFAULT
+            value_at = self%current_value
+        END SELECT
+
+    end function value_at   
+
+    !! TO INTERFACE WITH SIMULATOR
+    ! in hostcluster.f90 (inside CONTAINS)
+    SUBROUTINE get_kinematics(ntimes, t, x, y, z, vx, vy, vz)
+        INTEGER, INTENT(IN) :: ntimes
+        REAL*8, INTENT(OUT), DIMENSION(ntimes) :: t, x, y, z, vx, vy, vz
+
+
+        IF (.NOT. HOST_REGISTERED) THEN
+            PRINT*, "WARNING: get_kinematics: host is not registered"
+            RETURN
+        END IF
+
+        IF (.NOT. ALLOCATED(HOST_TIMES)) THEN
+            PRINT*, "WARNING: get_kinematics: host kinematics are not set"
+            RETURN
+        END IF
+
+        IF (SIZE(HOST_TIMES) /= ntimes) THEN
+            PRINT*, "WARNING: get_kinematics: ntimes mismatch"
+            RETURN
+        END IF
+
+        t  = HOST_TIMES
+        x  = HOST_X
+        y  = HOST_Y
+        z  = HOST_Z
+        vx = HOST_VX
+        vy = HOST_VY
+        vz = HOST_VZ
+
+    END SUBROUTINE GET_KINEMATICS    
+
+    ! extract the structural params
+    subroutine get_structure(n_params,model_name,constant_params)
+        INTEGER, INTENT(IN)                         :: n_params
+        CHARACTER(LEN=64), INTENT(OUT)              :: model_name 
+        REAL*8, INTENT(OUT), DIMENSION(n_params)    :: constant_params
+
+        IF (.NOT. HOST_STRUCTURE_SET) THEN
+            PRINT*, "WARNING: get_structure: host structure is not HOST_STRUCTURE_SET"
+            RETURN
+        END IF
+
+        IF (HOST_NPARAMS /= n_params) THEN
+            PRINT*, "WARNING: get_structure: n_params /= HOST_NPARAMS"
+            RETURN
+        END IF
+        
+        constant_params = HOST_PARAMS_CONSTANT
+        model_name = HOST_MODEL_NAME
+
+    END SUBROUTINE get_structure
+
+    !!! MODELS 
+
+    ! ANALYTICAL MODELS
+    SUBROUTINE plummer_force(n, x, y, z, force)
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
+        REAL*8, DIMENSION(n) :: r, amod
+        REAL*8 :: m, b
+
+        m = HOST_PARAMS_CURRENT(1)
+        b = HOST_PARAMS_CURRENT(2)
+        r = SQRT(x*x + y*y + z*z)
+        amod = -G_HOSTCLUSTER*m / (r*r + b*b)**1.5
+
+        force(:,1) = amod*x
+        force(:,2) = amod*y
+        force(:,3) = amod*z
+    END SUBROUTINE plummer_force
+
+    SUBROUTINE plummer_potential(n, x, y, z, phi)
+        
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n) :: phi
+        REAL*8, DIMENSION(n) :: r
+        REAL*8 :: m, b
+
+        m = HOST_PARAMS_CURRENT(1)
+        b = HOST_PARAMS_CURRENT(2)
+        r = SQRT(x*x + y*y + z*z)
+        phi = -G_HOSTCLUSTER*m / SQRT(r*r + b*b)
+    END SUBROUTINE plummer_potential
+
+END MODULE hostcluster

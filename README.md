@@ -3,17 +3,18 @@
 
 ![Tidal Stripping](logo.png)
 
-Not quite ready yet, but its getting there. Huge thanks to @JoBovy's [python packaging guide](https://pythonpackaging.info/) and GitHub's Co-Pilot for teaching me how to incorporate Fortran dependencies. 
+TSTRIPPY is a Python/Fortran package for tidal stripping simulations in Milky Way potentials.
+Huge thanks to @JoBovy's [python packaging guide](https://pythonpackaging.info/) and GitHub Copilot for helping with Fortran packaging workflows.
 
 
 - Tested on Linux systems
 - Started in Jan 2024. 
-- Compatible with Python 3.12 using meson build system
+- Compatible with Python 3.9 to 3.11 using meson build system
 - Cross-platform build via meson
 
 ## Requirements
 
-* Python 3.9+
+* Python 3.9 to 3.11
 * gfortran 11+ (or compatible Fortran compiler)
 * The following Python packages (installed automatically):
   * NumPy 1.20+
@@ -21,24 +22,32 @@ Not quite ready yet, but its getting there. Huge thanks to @JoBovy's [python pac
   * PyYAML 5.1+
 
 ## Installation
+
 ```bash
-    conda env create -f environment.yml
-    conda activate tstrippy
+conda env create -f environment.yml
+conda activate tstrippy
 ```
+
 Now build the package
+
 ``` bash
-    meson setup builddir
-    meson compile -C builddir/
-    meson install  -C builddir/
+meson setup builddir
+meson compile -C builddir/
+meson install -C builddir/
 ```
 
-NOTES:
-The documentation on `tstrippy.readthedocs.io` is going well. I want to be able to compile the code on readthedoc's computer. 
+Or use the helper script:
 
+```bash
+./build.sh
+```
 
-Compilation notes. 
-The trouble seems to never end, particularly with the mac processors. I have needed to delete miniconda and switch to miniforce in order to ensure that I am suing the arm64 processors
+## Verify Installation
+
+```bash
+python -c "import tstrippy; print(tstrippy.__file__)"
 ```
-curl -L -O https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
-```
-Hitherto this, I would have some success. However, I updated one conda environment to use plotly and then 
+
+## Documentation
+
+The docs are hosted at <https://tstrippy.readthedocs.io>.

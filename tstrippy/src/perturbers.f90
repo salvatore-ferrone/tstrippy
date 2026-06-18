@@ -5,7 +5,7 @@ MODULE perturbers
     ! so we have NPERTURBERS * Ntimesteps for x,y,z 
     ! then we have a one dimensional array of the time
     ! everything should be in galactic coordinates
-    use potentials, only : plummer
+    use gravity, only : plummerforce, plummerpotential
     IMPLICIT NONE
     PRIVATE
     REAL*8, DIMENSION(:,:), PUBLIC, ALLOCATABLE :: xperturbers,yperturbers,zperturbers 
@@ -73,19 +73,19 @@ MODULE perturbers
 
 
 
-    SUBROUTINE computeforcebyperturbers(Nparticles,Gin,x,y,z,ax,ay,az,phi)
+    SUBROUTINE computeforcebyperturbers(Nparticles,x,y,z,ax,ay,az,phi)
         ! compute the force on the particles due to the perturbers
         ! the force is computed by summing over all perturbers
         ! the force is computed in galactic coordinates
         integer, intent(in) :: Nparticles
         real*8, intent(in), dimension(Nparticles) :: x,y,z
         real*8, intent(out), dimension(Nparticles) :: ax,ay,az,phi
-        REAL*8, dimension(3) :: params
-        REAL*8, intent(in) :: Gin
+        REAL*8, dimension(2) :: params
+        REAL*8, dimension(Nparticles,3) :: forceperturber
         real*8,dimension(Nparticles) :: dx,dy,dz,axperturber,ayperturber,azperturber,phiperturber
         integer :: i,nperturbers
         nperturbers=size(massperturber)
-        params(1) = Gin
+        params = 0.0D0
         ax = 0
         ay = 0
         az = 0
@@ -94,9 +94,13 @@ MODULE perturbers
             dx = x - xperturbers(i,perturbertimeindex)
             dy = y - yperturbers(i,perturbertimeindex)
             dz = z - zperturbers(i,perturbertimeindex)
-            params(2) = massperturber(i)
-            params(3) = radiusperturber(i)
-            call plummer(params,Nparticles,dx,dy,dz,axperturber,ayperturber,azperturber,phiperturber)
+            params(1) = massperturber(i)
+            params(2) = radiusperturber(i)
+            call plummerforce(params, Nparticles, dx, dy, dz, forceperturber)
+            call plummerpotential(params, Nparticles, dx, dy, dz, phiperturber)
+            axperturber = forceperturber(:,1)
+            ayperturber = forceperturber(:,2)
+            azperturber = forceperturber(:,3)
             ax = ax + axperturber
             ay = ay + ayperturber
             az = az + azperturber

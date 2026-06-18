@@ -2,30 +2,59 @@
 TIDAL-STRIPPING-PYTHON
 ./tstrippy/__init__.py
 """
-# Import the Fortran modules and move them to the top level
-from .lib.integrator import integrator
-from .lib.potentials import potentials
+from importlib import import_module
+import warnings
 
-# Import the ergodic module and make it available at the top level
-from .code import ergodic
+# Try to import Fortran modules (they're compiled into lib/)
+# If they don't exist, provide helpful error messages
+def _load_fortran_entry(module_name, attr_name):
+    try:
+        mod = import_module(f"{__name__}.lib.{module_name}")
+        return getattr(mod, attr_name)
+    except (ModuleNotFoundError, AttributeError):
+        warnings.warn(
+            f"Fortran module 'tstrippy.lib.{module_name}' not found. "
+            "Have you built the package? Run: conda run -n tstrippy ./build.sh"
+        )
+        return None
 
-# Import Parsers module
-from . import Parsers
+
+simulator = _load_fortran_entry("simulator", "simulator")
+gravity = _load_fortran_entry("gravity", "gravity")
+mathutils = _load_fortran_entry("mathutils", "mathutils")
+
+try:
+    _gravity_ext = import_module(f"{__name__}.lib.gravity")
+    sphericalharmonicsbfe = _gravity_ext.sphericalharmonicsbfe
+    besselbfe = _gravity_ext.besselbfe
+except (ModuleNotFoundError, AttributeError):
+    sphericalharmonicsbfe = None
+    besselbfe = None
+    warnings.warn(
+        "Fortran backend modules are not available from 'tstrippy.lib.gravity'. "
+        "Have you built the package? Run: conda run -n tstrippy ./build.sh"
+    )
+
+# Import pure Python modules
+from . import io
+from . import code
 
 # Define what's available at the top level
 __all__ = [
-    'integrator',
-    'potentials',
-    'Parsers',
-    'ergodic',
+    'simulator',
+    'gravity',
+    'mathutils',
+    "sphericalharmonicsbfe",
+    "besselbfe",
+    'io',
+    'code',
 ]
 
 # Check for Fortran compiler
 import subprocess
-import warnings
 def _check_fortran_compiler():
     try:
-        subprocess.run(['gfortran', '--version'], capture_output=True)
+        subprocess.run(['gfortran', '--version'], capture_output=True, check=False)  # noqa: F841
     except FileNotFoundError:
         warnings.warn(
             "No Fortran compiler found. Some features of tstrippy may not work. "
@@ -33,6 +62,3 @@ def _check_fortran_compiler():
         )
 
 _check_fortran_compiler()
-
-# delete subprocess and warnings
-del subprocess, warnings 

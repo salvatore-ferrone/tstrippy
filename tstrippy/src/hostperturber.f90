@@ -1,7 +1,7 @@
 MODULE hostperturber
     ! so FAR, we can either have constant mass, or a double exponential mass evolution
     
-    use potentials, only : plummer
+    use gravity, only : plummerforce, plummerpotential
     use mathutils, only : linear_interp_scalar
 
     IMPLICIT NONE
@@ -195,17 +195,17 @@ MODULE hostperturber
         CALL updatehoststate(mytime)
     END SUBROUTINE findhosttimeindex
 
-    SUBROUTINE computeforcebyhosts(Nparticles,Gin,x,y,z,ax,ay,az,phi)
+    SUBROUTINE computeforcebyhosts(Nparticles,x,y,z,ax,ay,az,phi)
         ! compute the force on the particles due to the hosts
         ! the force is computed by summing over all hosts
         ! the force is computed in galactic coordinates
-        real*8, intent(in) :: Gin
         integer, intent(in) :: Nparticles
         real*8, intent(in), dimension(Nparticles) :: x,y,z
         real*8, intent(out), dimension(Nparticles) :: ax,ay,az,phi
-        REAL*8, dimension(3) :: params
+        REAL*8, dimension(2) :: params
+        REAL*8, dimension(Nparticles,3) :: forcehost
         real*8,dimension(Nparticles) :: dx,dy,dz,axhost,ayhost,azhost,phihost
-        params(1) =  Gin
+        params = 0.0D0
         ax = 0
         ay = 0
         az = 0
@@ -214,9 +214,13 @@ MODULE hostperturber
         dx = x - xhostcurrent
         dy = y - yhostcurrent
         dz = z - zhostcurrent
-        params(2) = masshostcurrent
-        params(3) = radiushostcurrent
-        call plummer(params,Nparticles,dx,dy,dz,axhost,ayhost,azhost,phihost)
+        params(1) = masshostcurrent
+        params(2) = radiushostcurrent
+        call plummerforce(params, Nparticles, dx, dy, dz, forcehost)
+        call plummerpotential(params, Nparticles, dx, dy, dz, phihost)
+        axhost = forcehost(:,1)
+        ayhost = forcehost(:,2)
+        azhost = forcehost(:,3)
         ax = ax + axhost
         ay = ay + ayhost
         az = az + azhost

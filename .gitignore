@@ -20,5 +20,8 @@ dist/
 # scrap
 *scrap*
 
+# the output data files 
+*.bin
+
 # don't add the custom agent
 .github*

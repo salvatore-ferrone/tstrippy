@@ -1,0 +1,3 @@
+[submodule "external/agama"]
+	path = external/agama
+	url = https://github.com/GalacticDynamics-Oxford/Agama.git

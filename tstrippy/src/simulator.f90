@@ -25,7 +25,10 @@ MODULE simulator
                            hostcluster_get_ionization_state                 => get_ionization_state, &
                            HOST_REGISTERED, &
                            HOST_FINALIZED
-    use flyingspheres, ONLY: flyingspheres_clear => clear
+    use flyingspheres, ONLY: flyingspheres_clear => clear,&
+                                flyingspheres_initialize => initialize_flyingspheres,&
+                                flyingsphere_set => set_flyingsphere
+
     USE mathutils, ONLY: is_strictly_increasing, is_strictly_decreasing
     ! UX: 
     ! (1) set necessary values and physics module (order independent): 
@@ -670,7 +673,20 @@ MODULE simulator
     END SUBROUTINE run
 
     !!! INTERACTING WITH SPECIFIC MODULES
+    
+    !!! THE FLYING SPHERES 
+    SUBROUTINE initialize_flyingspheres(n)
+        integer, intent(in) :: n
+        call flyingspheres_initialize(n)
+    END SUBROUTINE initialize_flyingspheres
 
+    subroutine set_flyingsphere(i,model_name, nparams, structural_parameters, ntimestamps, txyz)
+        INTEGER, INTENT(IN) :: i, nparams, ntimestamps
+        character(len=64), INTENT(IN):: model_name
+        REAl*8, DIMENSION(nparams), INTENT(IN) :: structural_parameters
+        REAL*8, DIMENSION(4,ntimestamps),INTENT(IN) :: txyz
+        call flyingsphere_set(i,model_name, nparams, structural_parameters, ntimestamps, txyz)
+    end subroutine set_flyingsphere
     !!! THE GRAVITY MODULE 
     SUBROUTINE cleargravitycomponents()
         CALL gravity_clear()

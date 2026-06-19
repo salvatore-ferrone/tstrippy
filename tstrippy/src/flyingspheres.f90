@@ -12,14 +12,14 @@ MODULE flyingspheres
         END SUBROUTINE force_eval_iface
     END INTERFACE
 
-    type, private :: perturber_t
+    type, private :: flyingsphere_t
         CHARACTER(len=64) :: model_name
         REAL*8, ALLOCATABLE :: txyz(:,:)
         REAL*8, ALLOCATABLE :: structural_parameters(:)
         PROCEDURE(force_eval_iface), pointer, NOPASS, private :: model_force => NULL()
         ! contains 
             ! PROCEDURE :: force_eval
-    end type perturber_t
+    end type flyingsphere_t
 
     type, private :: parameter_table_t 
         REAL*8 :: value = 0.0D0
@@ -30,39 +30,38 @@ MODULE flyingspheres
     end type parameter_table_t
 
     LOGICAL, PUBLIC :: FLYINGSPHERES_REGISTERED = .FALSE.
-    TYPE(perturber_t), ALLOCATABLE, PUBLIC :: perturbers(:)
-    INTEGER, PUBLIC :: NPERTURBERS = 0 
+    TYPE(flyingsphere_t), ALLOCATABLE, PUBLIC :: flyingsphere_registry(:)
+    INTEGER, PUBLIC :: Nflyingspheres = 0 
 
     CONTAINS
 
     SUBROUTINE CLEAR()
         FLYINGSPHERES_REGISTERED = .FALSE.
-        IF (ALLOCATED(perturbers)) DEALLOCATE(perturbers)
-        NPERTURBERS = 0
-        print*, "okay"
+        IF (ALLOCATED(flyingsphere_registry)) DEALLOCATE(flyingsphere_registry)
+        Nflyingspheres = 0
     END SUBROUTINE CLEAR
 
-    SUBROUTINE INIT_PERTURBERS(n)
+    SUBROUTINE initialize_flyingspheres(n)
         INTEGER, INTENT(IN) :: n
-        IF (ALLOCATED(perturbers)) DEALLOCATE(perturbers)
-        ALLOCATE(perturbers(n))
+        IF (ALLOCATED(flyingsphere_registry)) DEALLOCATE(flyingsphere_registry)
+        ALLOCATE(flyingsphere_registry(n))
         FLYINGSPHERES_REGISTERED = .TRUE.
-        NPERTURBERS = n
-    END SUBROUTINE INIT_PERTURBERS
+        Nflyingspheres = n
+    END SUBROUTINE initialize_flyingspheres
 
-    SUBROUTINE set_perturber(i,model_name, nparams, structural_parameters, ntimestamps, txyz)
+    SUBROUTINE set_flyingsphere(i,model_name, nparams, structural_parameters, ntimestamps, txyz)
         INTEGER, INTENT(IN) :: i, nparams, ntimestamps
         character(len=64), INTENT(IN):: model_name
         REAl*8, DIMENSION(nparams), INTENT(IN) :: structural_parameters
         REAL*8, DIMENSION(4,ntimestamps),INTENT(IN) :: txyz
-        IF (ALLOCATED(perturbers(i)%structural_parameters)) DEALLOCATE(perturbers(i)%structural_parameters)
-        IF (ALLOCATED(perturbers(i)%txyz)) DEALLOCATE(perturbers(i)%txyz)
-        allocate(perturbers(i)%txyz(4,ntimestamps))
-        allocate(perturbers(i)%structural_parameters(nparams))
-        perturbers(i)%model_name = TRIM(model_name)
-        perturbers(i)%structural_parameters = structural_parameters
-        perturbers(i)%txyz = txyz
-    end subroutine set_perturber
+        IF (ALLOCATED(flyingsphere_registry(i)%structural_parameters)) DEALLOCATE(flyingsphere_registry(i)%structural_parameters)
+        IF (ALLOCATED(flyingsphere_registry(i)%txyz)) DEALLOCATE(flyingsphere_registry(i)%txyz)
+        allocate(flyingsphere_registry(i)%txyz(4,ntimestamps))
+        allocate(flyingsphere_registry(i)%structural_parameters(nparams))
+        flyingsphere_registry(i)%model_name = TRIM(model_name)
+        flyingsphere_registry(i)%structural_parameters = structural_parameters
+        flyingsphere_registry(i)%txyz = txyz
+    end subroutine set_flyingsphere
 
     subroutine update_parameter(self,t)
         CLASS(parameter_table_t), INTENT(INOUT) :: self
@@ -78,7 +77,7 @@ MODULE flyingspheres
     END subroutine update_parameter
 
 	! REAL*8 FUNCTION force_eval(self,x,y,z)
-	! 	CLASS(perturber_t), INTENT(INOUT) :: self
+	! 	CLASS(flyingsphere_t), INTENT(INOUT) :: self
 	! 	REAL*8, intent(in) :: x,y,z
 
 	! END FUNCTION force_eval 
@@ -86,10 +85,10 @@ MODULE flyingspheres
 end module flyingspheres
 
 ! MODULE flyingspheres
-! 	! API sketch for a module of orbiting spherical perturbers.
+! 	! API sketch for a module of orbiting spherical flyingspheres.
 ! 	!
 ! 	! Intended shape:
-! 	! - many independent perturber objects
+! 	! - many independent flyingsphere objects
 ! 	! - each object owns its own kinematics table
 ! 	! - each object may own its own structural parameter tables
 ! 	! - each object selects a spherical force/potential model
@@ -97,9 +96,9 @@ end module flyingspheres
 ! 	!
 ! 	! Suggested usage flow:
 ! 	!   1. clear()
-! 	!   2. add_perturber(...)
-! 	!   3. configure_perturber_kinematics(...)
-! 	!   4. configure_perturber_structure(...)
+! 	!   2. add_flyingsphere(...)
+! 	!   3. configure_flyingsphere_kinematics(...)
+! 	!   4. configure_flyingsphere_structure(...)
 ! 	!   5. optionally configure per-parameter tables
 ! 	!   6. finalize()
 ! 	!   7. update_state(t)
@@ -107,7 +106,7 @@ end module flyingspheres
 ! 	!
 ! 	! Pseudocode for the internal object model:
 ! 	!
-! 	!   type perturber_t
+! 	!   type flyingsphere_t
 ! 	!       character(len=64) :: model_name
 ! 	!       real*8, allocatable :: t(:)
 ! 	!       real*8, allocatable :: x(:), y(:), z(:)
@@ -116,15 +115,15 @@ end module flyingspheres
 ! 	!       ! optional per-parameter time tables
 ! 	!       ! optional cached interpolation indices
 ! 	!       ! force evaluator callback or model dispatch key
-! 	!   end type perturber_t
+! 	!   end type flyingsphere_t
 ! 	!
-! 	!   type(perturber_t), allocatable :: perturbers(:)
-! 	!   integer :: nperturbers
+! 	!   type(flyingsphere_t), allocatable :: flyingspheres(:)
+! 	!   integer :: Nflyingspheres
 ! 	!
 ! 	! Pseudocode for the runtime contract:
 ! 	!
 ! 	!   subroutine update_state(t)
-! 	!       ! for each perturber:
+! 	!       ! for each flyingsphere:
 ! 	!       !   interpolate current position from its kinematics table
 ! 	!       !   interpolate any evolving structural parameters
 ! 	!       !   store the current state for fast force evaluation
@@ -132,8 +131,8 @@ end module flyingspheres
 ! 	!
 ! 	!   subroutine eval_force(n, x, y, z, ax, ay, az, phi)
 ! 	!       ! zero accumulators
-! 	!       ! for each perturber:
-! 	!       !   compute dx, dy, dz relative to the perturber's current position
+! 	!       ! for each flyingsphere:
+! 	!       !   compute dx, dy, dz relative to the flyingsphere's current position
 ! 	!       !   dispatch to the selected spherical profile model
 ! 	!       !   accumulate acceleration and potential
 ! 	!   end subroutine eval_force
@@ -144,7 +143,7 @@ end module flyingspheres
 ! 	!
 ! 	! Future extensions this layout should leave room for:
 ! 	! - close-encounter diagnostics
-! 	! - per-perturber encounter counters
+! 	! - per-flyingsphere encounter counters
 ! 	! - more profile types (e.g. NFW, truncated halo, tabulated profiles)
 ! 	! - time-dependent mass/scale-radius evolution via interpolation tables
 	

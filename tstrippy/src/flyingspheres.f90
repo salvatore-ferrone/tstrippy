@@ -29,6 +29,11 @@ MODULE flyingspheres
             PROCEDURE :: update_parameter
     end type parameter_table_t
 
+
+    REAL*8, PARAMETER, PRIVATE :: G_DEFAULT = 4.30091727D-6
+    REAL*8, PUBLIC  :: G_FLYINGSPHERES = G_DEFAULT
+    LOGICAL, PUBLIC :: G_IS_DEFAULT = .TRUE.
+
     LOGICAL, PUBLIC :: FLYINGSPHERES_REGISTERED = .FALSE.
     LOGICAL, PUBLIC :: FLYINGSPHERES_FINALIZED = .FALSE.
     TYPE(flyingsphere_t), ALLOCATABLE, PUBLIC :: flyingsphere_registry(:)
@@ -42,6 +47,21 @@ MODULE flyingspheres
         Nflyingspheres = 0
     END SUBROUTINE CLEAR
 
+    SUBROUTINE finalize_flyingspheres()
+        INTEGER :: i
+        DO i = 1, Nflyingspheres
+            SELECT CASE (TRIM(flyingsphere_registry(i)%model_name))
+            CASE ("plummer")
+                flyingsphere_registry(i)%model_force => plummer_force
+            ! CASE ("hernquist")
+                ! flyingsphere_registry(i)%model_force => hernquist_force
+            CASE DEFAULT
+                PRINT*, "ERROR: unknown flyingsphere model: ", TRIM(flyingsphere_registry(i)%model_name)
+                RETURN
+            END SELECT
+        END DO
+    END SUBROUTINE finalize_flyingspheres
+
     SUBROUTINE initialize_flyingspheres(n)
         INTEGER, INTENT(IN) :: n
         IF (ALLOCATED(flyingsphere_registry)) DEALLOCATE(flyingsphere_registry)
@@ -49,6 +69,7 @@ MODULE flyingspheres
         FLYINGSPHERES_REGISTERED = .TRUE.
         Nflyingspheres = n
     END SUBROUTINE initialize_flyingspheres
+
 
     SUBROUTINE set_flyingsphere(i,model_name, nparams, structural_parameters, ntimestamps, txyz)
         INTEGER, INTENT(IN) :: i, nparams, ntimestamps
@@ -63,6 +84,7 @@ MODULE flyingspheres
         flyingsphere_registry(i)%structural_parameters = structural_parameters
         flyingsphere_registry(i)%txyz = txyz
     end subroutine set_flyingsphere
+
 
     SUBROUTINE update_state(t)
         REAL*8, intent(in) :: t 
@@ -99,6 +121,7 @@ MODULE flyingspheres
 
     END subroutine update_state
 
+
     subroutine update_parameter(self,t)
         CLASS(parameter_table_t), INTENT(INOUT) :: self
         REAL*8 :: t 
@@ -112,11 +135,77 @@ MODULE flyingspheres
         self%values(self%index+1), alpha)
     END subroutine update_parameter
 
-	! REAL*8 FUNCTION force_eval(self,x,y,z)
-	! 	CLASS(flyingsphere_t), INTENT(INOUT) :: self
-	! 	REAL*8, intent(in) :: x,y,z
 
-	! END FUNCTION force_eval 
+    SUBROUTINE eval_force_from_one_flyingsphere(i, nparticles, x_particles, y_particles, z_particles, ax, ay, az)
+        INTEGER, INTENT(IN) :: i, nparticles
+        REAL*8, INTENT(IN) :: x_particles(nparticles), y_particles(nparticles), z_particles(nparticles)
+        REAL*8, INTENT(OUT) :: ax(nparticles), ay(nparticles), az(nparticles)
+        
+        REAL*8 :: dx(nparticles), dy(nparticles), dz(nparticles)
+        REAL*8 :: force_temp(nparticles, 3)
+        
+        ! Relative positions
+        dx = x_particles - flyingsphere_registry(i)%x
+        dy = y_particles - flyingsphere_registry(i)%y
+        dz = z_particles - flyingsphere_registry(i)%z
+        
+        ! Call this flyingsphere's model with its params and relative positions
+        CALL flyingsphere_registry(i)%model_force( &
+            flyingsphere_registry(i)%structural_parameters, &
+            nparticles, dx, dy, dz, force_temp)
+        
+        ax = force_temp(:, 1)
+        ay = force_temp(:, 2)
+        az = force_temp(:, 3)
+    END SUBROUTINE
+
+
+    SUBROUTINE eval_total_force(nparticles, x, y, z, ax, ay, az)
+        INTEGER, INTENT(IN) :: nparticles
+        REAL*8, INTENT(IN) :: x(nparticles), y(nparticles), z(nparticles)
+        REAL*8, INTENT(OUT) :: ax(nparticles), ay(nparticles), az(nparticles)
+        
+        INTEGER :: i
+        REAL*8 :: ax_tmp(nparticles), ay_tmp(nparticles), az_tmp(nparticles)
+        
+        ax = 0.0D0
+        ay = 0.0D0
+        az = 0.0D0
+        
+        DO i = 1, Nflyingspheres
+            IF (.NOT. ASSOCIATED(flyingsphere_registry(i)%model_force)) CYCLE
+            CALL eval_force_from_one_flyingsphere(i, nparticles, x, y, z, ax_tmp, ay_tmp, az_tmp)
+            ax = ax + ax_tmp
+            ay = ay + ay_tmp
+            az = az + az_tmp
+        END DO
+    END SUBROUTINE
+
+
+
+	! ANALYTICAL MODELS
+    SUBROUTINE plummer_force(params, n, x, y, z, force)
+        REAL*8, DIMENSION(:), INTENT(IN) :: params
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+        REAL*8, INTENT(OUT), DIMENSION(n,3) :: force
+        REAL*8, DIMENSION(n) :: r, amod
+        REAL*8 :: m, b
+
+        IF (SIZE(params) < 2) THEN
+            force = 0.0D0
+            RETURN
+        END IF
+
+        m = params(1)
+        b = params(2)
+        r = SQRT(x*x + y*y + z*z)
+        amod = -G_FLYINGSPHERES * m / (r*r + b*b)**1.5
+
+        force(:,1) = amod*x
+        force(:,2) = amod*y
+        force(:,3) = amod*z
+    END SUBROUTINE plummer_force
 
 end module flyingspheres
 

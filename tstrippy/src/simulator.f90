@@ -25,6 +25,7 @@ MODULE simulator
                            hostcluster_get_ionization_state                 => get_ionization_state, &
                            HOST_REGISTERED, &
                            HOST_FINALIZED
+    use flyingspheres, ONLY: flyingspheres_clear => clear
     USE mathutils, ONLY: is_strictly_increasing, is_strictly_decreasing
     ! UX: 
     ! (1) set necessary values and physics module (order independent): 
@@ -392,6 +393,7 @@ MODULE simulator
         ! clear the modules
         call hostcluster_clear()
         call gravity_clear()
+        call flyingspheres_clear()
         N_HOST_ORBIT_TIME_STAMPS = 0 
 
     END SUBROUTINE clear

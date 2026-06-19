@@ -27,7 +27,10 @@ MODULE simulator
                            HOST_FINALIZED
     use flyingspheres, ONLY: flyingspheres_clear => clear,&
                                 flyingspheres_initialize => initialize_flyingspheres,&
-                                flyingsphere_set => set_flyingsphere
+                                flyingsphere_set => set_flyingsphere,&
+                                flyingspheres_update_state => update_state,&
+                                FLYINGSPHERES_REGISTERED,&
+                                FLYINGSPHERES_FINALIZED
 
     USE mathutils, ONLY: is_strictly_increasing, is_strictly_decreasing
     ! UX: 
@@ -687,6 +690,7 @@ MODULE simulator
         REAL*8, DIMENSION(4,ntimestamps),INTENT(IN) :: txyz
         call flyingsphere_set(i,model_name, nparams, structural_parameters, ntimestamps, txyz)
     end subroutine set_flyingsphere
+    
     !!! THE GRAVITY MODULE 
     SUBROUTINE cleargravitycomponents()
         CALL gravity_clear()
@@ -714,7 +718,6 @@ MODULE simulator
         state%finalized = .FALSE.
     END SUBROUTINE add_component_agama   
     
-
     SUBROUTINE add_component_agama_from_file(inifilename)
         CHARACTER(LEN=*), INTENT(IN) :: inifilename
         CALL gravity_add_component_agama_from_file(inifilename)
@@ -1192,6 +1195,10 @@ MODULE simulator
         IF (HOST_REGISTERED .AND. HOST_FINALIZED) THEN
             CALL register_force_provider("hostcluster", hostcluster_force_provider)
         END IF
+
+        IF (FLYINGSPHERES_REGISTERED .AND. FLYINGSPHERES_FINALIZED) THEN 
+            CALL register_force_provider("flyingspheres", flyingspheres_force_provider)
+        END IF 
     END SUBROUTINE rebuild_force_registry
 
     SUBROUTINE gravity_force_provider(t, n, xin, yin, zin, ax, ay, az)
@@ -1220,6 +1227,15 @@ MODULE simulator
         CALL hostcluster_update_state(t)
         CALL hostcluster_eval_force(n, xin, yin, zin, ax, ay, az)
     END SUBROUTINE hostcluster_force_provider
+
+    SUBROUTINE flyingspheres_force_provider(t, n, xin, yin, zin, ax, ay, az)
+        REAL*8, INTENT(IN) :: t
+        INTEGER, INTENT(IN) :: n
+        REAL*8, INTENT(IN), DIMENSION(n) :: xin, yin, zin
+        REAL*8, INTENT(OUT), DIMENSION(n) :: ax, ay, az
+        CALL flyingspheres_update_state(t)    
+
+    END SUBROUTINE flyingspheres_force_provider
 
     SUBROUTINE evaluate_total_force(t, n, xin, yin, zin, ax, ay, az)
         REAL*8, INTENT(IN) :: t

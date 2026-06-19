@@ -30,6 +30,7 @@ MODULE flyingspheres
     end type parameter_table_t
 
     LOGICAL, PUBLIC :: FLYINGSPHERES_REGISTERED = .FALSE.
+    LOGICAL, PUBLIC :: FLYINGSPHERES_FINALIZED = .FALSE.
     TYPE(flyingsphere_t), ALLOCATABLE, PUBLIC :: flyingsphere_registry(:)
     INTEGER, PUBLIC :: Nflyingspheres = 0 
 
@@ -69,7 +70,7 @@ MODULE flyingspheres
         REAL*8 :: alpha, T0, TF, DT
         
         if (.NOT. FLYINGSPHERES_REGISTERED) THEN 
-            print*, "physics spheres no registered"
+            print*, "FLYINGSPHERES_REGISTERED is false! cannot update_state"
             return 
         end if 
 

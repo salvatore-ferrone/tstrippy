@@ -370,6 +370,7 @@ MODULE simulator
         basename_orbits = ""
         
         ! Close and deallocate orbit file units
+
         IF (ALLOCATED(orbit_file_units)) THEN
             DO n_particles_orbit = 1, SIZE(orbit_file_units)
                 IF (orbit_file_units(n_particles_orbit) > 0) THEN
@@ -701,7 +702,7 @@ MODULE simulator
 
     !!! INTERACTING WITH SPECIFIC MODULES
     
-    !!! THE FLYING SPHERES 
+    !!!! THE FLYING SPHERES 
     SUBROUTINE initialize_flyingspheres(n)
         integer, intent(in) :: n
         call flyingspheres_initialize(n)
@@ -734,8 +735,10 @@ MODULE simulator
         CALL clear_force_registry()
         state%gravity_finalized = .FALSE.
         state%finalized = .FALSE.
-    END SUBROUTINE cleargravitycomponents    
+    END SUBROUTINE cleargravitycomponents
+    
 
+    !!!!! GRAVITY
     SUBROUTINE add_component(model_name, params, nparams)
         CHARACTER(LEN=*), INTENT(IN) :: model_name
         INTEGER, INTENT(IN) :: nparams
@@ -971,7 +974,7 @@ MODULE simulator
 
     END SUBROUTINE write_orbit_records
 
-    ! COMPUTATION AND PREPARATIONS
+    !!!! COMPUTATION AND PREPARATIONS
     SUBROUTINE build_fixed_timestamps()
         INTEGER :: i
         REAL*8 :: t0, dtmag, sgn

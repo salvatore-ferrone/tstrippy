@@ -43,13 +43,47 @@ MODULE flyingspheres
 
     SUBROUTINE CLEAR()
         FLYINGSPHERES_REGISTERED = .FALSE.
+        FLYINGSPHERES_FINALIZED = .FALSE.
         IF (ALLOCATED(flyingsphere_registry)) DEALLOCATE(flyingsphere_registry)
         Nflyingspheres = 0
     END SUBROUTINE CLEAR
 
     SUBROUTINE finalize_flyingspheres()
         INTEGER :: i
+        FLYINGSPHERES_FINALIZED = .FALSE.
+
+        IF (.NOT. FLYINGSPHERES_REGISTERED) THEN
+            PRINT*, "ERROR: finalize_flyingspheres called before initialize_flyingspheres"
+            RETURN
+        END IF
+
+        IF (.NOT. ALLOCATED(flyingsphere_registry)) THEN
+            PRINT*, "ERROR: finalize_flyingspheres: registry is not allocated"
+            RETURN
+        END IF
+
+        IF (Nflyingspheres < 1) THEN
+            PRINT*, "ERROR: finalize_flyingspheres: no flyingspheres configured"
+            RETURN
+        END IF
+
         DO i = 1, Nflyingspheres
+            IF (.NOT. ALLOCATED(flyingsphere_registry(i)%structural_parameters)) THEN
+                PRINT*, "ERROR: finalize_flyingspheres: structural_parameters missing for index", i
+                RETURN
+            END IF
+            IF (.NOT. ALLOCATED(flyingsphere_registry(i)%txyz)) THEN
+                PRINT*, "ERROR: finalize_flyingspheres: txyz missing for index", i
+                RETURN
+            END IF
+            IF (SIZE(flyingsphere_registry(i)%txyz, 1) /= 4) THEN
+                PRINT*, "ERROR: finalize_flyingspheres: txyz must have shape (4,ntimestamps) for index", i
+                RETURN
+            END IF
+            IF (SIZE(flyingsphere_registry(i)%txyz, 2) < 2) THEN
+                PRINT*, "ERROR: finalize_flyingspheres: ntimestamps must be >= 2 for index", i
+                RETURN
+            END IF
             SELECT CASE (TRIM(flyingsphere_registry(i)%model_name))
             CASE ("plummer")
                 flyingsphere_registry(i)%model_force => plummer_force
@@ -60,6 +94,7 @@ MODULE flyingspheres
                 RETURN
             END SELECT
         END DO
+        FLYINGSPHERES_FINALIZED = .TRUE.
     END SUBROUTINE finalize_flyingspheres
 
     SUBROUTINE initialize_flyingspheres(n)
@@ -67,15 +102,16 @@ MODULE flyingspheres
         IF (ALLOCATED(flyingsphere_registry)) DEALLOCATE(flyingsphere_registry)
         ALLOCATE(flyingsphere_registry(n))
         FLYINGSPHERES_REGISTERED = .TRUE.
+        FLYINGSPHERES_FINALIZED = .FALSE.
         Nflyingspheres = n
     END SUBROUTINE initialize_flyingspheres
-
 
     SUBROUTINE set_flyingsphere(i,model_name, nparams, structural_parameters, ntimestamps, txyz)
         INTEGER, INTENT(IN) :: i, nparams, ntimestamps
         character(len=64), INTENT(IN):: model_name
         REAl*8, DIMENSION(nparams), INTENT(IN) :: structural_parameters
         REAL*8, DIMENSION(4,ntimestamps),INTENT(IN) :: txyz
+        FLYINGSPHERES_FINALIZED = .FALSE.
         IF (ALLOCATED(flyingsphere_registry(i)%structural_parameters)) DEALLOCATE(flyingsphere_registry(i)%structural_parameters)
         IF (ALLOCATED(flyingsphere_registry(i)%txyz)) DEALLOCATE(flyingsphere_registry(i)%txyz)
         allocate(flyingsphere_registry(i)%txyz(4,ntimestamps))
@@ -84,7 +120,6 @@ MODULE flyingspheres
         flyingsphere_registry(i)%structural_parameters = structural_parameters
         flyingsphere_registry(i)%txyz = txyz
     end subroutine set_flyingsphere
-
 
     SUBROUTINE update_state(t)
         REAL*8, intent(in) :: t 
@@ -121,7 +156,6 @@ MODULE flyingspheres
 
     END subroutine update_state
 
-
     subroutine update_parameter(self,t)
         CLASS(parameter_table_t), INTENT(INOUT) :: self
         REAL*8 :: t 
@@ -134,7 +168,6 @@ MODULE flyingspheres
         self%value = linear_interp_scalar(self%values(self%index),&
         self%values(self%index+1), alpha)
     END subroutine update_parameter
-
 
     SUBROUTINE eval_force_from_one_flyingsphere(i, nparticles, x_particles, y_particles, z_particles, ax, ay, az)
         INTEGER, INTENT(IN) :: i, nparticles
@@ -159,7 +192,6 @@ MODULE flyingspheres
         az = force_temp(:, 3)
     END SUBROUTINE
 
-
     SUBROUTINE eval_total_force(nparticles, x, y, z, ax, ay, az)
         INTEGER, INTENT(IN) :: nparticles
         REAL*8, INTENT(IN) :: x(nparticles), y(nparticles), z(nparticles)
@@ -180,8 +212,6 @@ MODULE flyingspheres
             az = az + az_tmp
         END DO
     END SUBROUTINE
-
-
 
 	! ANALYTICAL MODELS
     SUBROUTINE plummer_force(params, n, x, y, z, force)
@@ -209,81 +239,3 @@ MODULE flyingspheres
 
 end module flyingspheres
 
-! MODULE flyingspheres
-! 	! API sketch for a module of orbiting spherical flyingspheres.
-! 	!
-! 	! Intended shape:
-! 	! - many independent flyingsphere objects
-! 	! - each object owns its own kinematics table
-! 	! - each object may own its own structural parameter tables
-! 	! - each object selects a spherical force/potential model
-! 	! - the module evaluates all objects at a query time and sums the force
-! 	!
-! 	! Suggested usage flow:
-! 	!   1. clear()
-! 	!   2. add_flyingsphere(...)
-! 	!   3. configure_flyingsphere_kinematics(...)
-! 	!   4. configure_flyingsphere_structure(...)
-! 	!   5. optionally configure per-parameter tables
-! 	!   6. finalize()
-! 	!   7. update_state(t)
-! 	!   8. eval_force(...)
-! 	!
-! 	! Pseudocode for the internal object model:
-! 	!
-! 	!   type flyingsphere_t
-! 	!       character(len=64) :: model_name
-! 	!       real*8, allocatable :: t(:)
-! 	!       real*8, allocatable :: x(:), y(:), z(:)
-! 	!       real*8, allocatable :: vx(:), vy(:), vz(:)
-! 	!       real*8, allocatable :: constant_params(:)
-! 	!       ! optional per-parameter time tables
-! 	!       ! optional cached interpolation indices
-! 	!       ! force evaluator callback or model dispatch key
-! 	!   end type flyingsphere_t
-! 	!
-! 	!   type(flyingsphere_t), allocatable :: flyingspheres(:)
-! 	!   integer :: Nflyingspheres
-! 	!
-! 	! Pseudocode for the runtime contract:
-! 	!
-! 	!   subroutine update_state(t)
-! 	!       ! for each flyingsphere:
-! 	!       !   interpolate current position from its kinematics table
-! 	!       !   interpolate any evolving structural parameters
-! 	!       !   store the current state for fast force evaluation
-! 	!   end subroutine update_state
-! 	!
-! 	!   subroutine eval_force(n, x, y, z, ax, ay, az, phi)
-! 	!       ! zero accumulators
-! 	!       ! for each flyingsphere:
-! 	!       !   compute dx, dy, dz relative to the flyingsphere's current position
-! 	!       !   dispatch to the selected spherical profile model
-! 	!       !   accumulate acceleration and potential
-! 	!   end subroutine eval_force
-! 	!
-! 	! Model examples for the first implementation:
-! 	! - plummer
-! 	! - hernquist
-! 	!
-! 	! Future extensions this layout should leave room for:
-! 	! - close-encounter diagnostics
-! 	! - per-flyingsphere encounter counters
-! 	! - more profile types (e.g. NFW, truncated halo, tabulated profiles)
-! 	! - time-dependent mass/scale-radius evolution via interpolation tables
-	
-! 	! USE mathutils, only : linear_interp_scalar, is_strictly_monotonic, is_strictly_decreasing, bracketed_index_search
-
-! 	IMPLICIT NONE 
-	
-! 	LOGICAL, PUBLIC :: FLYINGSPHERES_REGISTERED = .FALSE.
-
-
-! 	CONTAINS
-
-! 	SUBROUTINE CLEAR()
-! 		FLYINGSPHERES_REGISTERED = .FALSE.
-
-! 	END SUBROUTINE CLEAR
-
-! END MODULE flyingspheres

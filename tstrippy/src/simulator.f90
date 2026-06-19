@@ -28,7 +28,9 @@ MODULE simulator
     use flyingspheres, ONLY: flyingspheres_clear => clear,&
                                 flyingspheres_initialize => initialize_flyingspheres,&
                                 flyingsphere_set => set_flyingsphere,&
+                                flyingspheres_finalize => finalize_flyingspheres,&
                                 flyingspheres_update_state => update_state,&
+                                flyingspheres_force => eval_total_force,&
                                 FLYINGSPHERES_REGISTERED,&
                                 FLYINGSPHERES_FINALIZED
 
@@ -70,7 +72,7 @@ MODULE simulator
         ! OPTIONAL PHYSICS
         LOGICAL :: host_enabled = .FALSE.                   ! OPTIONAL : using a host perturber 
         LOGICAL :: bar_enabled = .FALSE.                    ! OPTIONAL : using a galactic bar 
-        LOGICAL :: perturbers_enabled = .FALSE.             ! OPTIONAL : using host perturbers
+        LOGICAL :: flyingspheres_enabled = .FALSE.             ! OPTIONAL : using host perturbers
         ! TIME/SCHEME
         LOGICAL :: timestamps_from_user = .FALSE.
         LOGICAL :: backward_orbit = .FALSE.
@@ -164,10 +166,13 @@ MODULE simulator
     REAL*8, PUBLIC :: TIMER_SCHEME_SECONDS = 0.0D0
     REAL*8, PUBLIC :: TIMER_WRITE_SNAPSHOTS_SECONDS = 0.0D0
     REAL*8, PUBLIC :: TIMER_WRITE_ORBITS_SECONDS = 0.0D0
+    REAL*8, PUBLIC :: TIMER_FLYINGSPHERES_SECONDS = 0.0D0
     ! Private timing state (for run)
     INTEGER(KIND=8), PRIVATE :: c_run_start, c_run_end, c_scheme_accum, c_scheme_start
-    INTEGER(KIND=8), PRIVATE :: c_write_snap_accum, c_write_snap_start
-    INTEGER(KIND=8), PRIVATE :: c_write_orb_accum, c_write_orb_start
+    INTEGER(KIND=8), PRIVATE :: c_write_snap_accum, c_write_orb_accum
+    INTEGER(KIND=8), PRIVATE :: c_flyingspheres_start = 0 
+    INTEGER(KIND=8), PRIVATE :: c_flyingspheres_end = 0 
+    INTEGER(KIND=8), PRIVATE :: c_flyingspheres_accum = 0 
     INTEGER(KIND=8), PRIVATE :: rate_clock, cmax_clock
 
     ! PUBLIC :: simulator_cleargravitycomponents, simulator_set_gravitational_constant
@@ -388,11 +393,15 @@ MODULE simulator
         TIMER_SCHEME_SECONDS = 0.0D0
         TIMER_WRITE_SNAPSHOTS_SECONDS = 0.0D0
         TIMER_WRITE_ORBITS_SECONDS = 0.0D0
+        TIMER_FLYINGSPHERES_SECONDS = 0.0D0
         c_run_start = 0
         c_run_end = 0
         c_scheme_accum = 0
         c_write_snap_accum = 0
         c_write_orb_accum = 0
+        c_flyingspheres_accum = 0 
+        c_flyingspheres_start = 0
+        c_flyingspheres_end = 0
         ! Reset all state flags to defaults
         state = state_t()
         CALL clear_force_registry()
@@ -456,6 +465,19 @@ MODULE simulator
             END IF
             ! set the ionization state
 
+        END IF
+
+        IF (FLYINGSPHERES_REGISTERED) THEN
+            state%flyingspheres_enabled = .TRUE.
+            IF (.NOT. FLYINGSPHERES_FINALIZED) THEN
+                CALL flyingspheres_finalize()
+            END IF
+            IF (.NOT. FLYINGSPHERES_FINALIZED) THEN
+                PRINT*, "ERROR: flyingspheres finalize failed"
+                should_return = .TRUE.
+            END IF
+        ELSE
+            state%flyingspheres_enabled = .FALSE.
         END IF
 
         ! Resolve timestamps: build if user did not provide them
@@ -526,6 +548,7 @@ MODULE simulator
         c_scheme_accum = 0
         c_write_snap_accum = 0
         c_write_orb_accum = 0
+        c_flyingspheres_accum = 0 
 
         CALL finalize()
 
@@ -672,7 +695,8 @@ MODULE simulator
         TIMER_SCHEME_SECONDS = DBLE(c_scheme_accum) / DBLE(rate_clock)
         TIMER_WRITE_SNAPSHOTS_SECONDS = DBLE(c_write_snap_accum) / DBLE(rate_clock)
         TIMER_WRITE_ORBITS_SECONDS = DBLE(c_write_orb_accum) / DBLE(rate_clock)
-
+        TIMER_FLYINGSPHERES_SECONDS = DBLE(c_flyingspheres_accum) / DBLE(rate_clock)
+        
     END SUBROUTINE run
 
     !!! INTERACTING WITH SPECIFIC MODULES
@@ -681,6 +705,9 @@ MODULE simulator
     SUBROUTINE initialize_flyingspheres(n)
         integer, intent(in) :: n
         call flyingspheres_initialize(n)
+        CALL clear_force_registry()
+        state%flyingspheres_enabled = FLYINGSPHERES_REGISTERED
+        state%finalized = .FALSE.
     END SUBROUTINE initialize_flyingspheres
 
     subroutine set_flyingsphere(i,model_name, nparams, structural_parameters, ntimestamps, txyz)
@@ -689,7 +716,17 @@ MODULE simulator
         REAl*8, DIMENSION(nparams), INTENT(IN) :: structural_parameters
         REAL*8, DIMENSION(4,ntimestamps),INTENT(IN) :: txyz
         call flyingsphere_set(i,model_name, nparams, structural_parameters, ntimestamps, txyz)
+        CALL clear_force_registry()
+        state%flyingspheres_enabled = FLYINGSPHERES_REGISTERED
+        state%finalized = .FALSE.
     end subroutine set_flyingsphere
+
+    SUBROUTINE finalize_flyingspheres()
+        CALL flyingspheres_finalize()
+        CALL clear_force_registry()
+        state%flyingspheres_enabled = FLYINGSPHERES_REGISTERED .AND. FLYINGSPHERES_FINALIZED
+        state%finalized = .FALSE.
+    END SUBROUTINE finalize_flyingspheres
     
     !!! THE GRAVITY MODULE 
     SUBROUTINE cleargravitycomponents()
@@ -1233,7 +1270,11 @@ MODULE simulator
         INTEGER, INTENT(IN) :: n
         REAL*8, INTENT(IN), DIMENSION(n) :: xin, yin, zin
         REAL*8, INTENT(OUT), DIMENSION(n) :: ax, ay, az
-        CALL flyingspheres_update_state(t)    
+        call system_clock(c_flyingspheres_start)
+        CALL flyingspheres_update_state(t)   
+        call flyingspheres_force(n,xin,yin,zin,ax,ay,az) 
+        call system_clock(c_flyingspheres_end)
+        c_flyingspheres_accum = c_flyingspheres_accum + (c_flyingspheres_end-c_flyingspheres_start)
 
     END SUBROUTINE flyingspheres_force_provider
 

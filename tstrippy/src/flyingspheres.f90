@@ -15,7 +15,7 @@ MODULE flyingspheres
     type, private :: perturber_t
         CHARACTER(len=64) :: model_name
         REAL*8, ALLOCATABLE :: txyz(:,:)
-        REAL*8, ALLOCATABLE :: current_model_params(:)
+        REAL*8, ALLOCATABLE :: structural_parameters(:)
         PROCEDURE(force_eval_iface), pointer, NOPASS, private :: model_force => NULL()
         ! contains 
             ! PROCEDURE :: force_eval
@@ -29,11 +29,9 @@ MODULE flyingspheres
             PROCEDURE :: update_parameter
     end type parameter_table_t
 
-
     LOGICAL, PUBLIC :: FLYINGSPHERES_REGISTERED = .FALSE.
     TYPE(perturber_t), ALLOCATABLE, PUBLIC :: perturbers(:)
     INTEGER, PUBLIC :: NPERTURBERS = 0 
-
 
     CONTAINS
 
@@ -52,15 +50,19 @@ MODULE flyingspheres
         NPERTURBERS = n
     END SUBROUTINE INIT_PERTURBERS
 
-	SUBROUTINE set_perturber(i,model_name,structural_parameters, txyz)
-		INTEGER, INTENT(IN) :: i 
-		character(len=64), INTENT(IN):: model_name
-		REAl*8, DIMENSION(:) :: structural_parameters
-		REAL*8, DIMENSION(:,:) :: txyz
-
-		print*, "ok"
-
-	end subroutine set_perturber
+    SUBROUTINE set_perturber(i,model_name, nparams, structural_parameters, ntimestamps, txyz)
+        INTEGER, INTENT(IN) :: i, nparams, ntimestamps
+        character(len=64), INTENT(IN):: model_name
+        REAl*8, DIMENSION(nparams), INTENT(IN) :: structural_parameters
+        REAL*8, DIMENSION(4,ntimestamps),INTENT(IN) :: txyz
+        IF (ALLOCATED(perturbers(i)%structural_parameters)) DEALLOCATE(perturbers(i)%structural_parameters)
+        IF (ALLOCATED(perturbers(i)%txyz)) DEALLOCATE(perturbers(i)%txyz)
+        allocate(perturbers(i)%txyz(4,ntimestamps))
+        allocate(perturbers(i)%structural_parameters(nparams))
+        perturbers(i)%model_name = TRIM(model_name)
+        perturbers(i)%structural_parameters = structural_parameters
+        perturbers(i)%txyz = txyz
+    end subroutine set_perturber
 
     subroutine update_parameter(self,t)
         CLASS(parameter_table_t), INTENT(INOUT) :: self

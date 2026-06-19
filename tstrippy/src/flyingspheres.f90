@@ -16,9 +16,9 @@ MODULE flyingspheres
         CHARACTER(len=64) :: model_name
         REAL*8, ALLOCATABLE :: txyz(:,:)
         REAL*8, ALLOCATABLE :: structural_parameters(:)
+        REAL*8 :: t,x,y,z ! the current values
+        integer :: index = 1 
         PROCEDURE(force_eval_iface), pointer, NOPASS, private :: model_force => NULL()
-        ! contains 
-            ! PROCEDURE :: force_eval
     end type flyingsphere_t
 
     type, private :: parameter_table_t 
@@ -62,6 +62,41 @@ MODULE flyingspheres
         flyingsphere_registry(i)%structural_parameters = structural_parameters
         flyingsphere_registry(i)%txyz = txyz
     end subroutine set_flyingsphere
+
+    SUBROUTINE update_state(t)
+        REAL*8, intent(in) :: t 
+        INTEGER :: i
+        REAL*8 :: alpha, T0, TF, DT
+        
+        if (.NOT. FLYINGSPHERES_REGISTERED) THEN 
+            print*, "physics spheres no registered"
+            return 
+        end if 
+
+        DO i=1,Nflyingspheres
+            flyingsphere_registry(i)%index=bracketed_index_search(t,flyingsphere_registry(i)%index,flyingsphere_registry(i)%txyz(1,:))
+            T0=flyingsphere_registry(i)%txyz(1,flyingsphere_registry(i)%index)
+            TF=flyingsphere_registry(i)%txyz(1,flyingsphere_registry(i)%index+1)
+            DT = TF-T0
+            alpha=t-t0
+            flyingsphere_registry(i)%t=t
+            flyingsphere_registry(i)%x=linear_interp_scalar(&
+                flyingsphere_registry(i)%txyz(2,flyingsphere_registry(i)%index),&
+                flyingsphere_registry(i)%txyz(2,flyingsphere_registry(i)%index+1),&
+                alpha)
+            flyingsphere_registry(i)%y=linear_interp_scalar(&
+                flyingsphere_registry(i)%txyz(3,flyingsphere_registry(i)%index),&
+                flyingsphere_registry(i)%txyz(3,flyingsphere_registry(i)%index+1),&
+                alpha)
+            flyingsphere_registry(i)%z=linear_interp_scalar(&
+                flyingsphere_registry(i)%txyz(4,flyingsphere_registry(i)%index),&
+                flyingsphere_registry(i)%txyz(4,flyingsphere_registry(i)%index+1),&
+                alpha)
+        end do 
+		
+		! eventually implement updating specific parameters
+
+    END subroutine update_state
 
     subroutine update_parameter(self,t)
         CLASS(parameter_table_t), INTENT(INOUT) :: self

@@ -7,12 +7,10 @@ project('tstrippy', ['c'],
 pkg_name = 'tstrippy'
 
 # Find Python and f2py
-py = import('python').find_installation()
-# f2py = find_program('f2py') # could be system wide and incorrect
-fc_args = ['-fPIC']
+py = import('python').find_installation(required:true, pure:false)
 
 # Get the Python site-packages directory
-python_code = '''
+code_site_packages = '''
 import sysconfig
 print(sysconfig.get_path('purelib'))
 '''
@@ -21,12 +19,12 @@ ext_suffix_code = '''
 import sysconfig
 print(sysconfig.get_config_var('EXT_SUFFIX'))
 '''
-python_prefix_code = '''
+conda_prefix_code = '''
 import sys
 print(sys.prefix)
 '''
 
-install_dir = run_command(py, '-c', python_code, check: true).stdout().strip()
+install_dir = run_command(py, '-c', code_site_packages, check: true).stdout().strip()
 ext_suffix = run_command(py, '-c', ext_suffix_code, check: true).stdout().strip()
 python_prefix = run_command(py, '-c', python_prefix_code, check: true).stdout().strip()
 python_lib_dir = python_prefix / 'lib'
@@ -44,6 +42,7 @@ else:
     f2py_bin = shutil.which('f2py')
     print(f2py_bin if f2py_bin else 'f2py')
 '''
+fc_args = ['-fPIC']
 
 f2py_result = run_command(py, '-c', f2py_code, check: true).stdout().strip()
 if f2py_result.startswith('python:')

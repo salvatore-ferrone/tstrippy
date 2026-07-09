@@ -41,6 +41,8 @@ py.install_sources(
     ),
     subdir: 'tstrippy/io'
 )
+# installing data is native meson
+# so we have to specify the full path
 datadir=python_install_subdir/'data'
 install_data(
     files(

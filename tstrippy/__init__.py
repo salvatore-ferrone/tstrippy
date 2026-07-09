@@ -5,7 +5,7 @@ TIDAL-STRIPPING-PYTHON
 # starting from scratch 
 from . import code
 from . import io
-__all__ = ['code']
+__all__ = ['code', "io"]
 
 # from importlib import import_module
 # import warnings

@@ -5,7 +5,9 @@ TIDAL-STRIPPING-PYTHON
 # starting from scratch 
 from . import code
 from . import io
-__all__ = ['code', "io"]
+from . import mathutils as _mathutils_ext
+mathutils = _mathutils_ext.mathutils
+__all__ = ['code', "io", "mathutils"]
 
 # from importlib import import_module
 # import warnings

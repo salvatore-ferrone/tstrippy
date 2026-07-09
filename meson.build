@@ -63,6 +63,33 @@ install_subdir(
     install_dir:datadir
 )
 
+
+## START BUILDING FORTRAN CUSOTM TARGETS
+# get f2py from environment
+ext_suffix_code = '''
+import sysconfig
+print(sysconfig.get_config_var('EXT_SUFFIX'))
+'''
+ext_suffix = run_command(py, '-c', ext_suffix_code, check: true).stdout().strip()
+f2py_code = '''
+import sys, os, numpy
+f2py_path = os.path.join(os.path.dirname(numpy.__file__), 'f2py')
+print(f2py_path)
+'''
+f2py_result = run_command(py, '-c', f2py_code, check:true).stdout().strip()
+f2py = [py,f2py_result ]
+# build mathutils
+mathutils_sources =[
+    'tstrippy/src/mathutils.f90',
+]
+mathutils_out = 'mathutils' + ext_suffix
+mathutils_build = custom_target('mathutils',
+    output:mathutils_out,
+    input:mathutils_sources,
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils'],
+    install:true,
+    install_dir:python_install_subdir)
+
 # NOTE. 
 #   Executing python code is necessary to obtain the correct build
 #   and install information for running f2py. Meson doesn't have 

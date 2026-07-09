@@ -1,6 +1,6 @@
 [build-system]
 requires = [
-    "meson-python","meson"]
+    "meson-python","meson", "numpy"]
 build-backend = "mesonpy"
 
 [project]

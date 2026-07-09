@@ -71,6 +71,7 @@ import sysconfig
 print(sysconfig.get_config_var('EXT_SUFFIX'))
 '''
 ext_suffix = run_command(py, '-c', ext_suffix_code, check: true).stdout().strip()
+# make sure we're using f2py in the conda environment and not the system-wide version
 f2py_code = '''
 import sys, os, numpy
 f2py_path = os.path.join(os.path.dirname(numpy.__file__), 'f2py')
@@ -89,6 +90,41 @@ mathutils_build = custom_target('mathutils',
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils'],
     install:true,
     install_dir:python_install_subdir)
+
+gravity_sources = [
+    'tstrippy/src/mathutils.f90',
+    'tstrippy/src/sphericalharmonicsbfe.f90',
+    'tstrippy/src/besselbfe.f90',
+    'tstrippy/src/agamabackend.f90',
+    'tstrippy/src/gravity.f90',
+]
+gravity_out = 'gravity' + ext_suffix
+gravity_build = custom_target('gravity',
+    output: gravity_out,
+    input: gravity_sources,
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'gravity'],
+    install: true,
+    install_dir: python_install_subdir
+)
+
+
+simulator_sources = [
+    'tstrippy/src/mathutils.f90',
+    'tstrippy/src/sphericalharmonicsbfe.f90',
+    'tstrippy/src/besselbfe.f90',
+    'tstrippy/src/agamabackend.f90',
+    'tstrippy/src/gravity.f90',
+    'tstrippy/src/hostcluster.f90',
+    'tstrippy/src/simulator.f90'
+]
+simulator_out = 'simulator' + ext_suffix
+simulator_build = custom_target('simulator',
+    output: simulator_out,
+    input: simulator_sources,
+    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'simulator'],
+    install: true,
+    install_dir: python_install_subdir
+)
 
 # NOTE. 
 #   Executing python code is necessary to obtain the correct build

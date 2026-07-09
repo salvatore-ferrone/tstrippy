@@ -23,9 +23,42 @@ py.install_sources(
 py.install_sources(
     files(
         'tstrippy/code/__init__.py',
+        'tstrippy/code/bfe.py',
         'tstrippy/code/sampling.py',
+        'tstrippy/code/orbits.py',
+        'tstrippy/code/analysis.py',
+        'tstrippy/code/workflows.py',
     ),
     subdir:  'tstrippy/code'
+)
+py.install_sources(
+    files(
+        'tstrippy/io/__init__.py',
+        'tstrippy/io/mwgcs.py',    
+        'tstrippy/io/milkyway_models.py',
+        'tstrippy/io/reference_frames.py',
+        'tstrippy/io/write_simulation_hdf5.py',
+    ),
+    subdir: 'tstrippy/io'
+)
+datadir=python_install_subdir/'data'
+install_data(
+    files(
+        'tstrippy/data/2023-03-28-merged.fits',
+        'tstrippy/data/README_baumgardt_catalog.md',
+        'tstrippy/data/mwgcs-kinematics',
+        'tstrippy/data/mwgcs-structural',
+        'tstrippy/data/unit_basis.yaml',
+    ),
+    install_dir:datadir
+)
+install_subdir(
+    'tstrippy/data/MWmodels',
+    install_dir:datadir
+)
+install_subdir(
+    'tstrippy/data/MWreferenceframes',
+    install_dir:datadir
 )
 
 # NOTE. 

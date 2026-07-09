@@ -4,6 +4,7 @@ TIDAL-STRIPPING-PYTHON
 """
 # starting from scratch 
 from . import code
+from . import io
 __all__ = ['code']
 
 # from importlib import import_module

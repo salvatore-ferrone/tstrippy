@@ -7,10 +7,11 @@ project('tstrippy', ['c'],
 pkg_name = 'tstrippy'
 
 # Find Python and f2py
-py = import('python').find_installation(required:true, pure:false)
+pymod = import(module_name:'python')
+py = pymod.find_installation(required:true, pure:false)
 
 # Get the Python site-packages directory
-code_site_packages = '''
+site_packages_code = '''
 import sysconfig
 print(sysconfig.get_path('purelib'))
 '''
@@ -24,9 +25,9 @@ import sys
 print(sys.prefix)
 '''
 
-install_dir = run_command(py, '-c', code_site_packages, check: true).stdout().strip()
+install_dir = run_command(py, '-c', site_packages_code, check: true).stdout().strip()
 ext_suffix = run_command(py, '-c', ext_suffix_code, check: true).stdout().strip()
-python_prefix = run_command(py, '-c', python_prefix_code, check: true).stdout().strip()
+python_prefix = run_command(py, '-c', conda_prefix_code, check: true).stdout().strip()
 python_lib_dir = python_prefix / 'lib'
 message('Python install dir: ' + install_dir)
 message('Python extension suffix: ' + ext_suffix)
@@ -42,8 +43,6 @@ else:
     f2py_bin = shutil.which('f2py')
     print(f2py_bin if f2py_bin else 'f2py')
 '''
-fc_args = ['-fPIC']
-
 f2py_result = run_command(py, '-c', f2py_code, check: true).stdout().strip()
 if f2py_result.startswith('python:')
     # Use Python to run f2py.py script
@@ -54,7 +53,6 @@ else
     f2py = find_program(f2py_result)
 endif
 
-message('Running direct meson build')
 # Paths for direct meson install (absolute paths)
 module_install_dir = install_dir / pkg_name / 'lib'
 python_install_subdir = install_dir / pkg_name
@@ -62,9 +60,12 @@ fs = import('fs')
 
 # Optional Agama wiring
 agama_opt = get_option('agama')
-agama_dir = meson.project_source_root() / 'external' / 'agama'
-agama_a = agama_dir / 'agama.a'
-agama_so = agama_dir / 'agama.so'
+agama_pkg_dir = run_command(
+  py, '-c',
+  'import pathlib, sysconfig; print(pathlib.Path(sysconfig.get_path("platlib")) / "agama")',
+  check: true).stdout().strip()
+agama_a = agama_pkg_dir / 'agama.a'
+agama_so = agama_pkg_dir / 'agama.so'
 openblas_so = python_lib_dir / 'libopenblas.0.dylib'
 gsl_a = python_lib_dir / 'libgsl.a'
 gslcblas_a = python_lib_dir / 'libgslcblas.a'
@@ -83,7 +84,7 @@ if not agama_opt.disabled()
         message('Agama backend enabled via ' + agama_a)
     elif fs.exists(agama_so)
         agama_enabled = true
-        agama_link_flags = '-Wl,-rpath,' + agama_dir + ' ' + agama_so
+        agama_link_flags = '-Wl,-rpath,' + agama_pkg_dir + ' ' + agama_so
         message('Agama backend enabled via ' + agama_so)
     elif agama_opt.enabled()
         error('Agama backend explicitly enabled, but external/agama/agama.a or external/agama/agama.so was not found. Build Agama first with make lib in external/agama.')
@@ -123,10 +124,10 @@ if agama_ldflags.strip() != ''
     fc_env_agama.set('LDFLAGS', agama_ldflags.strip())
 endif
 
-agamabackend_sources = []
-if agama_enabled
-    agamabackend_sources += ['tstrippy/src/agamabackend.f90']
-endif
+# agamabackend_sources = []
+# if agama_enabled
+#     agamabackend_sources += ['tstrippy/src/agamabackend.f90']
+# endif
 
 mathutils_sources = [
     'tstrippy/src/mathutils.f90',

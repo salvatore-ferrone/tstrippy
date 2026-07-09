@@ -5,47 +5,48 @@ TIDAL-STRIPPING-PYTHON
 from importlib import import_module
 import warnings
 
-# Try to import Fortran modules (they're compiled into lib/)
-# If they don't exist, provide helpful error messages
-def _load_fortran_entry(module_name, attr_name):
-    try:
-        mod = import_module(f"{__name__}.lib.{module_name}")
-        return getattr(mod, attr_name)
-    except (ModuleNotFoundError, AttributeError):
-        warnings.warn(
-            f"Fortran module 'tstrippy.lib.{module_name}' not found. "
-            "Have you built the package? Run: conda run -n tstrippy ./build.sh"
-        )
-        return None
+# # Try to import Fortran modules (they're compiled into lib/)
+# # If they don't exist, provide helpful error messages
+# def _load_fortran_entry(module_name, attr_name):
+#     try:
+#         mod = import_module(f"{__name__}.lib.{module_name}")
+#         return getattr(mod, attr_name)
+#     except (ModuleNotFoundError, AttributeError):
+#         warnings.warn(
+#             f"Fortran module 'tstrippy.lib.{module_name}' not found. "
+#             "Have you built the package? Run: conda run -n tstrippy ./build.sh"
+#         )
+#         return None
 
 
-simulator = _load_fortran_entry("simulator", "simulator")
-gravity = _load_fortran_entry("gravity", "gravity")
-mathutils = _load_fortran_entry("mathutils", "mathutils")
+# simulator = _load_fortran_entry("simulator", "simulator")
+# gravity = _load_fortran_entry("gravity", "gravity")
+# mathutils = _load_fortran_entry("mathutils", "mathutils")
 
-try:
-    _gravity_ext = import_module(f"{__name__}.lib.gravity")
-    sphericalharmonicsbfe = _gravity_ext.sphericalharmonicsbfe
-    besselbfe = _gravity_ext.besselbfe
-except (ModuleNotFoundError, AttributeError):
-    sphericalharmonicsbfe = None
-    besselbfe = None
-    warnings.warn(
-        "Fortran backend modules are not available from 'tstrippy.lib.gravity'. "
-        "Have you built the package? Run: conda run -n tstrippy ./build.sh"
-    )
+# # try:
+# #     _gravity_ext = import_module(f"{__name__}.lib.gravity")
+# #     sphericalharmonicsbfe = _gravity_ext.sphericalharmonicsbfe
+# #     besselbfe = _gravity_ext.besselbfe
+# # except (ModuleNotFoundError, AttributeError):
+# #     sphericalharmonicsbfe = None
+# #     besselbfe = None
+# #     warnings.warn(
+# #         "Fortran backend modules are not available from 'tstrippy.lib.gravity'. "
+# #         "Have you built the package? Run: conda run -n tstrippy ./build.sh"
+# #     )
 
 # Import pure Python modules
 from . import io
 from . import code
+from . import simulator 
+from . import mathutils 
+from . import gravity
 
 # Define what's available at the top level
 __all__ = [
     'simulator',
     'gravity',
     'mathutils',
-    "sphericalharmonicsbfe",
-    "besselbfe",
     'io',
     'code',
 ]

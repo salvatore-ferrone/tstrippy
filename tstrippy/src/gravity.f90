@@ -5,8 +5,8 @@ MODULE gravity
                       agama_finalize => finalize, &
                       agama_force_component => force_component, &
                       agama_potential_component => potential_component, &
-                      agama_density_component => density_component, &
                       agama_ncomponents => ncomponents
+                    !   agama_density_component => density_component, &
     USE sphericalharmonicsbfe, ONLY: BASIS_GRID_SET, BASIS_EXPANSION_INITIALIZED, &
                                      setsphericalharmonicbasisgravityconstant, &
                                      clearsphericalharmonicbasis, &

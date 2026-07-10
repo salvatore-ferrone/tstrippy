@@ -79,6 +79,18 @@ print(f2py_path)
 '''
 f2py_result = run_command(py, '-c', f2py_code, check:true).stdout().strip()
 f2py = [py,f2py_result ]
+
+# Environment for targets that include agamabackend.f90.
+# -undefined dynamic_lookup (macOS) defers resolution of Agama symbols to
+# runtime so the .so loads cleanly even when Agama is not linked in.
+fc_env = environment()
+fc_env.set('FC', 'gfortran')
+fc_env.set('FFLAGS', '-Wno-unused-variable -fPIC')
+fc_env.set('CFLAGS', '-Wno-misleading-indentation')  # Suppress misleading indentation warning
+if host_machine.system() == 'darwin'
+    fc_env.set('LDFLAGS', '-Wl,-undefined,dynamic_lookup')
+endif
+
 # build mathutils
 mathutils_sources =[
     'tstrippy/src/mathutils.f90',
@@ -88,6 +100,7 @@ mathutils_build = custom_target('mathutils',
     output:mathutils_out,
     input:mathutils_sources,
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils'],
+    env: fc_env,
     install:true,
     install_dir:python_install_subdir)
 
@@ -103,10 +116,10 @@ gravity_build = custom_target('gravity',
     output: gravity_out,
     input: gravity_sources,
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'gravity'],
+    env: fc_env,
     install: true,
     install_dir: python_install_subdir
 )
-
 
 simulator_sources = [
     'tstrippy/src/mathutils.f90',
@@ -115,13 +128,14 @@ simulator_sources = [
     'tstrippy/src/agamabackend.f90',
     'tstrippy/src/gravity.f90',
     'tstrippy/src/hostcluster.f90',
-    'tstrippy/src/simulator.f90'
+    'tstrippy/src/simulator.f90',
 ]
 simulator_out = 'simulator' + ext_suffix
 simulator_build = custom_target('simulator',
     output: simulator_out,
     input: simulator_sources,
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'simulator'],
+    env: fc_env,
     install: true,
     install_dir: python_install_subdir
 )

@@ -178,25 +178,25 @@ CONTAINS
         END DO
     END SUBROUTINE potential_component
 
-    SUBROUTINE density_component(i_comp, n, x, y, z, rho)
-        INTEGER, INTENT(IN) :: i_comp, n
-        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
-        REAL*8, INTENT(OUT), DIMENSION(n) :: rho
-        INTEGER :: j, slot
-        REAL*8, DIMENSION(3) :: xyz
+    ! SUBROUTINE density_component(i_comp, n, x, y, z, rho)
+    !     INTEGER, INTENT(IN) :: i_comp, n
+    !     REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+    !     REAL*8, INTENT(OUT), DIMENSION(n) :: rho
+    !     INTEGER :: j, slot
+    !     REAL*8, DIMENSION(3) :: xyz
 
-        CALL ensure_finalized()
-        rho = 0.0D0
-        slot = component_slot(i_comp)
-        IF (slot == 0) RETURN
+    !     CALL ensure_finalized()
+    !     rho = 0.0D0
+    !     slot = component_slot(i_comp)
+    !     IF (slot == 0) RETURN
 
-        DO j = 1, n
-            xyz(1) = x(j)
-            xyz(2) = y(j)
-            xyz(3) = z(j)
-            rho(j) = agama_density(AGAMA_HANDLES(slot), xyz)
-        END DO
-    END SUBROUTINE density_component
+    !     DO j = 1, n
+    !         xyz(1) = x(j)
+    !         xyz(2) = y(j)
+    !         xyz(3) = z(j)
+    !         rho(j) = agama_density(AGAMA_HANDLES(slot), xyz)
+    !     END DO
+    ! END SUBROUTINE density_component
 
     SUBROUTINE force(n, x, y, z, ax, ay, az)
         INTEGER, INTENT(IN) :: n
@@ -234,21 +234,21 @@ CONTAINS
         END DO
     END SUBROUTINE potential
 
-    SUBROUTINE density(n, x, y, z, rho)
-        INTEGER, INTENT(IN) :: n
-        REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
-        REAL*8, INTENT(OUT), DIMENSION(n) :: rho
-        INTEGER :: i
-        REAL*8, DIMENSION(n) :: rho_c
+    ! SUBROUTINE density(n, x, y, z, rho)
+    !     INTEGER, INTENT(IN) :: n
+    !     REAL*8, INTENT(IN), DIMENSION(n) :: x, y, z
+    !     REAL*8, INTENT(OUT), DIMENSION(n) :: rho
+    !     INTEGER :: i
+    !     REAL*8, DIMENSION(n) :: rho_c
 
-        CALL ensure_finalized()
-        rho = 0.0D0
+    !     CALL ensure_finalized()
+    !     rho = 0.0D0
 
-        DO i = 1, N_AGAMA_COMPONENTS
-            CALL density_component(i, n, x, y, z, rho_c)
-            rho = rho + rho_c
-        END DO
-    END SUBROUTINE density
+    !     DO i = 1, N_AGAMA_COMPONENTS
+    !         CALL density_component(i, n, x, y, z, rho_c)
+    !         rho = rho + rho_c
+    !     END DO
+    ! END SUBROUTINE density
 
     SUBROUTINE agama_smoke_exponential_disk(phi, force_vec, ok)
         REAL*8, INTENT(OUT) :: phi

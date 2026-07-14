@@ -26,27 +26,27 @@ py.install_sources(
     ),
     subdir: 'tstrippy' 
 )
-py.install_sources(
-    files(
-        'tstrippy/code/__init__.py',
-        'tstrippy/code/bfe.py',
-        'tstrippy/code/sampling.py',
-        'tstrippy/code/orbits.py',
-        'tstrippy/code/analysis.py',
-        'tstrippy/code/workflows.py',
-    ),
-    subdir:  'tstrippy/code'
-)
-py.install_sources(
-    files(
-        'tstrippy/io/__init__.py',
-        'tstrippy/io/mwgcs.py',    
-        'tstrippy/io/milkyway_models.py',
-        'tstrippy/io/reference_frames.py',
-        'tstrippy/io/write_simulation_hdf5.py',
-    ),
-    subdir: 'tstrippy/io'
-)
+# py.install_sources(
+#     files(
+#         'tstrippy/code/__init__.py',
+#         'tstrippy/code/bfe.py',
+#         'tstrippy/code/sampling.py',
+#         'tstrippy/code/orbits.py',
+#         'tstrippy/code/analysis.py',
+#         'tstrippy/code/workflows.py',
+#     ),
+#     subdir:  'tstrippy/code'
+# )
+# py.install_sources(
+#     files(
+#         'tstrippy/io/__init__.py',
+#         'tstrippy/io/mwgcs.py',    
+#         'tstrippy/io/milkyway_models.py',
+#         'tstrippy/io/reference_frames.py',
+#         'tstrippy/io/write_simulation_hdf5.py',
+#     ),
+#     subdir: 'tstrippy/io'
+# )
 
 ################################################
 ############ INSTALL THE DATA FILES ############
@@ -55,24 +55,24 @@ py.install_sources(
 # installing data is native meson
 # so we have to specify the full path, there is no "subdir" argument
 datadir=python_install_subdir/'data'
-install_data(
-    files(
-        'tstrippy/data/2023-03-28-merged.fits',
-        'tstrippy/data/README_baumgardt_catalog.md',
-        'tstrippy/data/mwgcs-kinematics',
-        'tstrippy/data/mwgcs-structural',
-        'tstrippy/data/unit_basis.yaml',
-    ),
-    install_dir:datadir
-)
-install_subdir(
-    'tstrippy/data/MWmodels',
-    install_dir:datadir
-)
-install_subdir(
-    'tstrippy/data/MWreferenceframes',
-    install_dir:datadir
-)
+# install_data(
+#     files(
+#         'tstrippy/data/2023-03-28-merged.fits',
+#         'tstrippy/data/README_baumgardt_catalog.md',
+#         'tstrippy/data/mwgcs-kinematics',
+#         'tstrippy/data/mwgcs-structural',
+#         'tstrippy/data/unit_basis.yaml',
+#     ),
+#     install_dir:datadir
+# )
+# install_subdir(
+#     'tstrippy/data/MWmodels',
+#     install_dir:datadir
+# )
+# install_subdir(
+#     'tstrippy/data/MWreferenceframes',
+#     install_dir:datadir
+# )
 
 ##############################################################################################
 ######################## PREPARE ARGUMENTS FOR FORTRAN CUSTOM TARGETS ########################
@@ -108,22 +108,22 @@ mathutils_out = 'mathutils' + ext_suffix
 mathutils_sources =['tstrippy/src/mathutils.f90',]
 mathutils_command = [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils']
 
-gravity_out = 'gravity' + ext_suffix
-gravity_sources = [
-    'tstrippy/src/mathutils.f90',
-    'tstrippy/src/sphericalharmonicsbfe.f90',
-    'tstrippy/src/besselbfe.f90',
-    'tstrippy/src/gravity.f90',
-    ]
-gravity_command = [
-        f2py,
-        '-c',
-        '@INPUT@',
-        '--backend=meson',
-        '--quiet',
-        '-m',
-        'gravity',
-        ]
+# gravity_out = 'gravity' + ext_suffix
+# gravity_sources = [
+#     'tstrippy/src/mathutils.f90',
+#     # 'tstrippy/src/sphericalharmonicsbfe.f90',
+#     # 'tstrippy/src/besselbfe.f90',
+#     'tstrippy/src/gravity.f90',
+#     ]
+# gravity_command = [
+#         f2py,
+#         '-c',
+#         '@INPUT@',
+#         '--backend=meson',
+#         '--quiet',
+#         '-m',
+#         'gravity',
+#         ]
 
 simulator_out = 'simulator' + ext_suffix
 simulator_sources = [
@@ -180,24 +180,44 @@ else
     message('Agama not found; using stub backend.')
 endif
 
-gravity_sources += agama_sources
-gravity_command += agama_link
+# gravity_sources += agama_sources
+# gravity_command += agama_link
 
-simulator_sources += agama_sources
-simulator_command += agama_link
+# simulator_sources += agama_sources
+# simulator_command += agama_link
 
 
 ###############################################################################
 ######################## BUILD  FORTRAN CUSTOM TARGETS ########################
 ###############################################################################
 
-mathutils_build = custom_target('mathutils',
-    output:mathutils_out,
-    input:mathutils_sources,
-    command: mathutils_command,
-    env:fc_env,
-    install:true,
-    install_dir:python_install_subdir)
+# mathutils_build = custom_target('mathutils',
+#     output:mathutils_out,
+#     input:mathutils_sources,
+#     command: mathutils_command,
+#     env:fc_env,
+#     install:true,
+#     install_dir:python_install_subdir)
+
+
+### WORKING WITH GRAVITY DIRECTLY RIGHT NOW 
+
+gravity_out = 'gravity' + ext_suffix
+gravity_sources = [
+    # 'tstrippy/src/mathutils.f90',
+    # 'tstrippy/src/sphericalharmonicsbfe.f90',
+    # 'tstrippy/src/besselbfe.f90',
+    'tstrippy/src/gravity.f90',
+    ]
+gravity_command = [
+        f2py,
+        '-c',
+        '@INPUT@',
+        '--backend=meson',
+        '--quiet',
+        '-m',
+        'gravity',
+        ]
 
 gravity_build = custom_target('gravity',
     output: gravity_out,
@@ -208,14 +228,14 @@ gravity_build = custom_target('gravity',
     install_dir:python_install_subdir
 )
 
-simulator_build = custom_target('simulator',
-    output: simulator_out,
-    input: simulator_sources,
-    command: simulator_command,
-    env: fc_env,
-    install: true,
-    install_dir: python_install_subdir
-)
+# simulator_build = custom_target('simulator',
+#     output: simulator_out,
+#     input: simulator_sources,
+#     command: simulator_command,
+#     env: fc_env,
+#     install: true,
+#     install_dir: python_install_subdir
+# )
 
 ##########################################################################
 ######################## Dynamic Linker for MacOS ########################

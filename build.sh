@@ -29,8 +29,8 @@ meson setup builddir || { echo "BUILD FAILED: meson setup. Good luck debugging!"
 
 
 # Build
-meson compile -C builddir || { echo "BUILD FAILED: meson compile. Good luck debugging!"; exit 1; }
-meson install -C builddir/ || { echo "BUILD FAILED: meson install. Good luck debugging!"; exit 1; }
+meson compile -C builddir -v|| { echo "BUILD FAILED: meson compile. Good luck debugging!"; exit 1; }
+meson install -C builddir || { echo "BUILD FAILED: meson install. Good luck debugging!"; exit 1; }
 
 echo ""
 

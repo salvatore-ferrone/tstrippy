@@ -108,7 +108,6 @@ gravity_sources = [
     'tstrippy/src/sphericalharmonicsbfe.f90',
     'tstrippy/src/besselbfe.f90',
     'tstrippy/src/gravity.f90',
-    'tstrippy/src/agamabackend.f90',
     ]
 gravity_command = [
         f2py,
@@ -118,7 +117,6 @@ gravity_command = [
         '--quiet',
         '-m',
         'gravity',
-        agama_so_path,
         ]
 
 simulator_out = 'simulator' + ext_suffix
@@ -129,7 +127,6 @@ simulator_sources = [
     'tstrippy/src/gravity.f90',
     'tstrippy/src/hostcluster.f90',
     'tstrippy/src/simulator.f90',
-    'tstrippy/src/agamabackend.f90',
     ]
 simulator_command = [
         f2py, 
@@ -138,11 +135,12 @@ simulator_command = [
         '--backend=meson', 
         '--quiet', 
         '-m', 
-        'simulator',
-        agama_so_path]
+        'simulator']
 
-
-
+gravity_sources += ['tstrippy/src/agamabackend.f90']
+gravity_command += [agama_so_path]
+simulator_sources += ['tstrippy/src/agamabackend.f90']
+simulator_command += [agama_so_path]
 
 mathutils_build = custom_target('mathutils',
     output:mathutils_out,

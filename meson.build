@@ -83,13 +83,17 @@ import sysconfig
 print(sysconfig.get_config_var('EXT_SUFFIX'))
 '''
 ext_suffix = run_command(py, '-c', ext_suffix_code, check: true).stdout().strip()
+# on macOS: EXT_SUFFIX=.cpython-312-darwin.so
+# on linux: EXT_SUFFIX=.cpython-312-x86_64-linux-gnu.so
+#   if python3.12, for example. 
+
 f2py_code = '''
 import sys, os, numpy
 f2py_path = os.path.join(os.path.dirname(numpy.__file__), 'f2py')
 print(f2py_path)
 '''
 f2py_result = run_command(py, '-c', f2py_code, check:true).stdout().strip()
-f2py = [py,f2py_result] # essenctiall: python -m numpy.f2py
+f2py = [py,f2py_result] # essentially: python -m numpy.f2py
 
 # set some environment flags before calling f2py to supress verbose warnings
 fc_env = environment()
@@ -135,7 +139,8 @@ simulator_command = [
         '--backend=meson', 
         '--quiet', 
         '-m', 
-        'simulator']
+        'simulator',
+        ]
 
 
 

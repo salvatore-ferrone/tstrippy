@@ -84,14 +84,12 @@ print(f2py_path)
 f2py_result = run_command(py, '-c', f2py_code, check:true).stdout().strip()
 f2py = [py,f2py_result] # essenctiall: python -m numpy.f2py
 
-# 1. Add Agama
-# 2. implement the option for Agama
-# 3. implement the stub file
 
+# CHECK IF AGAMA EXISTS, IF YES, BUILD WITH IT
 agama_so_fname = 'agama.so'
 platlib_code = '''import sysconfig; print(sysconfig.get_path('platlib'));'''
 platlib_abs = run_command(py, '-c', platlib_code, check:true).stdout().strip()
-agama_so_path = platlib_abs / 'agama' / agama_so_fname
+agama_so_path = join_paths(platlib_abs, 'agama', agama_so_fname)
 
 
 fc_env = environment()
@@ -100,30 +98,19 @@ fc_env.set('FFLAGS', '-Wno-unused-variable -fPIC')
 fc_env.set('CFLAGS', '-Wno-misleading-indentation -Wno-unused-but-set-variable')  # Suppress misleading indentation warning
 
 # build mathutils
-mathutils_sources =[
-    'tstrippy/src/mathutils.f90',
-]
 mathutils_out = 'mathutils' + ext_suffix
-mathutils_build = custom_target('mathutils',
-    output:mathutils_out,
-    input:mathutils_sources,
-    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils'],
-    env:fc_env,
-    install:true,
-    install_dir:python_install_subdir)
+mathutils_sources =['tstrippy/src/mathutils.f90',]
+mathutils_command = [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils']
 
+gravity_out = 'gravity' + ext_suffix
 gravity_sources = [
     'tstrippy/src/mathutils.f90',
     'tstrippy/src/sphericalharmonicsbfe.f90',
     'tstrippy/src/besselbfe.f90',
-    'tstrippy/src/agamabackend.f90',
     'tstrippy/src/gravity.f90',
-]
-gravity_out = 'gravity' + ext_suffix
-gravity_build = custom_target('gravity',
-    output: gravity_out,
-    input: gravity_sources,
-    command: [
+    'tstrippy/src/agamabackend.f90',
+    ]
+gravity_command = [
         f2py,
         '-c',
         '@INPUT@',
@@ -132,27 +119,19 @@ gravity_build = custom_target('gravity',
         '-m',
         'gravity',
         agama_so_path,
-    ],
-    env: fc_env,
-    install:true,
-    install_dir:python_install_subdir
-)
+        ]
 
-
+simulator_out = 'simulator' + ext_suffix
 simulator_sources = [
     'tstrippy/src/mathutils.f90',
     'tstrippy/src/sphericalharmonicsbfe.f90',
     'tstrippy/src/besselbfe.f90',
-    'tstrippy/src/agamabackend.f90',
     'tstrippy/src/gravity.f90',
     'tstrippy/src/hostcluster.f90',
     'tstrippy/src/simulator.f90',
-]
-simulator_out = 'simulator' + ext_suffix
-simulator_build = custom_target('simulator',
-    output: simulator_out,
-    input: simulator_sources,
-    command: [
+    'tstrippy/src/agamabackend.f90',
+    ]
+simulator_command = [
         f2py, 
         '-c', 
         '@INPUT@', 
@@ -160,7 +139,32 @@ simulator_build = custom_target('simulator',
         '--quiet', 
         '-m', 
         'simulator',
-        agama_so_path],
+        agama_so_path]
+
+
+
+
+mathutils_build = custom_target('mathutils',
+    output:mathutils_out,
+    input:mathutils_sources,
+    command: mathutils_command,
+    env:fc_env,
+    install:true,
+    install_dir:python_install_subdir)
+
+gravity_build = custom_target('gravity',
+    output: gravity_out,
+    input: gravity_sources,
+    command:gravity_command,
+    env: fc_env,
+    install:true,
+    install_dir:python_install_subdir
+)
+
+simulator_build = custom_target('simulator',
+    output: simulator_out,
+    input: simulator_sources,
+    command: simulator_command,
     env: fc_env,
     install: true,
     install_dir: python_install_subdir

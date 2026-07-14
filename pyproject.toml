@@ -8,3 +8,4 @@ name="tstrippy"
 version = "0.1.0"
 description = "tidal stripping simulations of star clusters"
 requires-python = ">=3.9"
+dependencies = ["numpy"]

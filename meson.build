@@ -51,6 +51,7 @@ py.install_sources(
 ################################################
 ############ INSTALL THE DATA FILES ############
 ################################################
+
 # installing data is native meson
 # so we have to specify the full path, there is no "subdir" argument
 datadir=python_install_subdir/'data'
@@ -73,9 +74,10 @@ install_subdir(
     install_dir:datadir
 )
 
-#######################################################################################
-######################## START BUILDING FORTRAN CUSOTM TARGETS ########################
-#######################################################################################
+##############################################################################################
+######################## PREPARE ARGUMENTS FOR FORTRAN CUSTOM TARGETS ########################
+##############################################################################################
+
 # get f2py from environment
 # make sure we're using f2py in the conda environment and not the system-wide version
 ext_suffix_code = '''
@@ -144,26 +146,50 @@ simulator_command = [
 
 
 
+#################################################
+##################### AGAMA #####################
+#################################################
 
-# CHECK IF AGAMA EXISTS, IF YES, BUILD WITH IT
-use_agama = false
 agama_so_fname = 'agama.so'
 platlib_code = '''import sysconfig; print(sysconfig.get_path('platlib'));'''
 platlib_abs = run_command(py, '-c', platlib_code, check:true).stdout().strip()
-agama_so_path = join_paths(platlib_abs, 'agama', agama_so_fname)
-fs = import('fs') # get the file system to check if the file exists
-if fs.exists(agama_so_path)
-    use_agama = true
-endif 
 
-if use_agama
-    gravity_sources += ['tstrippy/src/agamabackend.f90']
-    gravity_command += [agama_so_path]
-    simulator_sources += ['tstrippy/src/agamabackend.f90']
-    simulator_command += [agama_so_path]
-    else
-        message('AGAMA MUST BE INSTALLED PROPERLY')
+fs = import('fs')
+agama_so_path = ''
+installed_agama = join_paths(platlib_abs, 'agama', agama_so_fname)
+bundled_agama  = join_paths(meson.project_source_root(),'external', 'agama', agama_so_fname)
+
+if fs.exists(installed_agama)
+    agama_so_path = installed_agama
+elif fs.exists(bundled_agama)
+    # sometimes, when install agama, pip install fails, but the project still compiles.
+    #   if that's the case, tstrippy will take that agama.so file, instead of failing because
+    #   agama.so isn't found in the site-packages.
+    agama_so_path = bundled_agama
 endif
+
+agama_sources = []
+agama_link = []
+
+if agama_so_path != ''
+    agama_sources = ['tstrippy/src/agamabackend.f90']
+    agama_link = [agama_so_path]
+    message('Using Agama: ' + agama_so_path)
+else
+    agama_sources = ['tstrippy/src/agamabackend_stub.f90']
+    message('Agama not found; using stub backend.')
+endif
+
+gravity_sources += agama_sources
+gravity_command += agama_link
+
+simulator_sources += agama_sources
+simulator_command += agama_link
+
+
+###############################################################################
+######################## BUILD  FORTRAN CUSTOM TARGETS ########################
+###############################################################################
 
 mathutils_build = custom_target('mathutils',
     output:mathutils_out,
@@ -191,11 +217,11 @@ simulator_build = custom_target('simulator',
     install_dir: python_install_subdir
 )
 
-
-# now update the dynamic link for macOS. 
+##########################################################################
+######################## Dynamic Linker for MacOS ########################
+##########################################################################
 # this is required because at run time, simulator and gravity will look for agama.so
 #   only in /usr/lib/. We have to add the symbolic link to where agama.so is located
-
 if host_machine.system()=='darwin'
     install_name_tool = find_program('install_name_tool', required:true)
     meson.add_install_script(

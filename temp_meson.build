@@ -100,7 +100,7 @@ base_ldflags = ''
 # Suppress compact unwind warnings from macOS linker
 if host_machine.system() == 'darwin'
     # For macOS, add linker flags to suppress unwind warnings
-    base_ldflags = base_ldflags + ' -Wl,-no_compact_unwind'
+    base_ldflags = base_ldflags + '-Wl,-no_compact_unwind'
 endif
 
 fc_env_base = environment()

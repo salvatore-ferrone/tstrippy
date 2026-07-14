@@ -14,10 +14,12 @@ py = pymod.find_installation(required:true,pure:false)
 # installed files into wheel-relative paths.
 python_install_dir = py.get_install_dir()
 python_install_subdir = python_install_dir / pkg_name
-
 message('install dir: ', python_install_dir)
 
-# install the python part of the project
+
+################################################################
+############ install the python part of the project ############
+################################################################
 py.install_sources(
     files(
         'tstrippy/__init__.py',
@@ -45,6 +47,10 @@ py.install_sources(
     ),
     subdir: 'tstrippy/io'
 )
+
+################################################
+############ INSTALL THE DATA FILES ############
+################################################
 # installing data is native meson
 # so we have to specify the full path, there is no "subdir" argument
 datadir=python_install_subdir/'data'
@@ -67,15 +73,16 @@ install_subdir(
     install_dir:datadir
 )
 
-
-## START BUILDING FORTRAN CUSOTM TARGETS
+#######################################################################################
+######################## START BUILDING FORTRAN CUSOTM TARGETS ########################
+#######################################################################################
 # get f2py from environment
+# make sure we're using f2py in the conda environment and not the system-wide version
 ext_suffix_code = '''
 import sysconfig
 print(sysconfig.get_config_var('EXT_SUFFIX'))
 '''
 ext_suffix = run_command(py, '-c', ext_suffix_code, check: true).stdout().strip()
-# make sure we're using f2py in the conda environment and not the system-wide version
 f2py_code = '''
 import sys, os, numpy
 f2py_path = os.path.join(os.path.dirname(numpy.__file__), 'f2py')
@@ -84,20 +91,13 @@ print(f2py_path)
 f2py_result = run_command(py, '-c', f2py_code, check:true).stdout().strip()
 f2py = [py,f2py_result] # essenctiall: python -m numpy.f2py
 
-
-# CHECK IF AGAMA EXISTS, IF YES, BUILD WITH IT
-agama_so_fname = 'agama.so'
-platlib_code = '''import sysconfig; print(sysconfig.get_path('platlib'));'''
-platlib_abs = run_command(py, '-c', platlib_code, check:true).stdout().strip()
-agama_so_path = join_paths(platlib_abs, 'agama', agama_so_fname)
-
-
+# set some environment flags before calling f2py to supress verbose warnings
 fc_env = environment()
 fc_env.set('FC', 'gfortran')
 fc_env.set('FFLAGS', '-Wno-unused-variable -fPIC')
-fc_env.set('CFLAGS', '-Wno-misleading-indentation -Wno-unused-but-set-variable')  # Suppress misleading indentation warning
+fc_env.set('CFLAGS', '-Wno-misleading-indentation -Wno-unused-but-set-variable')  
 
-# build mathutils
+# prepare the arguments for building the fotran shared object files 
 mathutils_out = 'mathutils' + ext_suffix
 mathutils_sources =['tstrippy/src/mathutils.f90',]
 mathutils_command = [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils']
@@ -137,10 +137,28 @@ simulator_command = [
         '-m', 
         'simulator']
 
-gravity_sources += ['tstrippy/src/agamabackend.f90']
-gravity_command += [agama_so_path]
-simulator_sources += ['tstrippy/src/agamabackend.f90']
-simulator_command += [agama_so_path]
+
+
+
+# CHECK IF AGAMA EXISTS, IF YES, BUILD WITH IT
+use_agama = false
+agama_so_fname = 'agama.so'
+platlib_code = '''import sysconfig; print(sysconfig.get_path('platlib'));'''
+platlib_abs = run_command(py, '-c', platlib_code, check:true).stdout().strip()
+agama_so_path = join_paths(platlib_abs, 'agama', agama_so_fname)
+fs = import('fs') # get the file system to check if the file exists
+if fs.exists(agama_so_path)
+    use_agama = true
+endif 
+
+if use_agama
+    gravity_sources += ['tstrippy/src/agamabackend.f90']
+    gravity_command += [agama_so_path]
+    simulator_sources += ['tstrippy/src/agamabackend.f90']
+    simulator_command += [agama_so_path]
+    else
+        message('AGAMA MUST BE INSTALLED PROPERLY')
+endif
 
 mathutils_build = custom_target('mathutils',
     output:mathutils_out,

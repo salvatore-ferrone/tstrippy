@@ -10,12 +10,12 @@ pkg_name = 'tstrippy'
 pymod = import('python')
 py = pymod.find_installation(required:true,pure:false)
 
-# the snippit below is preferd to: install_dir = py.get_install_dir()
-install_dir_code='''import sysconfig; print(sysconfig.get_path('platlib'));'''
-install_dir = run_command(py, '-c', install_dir_code, check:true).stdout().strip()
-python_install_subdir = install_dir / pkg_name
+# Use Meson's Python install dir abstraction so meson-python can map
+# installed files into wheel-relative paths.
+python_install_dir = py.get_install_dir()
+python_install_subdir = python_install_dir / pkg_name
 
-message('install dir: ', install_dir)
+message('install dir: ', python_install_dir)
 
 # install the python part of the project
 py.install_sources(
@@ -89,13 +89,15 @@ f2py = [py,f2py_result] # essenctiall: python -m numpy.f2py
 # 3. implement the stub file
 
 agama_so_fname = 'agama.so'
-agama_so_path = install_dir / 'agama' / agama_so_fname
+platlib_code = '''import sysconfig; print(sysconfig.get_path('platlib'));'''
+platlib_abs = run_command(py, '-c', platlib_code, check:true).stdout().strip()
+agama_so_path = platlib_abs / 'agama' / agama_so_fname
 
 
 fc_env = environment()
 fc_env.set('FC', 'gfortran')
 fc_env.set('FFLAGS', '-Wno-unused-variable -fPIC')
-fc_env.set('CFLAGS', '-Wno-misleading-indentation')  # Suppress misleading indentation warning
+fc_env.set('CFLAGS', '-Wno-misleading-indentation -Wno-unused-but-set-variable')  # Suppress misleading indentation warning
 
 # build mathutils
 mathutils_sources =[
@@ -176,13 +178,13 @@ if host_machine.system()=='darwin'
         '-change',
         '@executable_path/'+agama_so_fname,
         agama_so_path,
-        install_dir / pkg_name / simulator_out
+        python_install_dir / pkg_name / simulator_out
     )
     meson.add_install_script(
         install_name_tool,
         '-change',
         '@executable_path/'+agama_so_fname,
         agama_so_path,
-        install_dir / pkg_name / gravity_out
+        python_install_dir / pkg_name / gravity_out
     )
 endif

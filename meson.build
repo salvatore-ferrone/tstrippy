@@ -92,17 +92,10 @@ agama_so_fname = 'agama.so'
 agama_so_path = install_dir / 'agama' / agama_so_fname
 
 
-# Environment for targets that include agamabackend.f90.
-# -undefined dynamic_lookup (macOS) defers resolution of Agama symbols to
-# runtime so the .so loads cleanly even when Agama is not linked in.
-
-
-
-# fc_env = environment()
-# fc_env.set('FC', 'gfortran')
-# fc_env.set('FFLAGS', '-Wno-unused-variable -fPIC')
-# fc_env.set('CFLAGS', '-Wno-misleading-indentation')  # Suppress misleading indentation warning
-# fc_env.set('LDFLAGS', agama_link_flags.strip())
+fc_env = environment()
+fc_env.set('FC', 'gfortran')
+fc_env.set('FFLAGS', '-Wno-unused-variable -fPIC')
+fc_env.set('CFLAGS', '-Wno-misleading-indentation')  # Suppress misleading indentation warning
 
 # build mathutils
 mathutils_sources =[
@@ -113,6 +106,7 @@ mathutils_build = custom_target('mathutils',
     output:mathutils_out,
     input:mathutils_sources,
     command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils'],
+    env:fc_env,
     install:true,
     install_dir:python_install_subdir)
 
@@ -137,7 +131,7 @@ gravity_build = custom_target('gravity',
         'gravity',
         agama_so_path,
     ],
-    # env: fc_env,
+    env: fc_env,
     install:true,
     install_dir:python_install_subdir
 )
@@ -165,7 +159,7 @@ simulator_build = custom_target('simulator',
         '-m', 
         'simulator',
         agama_so_path],
-    # env: fc_env,
+    env: fc_env,
     install: true,
     install_dir: python_install_subdir
 )

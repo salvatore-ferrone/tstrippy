@@ -4,9 +4,3 @@ option(
     value: 'false', 
     description: 
     'Whether building via pip/meson-python')
-
-option(
-    'agama', 
-    type: 'feature', 
-    value: 'auto', 
-    description: 'Enable Agama backend (links against external/agama/agama.so)')

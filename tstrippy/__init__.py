@@ -9,7 +9,7 @@ from . import mathutils as _mathutils_ext
 from . import gravity as _gravity_ext
 from . import simulator as _simulator_ext
 gravity = _gravity_ext.gravity
-simulator = _simulator_ext.gravity
+simulator = _simulator_ext.simulator
 mathutils = _mathutils_ext.mathutils
 __all__ = ['code', "io", "mathutils","gravity","simulator"]
 

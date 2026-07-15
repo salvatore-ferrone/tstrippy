@@ -11,6 +11,10 @@ module simulator_module
     end type simulator_t 
 
     CONTAINS
-        subroutine setinitialconditions(self, x,y,z,vx,vy,vz)
-            class(simulator_t), intent(in)
-            print*, hello
+
+        subroutine setinitialconditions(self)
+            class(simulator_t), intent(in) :: self 
+            print*, "hello"
+        end subroutine setinitialconditions
+
+end module simulator_module

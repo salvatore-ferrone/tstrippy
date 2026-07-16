@@ -51,3 +51,6 @@ python -c "import tstrippy; print(tstrippy.__file__)"
 ## Documentation
 
 The docs are hosted at <https://tstrippy.readthedocs.io>.
+
+
+python -m pip install . --no-build-isolation --config-settings=--build-option=--yes -vvs/tstrippy/lib

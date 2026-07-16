@@ -1,209 +1,31 @@
-project('tstrippy', ['c'],
-    version: '0.0.1',
-    license: 'MIT'
-)
-
-# Define package name variable to avoid repetition
+project(
+    'tstrippy', 
+    ['fortran'], 
+    version:'0.0.1',
+    license:'MIT',
+    default_options:[
+        'python.install_env=auto',
+    ] )
 pkg_name = 'tstrippy'
+pymod = import('python')
+py = pymod.find_installation(required:true,pure:false)
 
-# Find Python and f2py
-py = import('python').find_installation()
-# f2py = find_program('f2py') # could be system wide and incorrect
-fc_args = ['-fPIC']
-
-# Get the Python site-packages directory
-python_code = '''
-import sysconfig
-print(sysconfig.get_path('purelib'))
-'''
-# Get Python extension suffix for module naming
-ext_suffix_code = '''
-import sysconfig
-print(sysconfig.get_config_var('EXT_SUFFIX'))
-'''
-python_prefix_code = '''
-import sys
-print(sys.prefix)
-'''
-
-install_dir = run_command(py, '-c', python_code, check: true).stdout().strip()
-ext_suffix = run_command(py, '-c', ext_suffix_code, check: true).stdout().strip()
-python_prefix = run_command(py, '-c', python_prefix_code, check: true).stdout().strip()
-python_lib_dir = python_prefix / 'lib'
-message('Python install dir: ' + install_dir)
-message('Python extension suffix: ' + ext_suffix)
-
-# Use Python to locate the correct f2py from NumPy
-f2py_code = '''
-import sys, os, numpy
-f2py_path = os.path.join(os.path.dirname(numpy.__file__), 'f2py', 'f2py.py')
-if os.path.exists(f2py_path):
-    print('python:' + f2py_path)
-else:
-    import shutil
-    f2py_bin = shutil.which('f2py')
-    print(f2py_bin if f2py_bin else 'f2py')
-'''
-
-f2py_result = run_command(py, '-c', f2py_code, check: true).stdout().strip()
-if f2py_result.startswith('python:')
-    # Use Python to run f2py.py script
-    f2py_script = f2py_result.split(':', 1)[1]
-    f2py = [py, f2py_script]
-else
-    # Use binary f2py from PATH
-    f2py = find_program(f2py_result)
-endif
-
-message('Running direct meson build')
-# Paths for direct meson install (absolute paths)
-module_install_dir = install_dir / pkg_name / 'lib'
-python_install_subdir = install_dir / pkg_name
-fs = import('fs')
-
-# Optional Agama wiring
-agama_opt = get_option('agama')
-agama_dir = meson.project_source_root() / 'external' / 'agama'
-agama_a = agama_dir / 'agama.a'
-agama_so = agama_dir / 'agama.so'
-openblas_so = python_lib_dir / 'libopenblas.0.dylib'
-gsl_a = python_lib_dir / 'libgsl.a'
-gslcblas_a = python_lib_dir / 'libgslcblas.a'
-libomp_so = python_lib_dir / 'libomp.dylib'
-agama_enabled = false
-agama_link_flags = ''
-
-if not agama_opt.disabled()
-    if fs.exists(agama_a)
-        agama_enabled = true
-        if fs.exists(openblas_so)
-            agama_link_flags = '-Wl,-rpath,' + python_lib_dir + ' ' + agama_a + ' ' + gsl_a + ' ' + gslcblas_a + ' ' + openblas_so + ' ' + libomp_so + ' -lc++'
-        else
-            agama_link_flags = '-Wl,-rpath,' + python_lib_dir + ' ' + agama_a + ' ' + gsl_a + ' ' + gslcblas_a + ' -lopenblas ' + libomp_so + ' -lc++'
-        endif
-        message('Agama backend enabled via ' + agama_a)
-    elif fs.exists(agama_so)
-        agama_enabled = true
-        agama_link_flags = '-Wl,-rpath,' + agama_dir + ' ' + agama_so
-        message('Agama backend enabled via ' + agama_so)
-    elif agama_opt.enabled()
-        error('Agama backend explicitly enabled, but external/agama/agama.a or external/agama/agama.so was not found. Build Agama first with make lib in external/agama.')
-    else
-        warning('Agama backend not found at external/agama/agama.so; continuing without Agama support')
-    endif
-endif
+# Use Meson's Python install dir abstraction so meson-python can map
+# installed files into wheel-relative paths.
+python_install_dir = py.get_install_dir()
+python_install_subdir = python_install_dir / pkg_name
+message('install dir: ', python_install_dir)
 
 
-# Setup environment for f2py
-base_ldflags = ''
-
-# Suppress compact unwind warnings from macOS linker
-if host_machine.system() == 'darwin'
-    # For macOS, add linker flags to suppress unwind warnings
-    base_ldflags = base_ldflags + ' -Wl,-no_compact_unwind'
-endif
-
-fc_env_base = environment()
-fc_env_base.set('FC', 'gfortran')
-fc_env_base.set('FFLAGS', '-Wno-unused-variable -fPIC')
-fc_env_base.set('CFLAGS', '-Wno-misleading-indentation')  # Suppress misleading indentation warning
-if base_ldflags.strip() != ''
-    fc_env_base.set('LDFLAGS', base_ldflags.strip())
-endif
-
-fc_env_agama = environment()
-fc_env_agama.set('FC', 'gfortran')
-fc_env_agama.set('FFLAGS', '-Wno-unused-variable -fPIC')
-fc_env_agama.set('CFLAGS', '-Wno-misleading-indentation')  # Suppress misleading indentation warning
-
-agama_ldflags = base_ldflags
-if agama_enabled
-    agama_ldflags = agama_ldflags + ' ' + agama_link_flags
-endif
-if agama_ldflags.strip() != ''
-    fc_env_agama.set('LDFLAGS', agama_ldflags.strip())
-endif
-
-agamabackend_sources = []
-if agama_enabled
-    agamabackend_sources += ['tstrippy/src/agamabackend.f90']
-endif
-
-mathutils_sources = [
-    'tstrippy/src/mathutils.f90',
-]
-mathutils_out = 'mathutils' + ext_suffix
-mathutils_build = custom_target('mathutils',
-    output:mathutils_out,
-    input: mathutils_sources,
-    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils'],
-    env: fc_env_base,
-    install: true,
-    install_dir: module_install_dir)
-
-gravity_sources = [
-    'tstrippy/src/mathutils.f90',
-    'tstrippy/src/sphericalharmonicsbfe.f90',
-    'tstrippy/src/besselbfe.f90',
-    'tstrippy/src/agamabackend.f90',
-    'tstrippy/src/gravity.f90',
-]
-gravity_out = 'gravity' + ext_suffix
-gravity_build = custom_target('gravity',
-    output: gravity_out,
-    input: gravity_sources,
-    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'gravity'],
-    env: fc_env_agama,
-    install: true,
-    install_dir: module_install_dir
-)
-
-simulator_sources = [
-    'tstrippy/src/mathutils.f90',
-    'tstrippy/src/sphericalharmonicsbfe.f90',
-    'tstrippy/src/besselbfe.f90',
-    'tstrippy/src/agamabackend.f90',
-    'tstrippy/src/gravity.f90',
-    'tstrippy/src/hostcluster.f90',
-    'tstrippy/src/flyingspheres.f90',
-    'tstrippy/src/simulator.f90'
-]
-simulator_out = 'simulator' + ext_suffix
-simulator_build = custom_target('simulator',
-    output: simulator_out,
-    input: simulator_sources,
-    command: [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'simulator'],
-    env: fc_env_agama,
-    install: true,
-    install_dir: module_install_dir
-)
-
-# Then install Python files to their proper directories
+################################################################
+############ install the python part of the project ############
+################################################################
 py.install_sources(
     files(
         'tstrippy/__init__.py',
     ),
-    subdir: python_install_subdir
+    subdir: 'tstrippy' 
 )
-
-py.install_sources(
-    files(
-        'tstrippy/lib/__init__.py',
-    ),
-    subdir: python_install_subdir / 'lib'
-)
-
-py.install_sources(
-    files(
-        'tstrippy/io/__init__.py',
-        'tstrippy/io/mwgcs.py',    
-        'tstrippy/io/milkyway_models.py',
-        'tstrippy/io/reference_frames.py',
-        'tstrippy/io/write_simulation_hdf5.py',
-    ),
-    subdir: python_install_subdir / 'io'
-)
-
 py.install_sources(
     files(
         'tstrippy/code/__init__.py',
@@ -213,28 +35,26 @@ py.install_sources(
         'tstrippy/code/analysis.py',
         'tstrippy/code/workflows.py',
     ),
-    subdir: python_install_subdir / 'code'
+    subdir:  'tstrippy/code'
+)
+py.install_sources(
+    files(
+        'tstrippy/io/__init__.py',
+        'tstrippy/io/mwgcs.py',    
+        'tstrippy/io/milkyway_models.py',
+        'tstrippy/io/reference_frames.py',
+        'tstrippy/io/write_simulation_hdf5.py',
+    ),
+    subdir: 'tstrippy/io'
 )
 
-# for listing files 
+################################################
+############ INSTALL THE DATA FILES ############
+################################################
 
-# colelct all files in the MW referenceframes 
-
-
-# And data files
-# install_data(
-#     files('tstrippy/data/mwgcs-kinematics',
-#           'tstrippy/data/mwgcs-structural',
-#           'tstrippy/data/MWreferenceframes/MWrefframeFerrone2023.yaml',
-#           'tstrippy/data/MWmodels/pouliasis2017pii.yaml',
-#           'tstrippy/data/MWmodels/ibata2024mostprob.yaml',
-#           'tstrippy/data/unit_basis.yaml'),
-#     install_dir: python_install_subdir / 'data'
-# )
-
-# And data files
-# Keep top-level data files explicit, and install model/reference-frame
-# directories as subtrees so new files are picked up automatically.
+# installing data is native meson
+# so we have to specify the full path, there is no "subdir" argument
+datadir=python_install_subdir/'data'
 install_data(
     files(
         'tstrippy/data/2023-03-28-merged.fits',
@@ -243,15 +63,179 @@ install_data(
         'tstrippy/data/mwgcs-structural',
         'tstrippy/data/unit_basis.yaml',
     ),
-    install_dir: python_install_subdir / 'data'
+    install_dir:datadir
 )
-
 install_subdir(
     'tstrippy/data/MWmodels',
-    install_dir: python_install_subdir / 'data'
+    install_dir:datadir
 )
-
 install_subdir(
     'tstrippy/data/MWreferenceframes',
-    install_dir: python_install_subdir / 'data'
+    install_dir:datadir
 )
+
+##############################################################################################
+######################## PREPARE ARGUMENTS FOR FORTRAN CUSTOM TARGETS ########################
+##############################################################################################
+
+# get f2py from environment
+# make sure we're using f2py in the conda environment and not the system-wide version
+ext_suffix_code = '''
+import sysconfig
+print(sysconfig.get_config_var('EXT_SUFFIX'))
+'''
+ext_suffix = run_command(py, '-c', ext_suffix_code, check: true).stdout().strip()
+# on macOS: EXT_SUFFIX=.cpython-312-darwin.so
+# on linux: EXT_SUFFIX=.cpython-312-x86_64-linux-gnu.so
+#   if python3.12, for example. 
+
+f2py_code = '''
+import sys, os, numpy
+f2py_path = os.path.join(os.path.dirname(numpy.__file__), 'f2py')
+print(f2py_path)
+'''
+f2py_result = run_command(py, '-c', f2py_code, check:true).stdout().strip()
+f2py = [py,f2py_result] # essentially: python -m numpy.f2py
+
+# set some environment flags before calling f2py to supress verbose warnings
+fc_env = environment()
+fc_env.set('FC', 'gfortran')
+fc_env.set('FFLAGS', '-Wno-unused-variable -fPIC')
+fc_env.set('CFLAGS', '-Wno-misleading-indentation -Wno-unused-but-set-variable')  
+
+# prepare the arguments for building the fotran shared object files 
+mathutils_out = 'mathutils' + ext_suffix
+mathutils_sources =['tstrippy/src/mathutils.f90',]
+mathutils_command = [f2py, '-c', '@INPUT@', '--backend=meson', '--quiet', '-m', 'mathutils']
+
+gravity_out = 'gravity' + ext_suffix
+gravity_sources = [
+    'tstrippy/src/mathutils.f90',
+    'tstrippy/src/sphericalharmonicsbfe.f90',
+    'tstrippy/src/besselbfe.f90',
+    'tstrippy/src/gravity.f90',
+    ]
+gravity_command = [
+        f2py,
+        '-c',
+        '@INPUT@',
+        '--backend=meson',
+        '--quiet',
+        '-m',
+        'gravity',
+        ]
+
+simulator_out = 'simulator' + ext_suffix
+simulator_sources = [
+    'tstrippy/src/mathutils.f90',
+    'tstrippy/src/sphericalharmonicsbfe.f90',
+    'tstrippy/src/besselbfe.f90',
+    'tstrippy/src/gravity.f90',
+    'tstrippy/src/hostcluster.f90',
+    'tstrippy/src/simulator.f90',
+    ]
+simulator_command = [
+        f2py, 
+        '-c', 
+        '@INPUT@', 
+        '--backend=meson', 
+        '--quiet', 
+        '-m', 
+        'simulator',
+        ]
+
+
+
+#################################################
+##################### AGAMA #####################
+#################################################
+
+agama_so_fname = 'agama.so'
+platlib_code = '''import sysconfig; print(sysconfig.get_path('platlib'));'''
+platlib_abs = run_command(py, '-c', platlib_code, check:true).stdout().strip()
+
+fs = import('fs')
+agama_so_path = ''
+installed_agama = join_paths(platlib_abs, 'agama', agama_so_fname)
+bundled_agama  = join_paths(meson.project_source_root(),'external', 'agama', agama_so_fname)
+
+if fs.exists(installed_agama)
+    agama_so_path = installed_agama
+elif fs.exists(bundled_agama)
+    # sometimes, when install agama, pip install fails, but the project still compiles.
+    #   if that's the case, tstrippy will take that agama.so file, instead of failing because
+    #   agama.so isn't found in the site-packages.
+    agama_so_path = bundled_agama
+endif
+
+agama_sources = []
+agama_link = []
+
+if agama_so_path != ''
+    agama_sources = ['tstrippy/src/agamabackend.f90']
+    agama_link = [agama_so_path]
+    message('Using Agama: ' + agama_so_path)
+else
+    agama_sources = ['tstrippy/src/agamabackend_stub.f90']
+    message('Agama not found; using stub backend.')
+endif
+
+gravity_sources += agama_sources
+gravity_command += agama_link
+
+simulator_sources += agama_sources
+simulator_command += agama_link
+
+
+###############################################################################
+######################## BUILD  FORTRAN CUSTOM TARGETS ########################
+###############################################################################
+
+mathutils_build = custom_target('mathutils',
+    output:mathutils_out,
+    input:mathutils_sources,
+    command: mathutils_command,
+    env:fc_env,
+    install:true,
+    install_dir:python_install_subdir)
+
+gravity_build = custom_target('gravity',
+    output: gravity_out,
+    input: gravity_sources,
+    command:gravity_command,
+    env: fc_env,
+    install:true,
+    install_dir:python_install_subdir
+)
+
+simulator_build = custom_target('simulator',
+    output: simulator_out,
+    input: simulator_sources,
+    command: simulator_command,
+    env: fc_env,
+    install: true,
+    install_dir: python_install_subdir
+)
+
+##########################################################################
+######################## Dynamic Linker for MacOS ########################
+##########################################################################
+# this is required because at run time, simulator and gravity will look for agama.so
+#   only in /usr/lib/. We have to add the symbolic link to where agama.so is located
+if host_machine.system()=='darwin'
+    install_name_tool = find_program('install_name_tool', required:true)
+    meson.add_install_script(
+        install_name_tool,
+        '-change',
+        '@executable_path/'+agama_so_fname,
+        agama_so_path,
+        python_install_dir / pkg_name / simulator_out
+    )
+    meson.add_install_script(
+        install_name_tool,
+        '-change',
+        '@executable_path/'+agama_so_fname,
+        agama_so_path,
+        python_install_dir / pkg_name / gravity_out
+    )
+endif

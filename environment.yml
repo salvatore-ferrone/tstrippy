@@ -2,16 +2,18 @@ name: tstrippy
 channels:
   - conda-forge
 dependencies:
-  - python>=3.9,<3.12
-  - numpy>=2.0
+  - python
+  - numpy
   - astropy>=7.0
-  - pyyaml>=5.1
+  - pyyaml
   - hdf5
   - pytest
+  
+  # Runtime/build deps
+  - build
   - meson
-  - ninja
-  - make
-  - pkg-config
+  - meson-python
+  - ninja  
 
   # compiler toolchain (important for Agama + OpenMP on macOS)
   - c-compiler
@@ -20,8 +22,11 @@ dependencies:
   - llvm-openmp
   - gsl
   - eigen
+  - make
+  - compilers 
 
   # needed because Agama builds via setup.py/pip
-  - setuptools
+  - pkg-config
+  - setuptools=<81
   - wheel
   - pip

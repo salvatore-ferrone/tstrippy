@@ -2,8 +2,8 @@ MODULE simulator
     USE gravity, ONLY: gravity_clear => clear, &
                        gravity_set_gravitational_constant => set_gravitational_constant, &
                        gravity_add_component => add_component, &
-                       gravity_add_component_agama => add_component_agama, &
-                       gravity_add_component_agama_from_file => add_component_agama_from_file, &
+                       gravity_add_component_agama_initfromparam => add_component_agama_initfromparam, &
+                       gravity_add_component_agama_initfromfile => add_component_agama_initfromfile, &
                        gravity_finalize => finalize, &
                        gravity_force => force, &
                        gravity_potential => potential, &
@@ -688,22 +688,22 @@ MODULE simulator
         state%finalized = .FALSE.
     END SUBROUTINE add_component
 
-    SUBROUTINE add_component_agama(params)
+    SUBROUTINE add_component_agama_initfromparam(params)
         CHARACTER(LEN=*), INTENT(IN) :: params
-        CALL gravity_add_component_agama(params)
+        CALL gravity_add_component_agama_initfromparam(params)
         CALL clear_force_registry()
         state%gravity_finalized = GRAVITY_FINALIZED
         state%finalized = .FALSE.
-    END SUBROUTINE add_component_agama   
+    END SUBROUTINE add_component_agama_initfromparam   
     
 
-    SUBROUTINE add_component_agama_from_file(inifilename)
+    SUBROUTINE add_component_agama_initfromfile(inifilename)
         CHARACTER(LEN=*), INTENT(IN) :: inifilename
-        CALL gravity_add_component_agama_from_file(inifilename)
+        CALL gravity_add_component_agama_initfromfile(inifilename)
         CALL clear_force_registry()
         state%gravity_finalized = GRAVITY_FINALIZED
         state%finalized = .FALSE.
-    END SUBROUTINE add_component_agama_from_file        
+    END SUBROUTINE add_component_agama_initfromfile        
 
     !!!!! THE HOST CLUSTER MODULE
     SUBROUTINE add_hostcluster()

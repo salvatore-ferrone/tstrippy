@@ -54,39 +54,39 @@ CONTAINS
         AGAMA_SPEC_IS_FILE = .FALSE.
     END SUBROUTINE clear
 
-    SUBROUTINE add_component_from_param(params)
+    SUBROUTINE add_component_initfromparam(params)
         CHARACTER(LEN=*), INTENT(IN) :: params
 
         IF (AGAMA_FINALIZED) THEN
-            WRITE(*,'(A)') 'WARNING: add_component_from_param: cannot add components after finalize'
+            WRITE(*,'(A)') 'WARNING: add_component_initfromparam: cannot add components after finalize'
             RETURN
         END IF
         IF (N_AGAMA_COMPONENTS >= MAX_AGAMA_COMPONENTS) THEN
-            WRITE(*,'(A)') 'WARNING: add_component_from_param: maximum number of Agama components reached'
+            WRITE(*,'(A)') 'WARNING: add_component_initfromparam: maximum number of Agama components reached'
             RETURN
         END IF
 
         N_AGAMA_COMPONENTS = N_AGAMA_COMPONENTS + 1
         AGAMA_SPECS(N_AGAMA_COMPONENTS) = ADJUSTL(params)
         AGAMA_SPEC_IS_FILE(N_AGAMA_COMPONENTS) = .FALSE.
-    END SUBROUTINE add_component_from_param
+    END SUBROUTINE add_component_initfromparam
 
-    SUBROUTINE add_component_from_file(inifilename)
+    SUBROUTINE add_component_initfromfile(inifilename)
         CHARACTER(LEN=*), INTENT(IN) :: inifilename
 
         IF (AGAMA_FINALIZED) THEN
-            WRITE(*,'(A)') 'WARNING: add_component_from_file: cannot add components after finalize'
+            WRITE(*,'(A)') 'WARNING: add_component_initfromfile: cannot add components after finalize'
             RETURN
         END IF
         IF (N_AGAMA_COMPONENTS >= MAX_AGAMA_COMPONENTS) THEN
-            WRITE(*,'(A)') 'WARNING: add_component_from_file: maximum number of Agama components reached'
+            WRITE(*,'(A)') 'WARNING: add_component_initfromfile: maximum number of Agama components reached'
             RETURN
         END IF
 
         N_AGAMA_COMPONENTS = N_AGAMA_COMPONENTS + 1
         AGAMA_SPECS(N_AGAMA_COMPONENTS) = ADJUSTL(inifilename)
         AGAMA_SPEC_IS_FILE(N_AGAMA_COMPONENTS) = .TRUE.
-    END SUBROUTINE add_component_from_file
+    END SUBROUTINE add_component_initfromfile
 
     SUBROUTINE add_disk_component(sigma0, hR, hZ)
         REAL*8, INTENT(IN) :: sigma0, hR, hZ
@@ -95,7 +95,7 @@ CONTAINS
         spec = 'type=Disk surfaceDensity=' // TRIM(ADJUSTL(agama_real_to_string(sigma0))) // &
                ' scaleRadius=' // TRIM(ADJUSTL(agama_real_to_string(hR))) // &
                ' scaleHeight=' // TRIM(ADJUSTL(agama_real_to_string(hZ)))
-        CALL add_component_from_param(spec)
+        CALL add_component_initfromparam(spec)
     END SUBROUTINE add_disk_component
 
     SUBROUTINE finalize()
@@ -258,7 +258,7 @@ CONTAINS
         REAL*8, DIMENSION(1) :: x, y, z, phi_arr, ax, ay, az
 
         CALL clear()
-        CALL add_component_from_param('type=Disk surfaceDensity=1 scaleRadius=3 scaleHeight=0.3')
+        CALL add_component_initfromparam('type=Disk surfaceDensity=1 scaleRadius=3 scaleHeight=0.3')
         CALL finalize()
 
         x(1) = 8.0D0
@@ -284,7 +284,7 @@ CONTAINS
         REAL*8, DIMENSION(3) :: xyz
 
         CALL clear()
-        CALL add_component_from_file(inifilename)
+        CALL add_component_initfromfile(inifilename)
         CALL finalize()
 
         xyz(1) = 8.0D0

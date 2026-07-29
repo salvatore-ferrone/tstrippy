@@ -1,7 +1,7 @@
 MODULE gravity
     USE agamabackend, ONLY: agama_clear => clear, &
-                      agama_add_component_from_param => add_component_from_param, &
-                      agama_add_component_from_file => add_component_from_file, &
+                      agama_add_component_initfromparam => add_component_initfromparam, &
+                      agama_add_component_initfromfile => add_component_initfromfile, &
                       agama_finalize => finalize, &
                       agama_force_component => force_component, &
                       agama_potential_component => potential_component, &
@@ -207,7 +207,7 @@ CONTAINS
         COMPONENT_HANDLERS(N_COMPONENT_HANDLERS)%backend = BACKEND_AGAMA
     END SUBROUTINE register_handler_agama
 
-    SUBROUTINE add_component_agama(params)
+    SUBROUTINE add_component_agama_initfromparam(params)
         CHARACTER(LEN=*), INTENT(IN) :: params
         INTEGER :: i_handler
 
@@ -231,24 +231,24 @@ CONTAINS
         COMPONENT_MODEL_NAMES(GRAVITY_NCOMP) = "agama"
         AGAMA_COMPONENT_SPECS(GRAVITY_NCOMP) = ADJUSTL(params)
         AGAMA_COMPONENT_SPEC_IS_FILE(GRAVITY_NCOMP) = .FALSE.
-    END SUBROUTINE add_component_agama
+    END SUBROUTINE add_component_agama_initfromparam
 
-    SUBROUTINE add_component_agama_from_file(inifilename)
+    SUBROUTINE add_component_agama_initfromfile(inifilename)
         CHARACTER(LEN=*), INTENT(IN) :: inifilename
         INTEGER :: i_handler
 
         IF (GRAVITY_FINALIZED) THEN
-            WRITE(*,'(A)') "WARNING: add_component_agama_from_file: cannot add components after finalize"
+            WRITE(*,'(A)') "WARNING: add_component_agama_initfromfile: cannot add components after finalize"
             RETURN
         END IF
         IF (GRAVITY_NCOMP >= GRAVITY_MAX_NCOMP) THEN
-            WRITE(*,'(A)') "WARNING: add_component_agama_from_file: maximum number of components reached"
+            WRITE(*,'(A)') "WARNING: add_component_agama_initfromfile: maximum number of components reached"
             RETURN
         END IF
 
         i_handler = handler_index_from_name("agama")
         IF (i_handler <= 0) THEN
-            WRITE(*,'(A)') "WARNING: add_component_agama_from_file: agama backend is not registered"
+            WRITE(*,'(A)') "WARNING: add_component_agama_initfromfile: agama backend is not registered"
             RETURN
         END IF
 
@@ -257,7 +257,7 @@ CONTAINS
         COMPONENT_MODEL_NAMES(GRAVITY_NCOMP) = "agama"
         AGAMA_COMPONENT_SPECS(GRAVITY_NCOMP) = ADJUSTL(inifilename)
         AGAMA_COMPONENT_SPEC_IS_FILE(GRAVITY_NCOMP) = .TRUE.
-    END SUBROUTINE add_component_agama_from_file
+    END SUBROUTINE add_component_agama_initfromfile
 
     INTEGER FUNCTION handler_index_from_name(model_name)
         
@@ -409,6 +409,7 @@ CONTAINS
                 n_sh = n_sh + 1
                 i_sh = i
             END IF
+    
             IF (component_is_bessel(i)) THEN
                 n_bessel = n_bessel + 1
                 i_bessel = i
@@ -417,9 +418,9 @@ CONTAINS
                 n_agama = n_agama + 1
                 i_handler = COMPONENT_HANDLER_SLOT(i)
                 IF (AGAMA_COMPONENT_SPEC_IS_FILE(i)) THEN
-                    CALL agama_add_component_from_file(TRIM(AGAMA_COMPONENT_SPECS(i)))
+                    CALL agama_add_component_initfromfile(TRIM(AGAMA_COMPONENT_SPECS(i)))
                 ELSE
-                    CALL agama_add_component_from_param(TRIM(AGAMA_COMPONENT_SPECS(i)))
+                    CALL agama_add_component_initfromparam(TRIM(AGAMA_COMPONENT_SPECS(i)))
                 END IF
             END IF
         END DO
